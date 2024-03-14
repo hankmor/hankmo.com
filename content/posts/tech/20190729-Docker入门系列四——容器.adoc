@@ -1,0 +1,787 @@
+---
+title: Docker入门系列四——容器
+slug: docker-container
+img: /images/thumbnail/attachment/20190807/e512b5d1ba6940dcab8e0454e693d6b4.png
+categories:
+  - 中间组件
+tags:
+  - docker
+  - 容器
+  - container
+  - 镜像
+description: >-
+  容器是镜像的可运行实例。您可以使用Docker
+  API或CLI创建，启动，停止，移动或删除容器。您可以将容器连接到一个或多个网络，附加存储，甚至可以根据其当前状态创建新镜像。默认情况下，容器与其他容器及其主机相对隔离。您可以控制容器的网络，存储或其他基础子系统与其他容器或主机的隔离程度。容器由其镜像以及在创建或启动时为其提供的配置选项定义。删除容器后，其未持久存储的状态数据都将消失。
+date: 2019-07-29 16:16:45
+updated: 2020-04-03 14:48:45
+---
+
+= Docker入门系列四——容器
+:author: belonk.com
+:date: 2020-04-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器,镜像,容器基本操作,容器迁移,导出,导入
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: docker,容器,container,镜像
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+
+前一篇我们介绍了Docker的核心概念--镜像，知道了镜像是只读的创建容器的指令模板，由不同的层组成，也提到了镜像运行后就成为了容器，容器启动后回家镜像上增加一个可写的容器层，容器和镜像最主要的区别就在于容器层，容器层可读写，新写入或者修改的数据都存储在容器层上。在本篇，我们再来详细了解一下Docker的容器。 
+
+== 简介
+
+容器是镜像的可运行实例。您可以使用Docker API或CLI创建，启动，停止，移动或删除容器。您可以将容器连接到一个或多个网络，附加存储，甚至可以根据其当前状态创建新镜像。默认情况下，容器与其他容器及其主机相对隔离。您可以控制容器的网络，存储或其他基础子系统与其他容器或主机的隔离程度。容器由其镜像以及在创建或启动时为其提供的配置选项定义。删除容器后，其未持久存储的状态数据都将消失。 
+
+简单而言，容器可以看作是一个或一组独立运行的应用，以及这些应用必须的运行环境的一个整体。镜像是只读的，而容器则是在镜像上层添加了一个可写的容器层，镜像运行的实例就是容器。容器都有唯一的CONTAINER ID和名称(NAME)，还包括该容器对应的镜像(IMAGE)、状态(STATUS)等属性，另外，容器可以被创建、启动、停止和删除。
+
+例如，ubuntu是一个镜像，运行后，就得到了容器，多次运行则得到多个容器。
+
+== 容器操作
+
+现在我们看看操作容器的一些基本命令。
+
+=== 查看容器
+
+* **查看容器列表**
+
+1、命令
+
+----
+docker container ls [OPTIONS]
+----
+
+改命令等同于：
+
+----
+docker ps [OPTIONS]
+----
+
+选项：
+
+* -a, --all：显示所有的容器（不加此选项则仅显示运行中的）
+* -f, --filter：按照条件过滤查询
+* --format string:&nbsp;格式化输出信息
+* -n, --last int: 仅显示最后的n个容器(所有状态)
+* -l, --latest: 仅显示最近创建的容器(所有状态)
+* --no-trunc: 不截断输出信息
+* -q, --quiet: 仅输出容器id
+* -s, --size: 设置显示的总数
+
+2、举例
+
+查看本机运行的容器：
+ 
+----
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+1dd6cb8df75d        ubuntu              "/bin/bash"         24 hours ago        Up 24 hours                             dbdata2
+d428c1240bc8        ubuntu              "/bin/bash"         25 hours ago        Up 25 hours                             db2
+2442cb173404        ubuntu              "/bin/bash"         25 hours ago        Up 25 hours                             db1
+db3ac83e2531        ubuntu              "/bin/bash"         26 hours ago        Up 25 hours                             dbdata
+----
+ 
+
+查看所有容器：``docker ps -a``&nbsp;, 查看最近创建的容器：``docker ps -l``，查看最后创建的3个容器：``docker ps -n=3``。
+
+* 查看容器详细信息
+
+查看某写容器的详细信息。需要使用 ``inspect`` 命令，该命令会以 ``json`` 格式展示容器的详细信息。
+
+1、命令
+
+----
+docker [container] inspect [OPTIONS] CONTAINER [CONTAINER...]
+----
+
+2、举例
+
+先使用 ``docker ps -q`` 获取容器的ID，然后查看c711开头的容器的详细信息:
+ 
+----
+root@ubuntu:~# docker inspect c711
+[
+    {
+        "Id": "c7117b649a39a4429c3490d76b0a85040f47f7e12193aa0b486fbf0f445c6eb5",
+        "Created": "2019-07-15T04:25:39.604140185Z",
+        "Path": "nginx",
+        "Args": [
+            "-g",
+            "daemon off;"
+        ],
+        "State": {
+            "Status": "running",
+           ……
+        }
+    }
+]
+----
+
+* **查看容器内进程**
+
+在宿主机也可以直接查看容器内的进程信息，使用 ``top`` 命令。
+
+1、命令
+
+----
+docker [container] top CONTAINER [ps OPTIONS]
+----
+
+2、举例
+
+查看ID为c711开头的容器的进程：
+ 
+----
+root@ubuntu:~# docker top  c711
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                73138               73099               0                   12:25               ?                   00:00:00            nginx: master process nginx -g daemon off;
+systemd+            73172               73138               0                   12:25               ?                   00:00:00            nginx: worker process
+----
+ 
+
+列表信息包括：进程ID、启动时间、进程的命令等。
+
+* **查看容器统计信息**
+
+使用 ``stats`` 命令可以查看容器运行统计信息，类似于linux的top命令。
+
+1、命令
+
+----
+docker [container] stats [OPTIONS] CONTAINER
+----
+
+选项：
+
+* -a, --all: 输出所有容器统计信息，默认仅在运行中
+* --format string: 格式化输出信息
+* --no-stream: 不持续输出信息，默认为自动更新
+* --no-trunc: 不截断输出信息，默认文本信息超过为自动截断
+
+2、举例
+
+查看c711容器的统计信息：
+ 
+----
+root@ubuntu:~# docker stats --no-stream c711
+CONTAINER ID        NAME                  CPU %               MEM USAGE / LIMIT     MEM %               NET I/O             BLOCK I/O           PIDS
+c7117b649a39        objective_lederberg   0.00%               1.363MiB / 974.9MiB   0.14%               648B / 0B           0B / 0B             2
+----
+
+列表展示了容器ID、名称、CPU使用率、内存使用率、网络IO、磁盘IO等信息。
+
+=== 创建容器
+
+先看一下如何创建容器及相关的一些命令，包括create、start、run、logs等。
+
+* **创建容器**
+
+使用``docker create``命令来创建容器，改命令仅仅是创建了一个容器，但是容器并没有运行，还需要单独启动容器。
+
+1、命令语法：
+
+----
+docker [container] create [OPTIONS] IMAGE [COMMAND] [ARG...]
+----
+
+中括号内的可选，大写的表示参数。
+
+* OPTIONS: 创建时的选项
+* IMAGE: 创建容器所依赖的镜像
+* COMMAND: 附加命令
+* ARG: 附加命令参数
+
+该命令的选项非常多，大致可以分为几大类：容器运行模式、容器环境配置、容器资源限制和安全保护，可以使用``docker create --help``查看详细选项，这里列举几个常用的(下文的docker run等命令的选项与之相似)：
+
+* -a, --attach list:&nbsp;绑定到STDIN、STDOUT或STDERR
+* -e, --env list:&nbsp;设置环境变量
+* -h, --hostname string:&nbsp;配置容器hostname
+* -i, --interactive: 打开交互终端STDIN
+* -t, --tty：为容器分配伪终端
+* --ip string:&nbsp;配置IPV4(e.g., 172.30.100.104)
+* -l, --label list：设置容器的元数据（key=value的形式）
+* --log-driver string：设置容器的日志驱动，包括：json-file(默认)、syslog、journald、gelf、fluentd、awslogs、splunk、etwlogs、gcplogs、none
+* -m, --memory bytes: 设置容器内存大小
+* --name string: 为容器设置名称
+* --mount mount: 为容器挂载宿主机文件或目录
+* -p, --publish list: 为容器指定发布的端口映射
+* -P, --publish-all：发布容器端口到宿主机的可用随机端口
+* --restart string：容器退出的重启策略，包括no、on-failure[:max-retry]、always、unless-stopped等，(default "no")
+* -v, --volume list 挂载主机的数据卷
+* --volume-driver string 设置数据卷驱动
+* --volumes-from list 挂载数据卷容器
+* -w, --workdir string 设置容器的工作目录
+
+后续我们将会用到上边的选项，例如挂载数据卷相关的``-v``、``--mount``选项等。
+
+2、举例
+
+根据nginx镜像创建一个nginx容器的操作如下：
+ 
+----
+root@ubuntu:~# docker container create nginx
+2fe6e02437ab68d72ba4cd18a6ee6879797a8d86b1ce91159e2f580298c5176c
+root@ubuntu:~# docker container ls -a
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   11 seconds ago      Created                                 lucid_bose
+----
+ 
+
+其中，``docker container ls -a``命令为查看所有容器，这里的容器名称``NAMES``为自动生成的，也可以通过``--name``参数来指定：
+
+----
+docker create --name mynginx nginx
+----
+
+* **启动容器**
+
+使用``docker create``命令创建了容器，此时容器处于停止状态，并没有启动，我们需要使用``docker start``命令来启动它。
+
+1、命令语法
+
+----
+docker [container] start CONTAINER
+----
+
+* CONTAINER: 已经创建的容器(ID或名称)
+
+2、举例
+
+先使用``docker ps -a``查看所有的容器，找到刚才创建的nginx容器并启动：
+ 
+----
+root@ubuntu:~# docker container start 2fe6e
+2fe6e
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   13 minutes ago      Up 2 seconds        80/tcp              lucid_bose
+----
+ 
+
+* **创建并启动**
+
+创建并启动容器可以合为一步，使用``docker run``命令。
+
+1、命令
+
+----
+docker [container] run IMAGE[:TAG]
+----
+
+* IMAGE：创建容器依赖的镜像
+* TAG: 镜像的标签，一般为版本号
+
+该命令包含的选项与 create 大多相同。
+
+2、举例
+
+直接运行ubuntu镜像创建容器：
+
+----
+$ docker run -it ubuntu /bin/bash
+----
+
+上边使用 ``-it`` 选项，i 表示开发容器的标准输入（STDIN），t 则为容器创建一个命令行终端，容器启动后直接进入命令行终端。
+
+上边的示例命令，执行的流程如下：
+
+* 如果您没有ubuntu本地映像，Docker会先从您配置的注册表中``pull``映像，等同于手动执行``docker pull ubuntu``拉取镜像；
+* Docker创建一个新容器，好比&nbsp;``docker container create`` 手动运行命令一样；
+* Docker将读写文件系统分配给容器，作为其最后一层，这允许正在运行的容器在其本地文件系统中创建或修改文件和目录；
+* Docker创建了一个网络接口，用于将容器连接到默认网络， 因为您没有指定任何网络选项，这包括为容器分配IP地址。默认情况下，容器可以使用主机的网络连接连接到外部网络；
+* Docker启动容器并执行``/bin/bash``。由于容器以交互方式运行并连接到终端（由-i和-t参数定义），因此您可以使用键盘提供输入，同时将输出记录到终端；
+* 键入exit以终止/bin/bash命令时，容器会停止但不会被删除。您可以重新启动它或将其删除。
+
+运行nginx镜像，并输出文本：
+ 
+----
+root@ubuntu:~# docker run nginx /bin/echo 'hello docker'
+hello docker
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   17 minutes ago      Up 3 minutes        80/tcp              lucid_bose
+----
+
+成功输出了hello docker，但是 ``docker ps`` 查看运行的容器时，没有看到刚创建的镜像，这是因为容器启动并执行完成后就停止了。如果让容器在后台运行呢？这就需要使用&nbsp;``-d`` 选项，来以守护态运行容器。
+
+* **守护态运行容器**
+
+只需要在运行容器时加上 `-d` 选项即可。
+
+1、命令
+
+----
+docker [container] run -d
+----
+
+* -d, --detach：后台运行容器(守护态)，并在控制台打印出容器ID
+
+2、举例
+
+守护态运行 nginx 镜像：
+ 
+
+----
+root@ubuntu:~# docker run -d nginx /bin/echo 'hello docker'
+837eac57115f0a4e88645d9ce3ba0892d37ea7924a9b5acb64afe0b2df331004
+----
+ 
+
+可以看到打印了容器ID。
+
+运行 nginx 容器，并映射端口，使得 nginx 可以被访问：
+ 
+
+----
+root@ubuntu:~# docker run --name nginx-dev -d -p 8080:80 nginx
+a1d7dc128dda73ac55a88f8613aa5c2bd3aeed20dab6f25174770400a17aac71
+----
+ 
+
+前边的 docker create 选项介绍过 ``-p``&nbsp;(小写)选项了，它的作用是将宿主机的端口和容器的端口进行映射（显示指定，不显示指定可以使用 ``-P`` 选项来随机映射到宿主机可用的端口），格式为 **宿主机端口:容器端口。**
+
+然后，就可以通过8080端口访问nginx主页了。
+
+* **查看容器日志**
+
+要查看容器的启动日志，或者监听容器的运行日志，则需要使用 ``docker logs`` 命令。
+
+1、命令
+
+----
+docker [container] logs [OPTION] CONTAINER
+----
+
+选项：
+
+* -details : 打印详细信息;
+* -f, --follow: 保持输出日志
+* --since string: 输出从某个时间开始的日志
+* --tail string : 输出最近的若干日志
+* -t, --timestamps: 显示时间戳信息
+* --until string: 输出某个时间之前的日志
+
+2、举例
+
+查看前边后台运行的 nginx 容器的日志信息：
+ 
+
+----
+root@ubuntu:~# docker logs 837
+hello docker
+----
+ 
+
+如果需要支持监听日志：
+
+----
+docker logs -f 837
+----
+ 
+
+=== 停止容器
+ 
+
+相关的命令：pause/unpause、stop、prune。
+
+* **暂停容器**
+
+暂停容器的运行，使用 ``pause`` 命令，恢复容器运行则使用 ``unpause``。
+
+1、命令
+
+暂停容器：
+
+----
+docker [container] pause CONTAINER
+----
+
+恢复暂停：
+
+----
+docker [container] unpause CONTAINER
+----
+
+2、举例
+ 
+
+----
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   36 minutes ago      Up 22 minutes       80/tcp              lucid_bose
+root@ubuntu:~# docker container pause 2fe
+2fe
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                   PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   37 minutes ago      Up 24 minutes (Paused)   80/tcp              lucid_bose
+root@ubuntu:~# docker unpause 2fe
+2fe
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   40 minutes ago      Up 26 minutes       80/tcp              lucid_bose
+----
+ 
+
+注意观察``STATUS``字段，调用 ``pause`` 命令后，``STATUS`` 变成了 ``Paused`` 状态。
+
+* **停止容器**
+
+1、命令
+
+----
+docker [container] stop [-t | --time[=10]] [CONTAINER...]
+----
+
+-t, --time 参数用于指定停止容器的超时时间，默认为10s。
+
+
+命令执行后，先向容器发送 ``SIGTERM`` 信号，等待一段超时时间后(默认为 ``10`` 秒)，再发送 ``SIGKILL``信号来终止容器。
+
+2、举例
+
+查看运行中的容器，然后停止它：
+
+----
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+2fe6e02437ab        nginx               "nginx -g 'daemon of…"   3 hours ago         Up 2 hours          80/tcp              lucid_bose
+root@ubuntu:~# docker container stop 2fe
+2fe
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+root@ubuntu:~#
+----
+ 
+
+=== 进入容器
+
+
+很多时候，我们在宿主机上使用命令来操作容器还不够，我们还需要进入容器系统内部，来进行一些操作。
+
+1、attach命令
+
+该命令局限性很大，不建议使用。
+
+2、exec命令
+
+命令格式如下：
+
+----
+docker [container] exec [-d|--detach] [--detach-keys[=[]]] [-i|--interactive] [--pfivileged] [-t|--tty] [-u|--user[=USER]] CONTAINER COMMAND [ARG...]
+----
+
+选项如下：
+
+* -d, --detach: 在容器中后台执行命令
+* --detach-keys="": 指定将容器切回后台的按键
+* -e, --env=[]: 指定环境变量列表
+* -i, --interactive=true|false: 打开标准输入接受用户输入命令， 默认值为false
+* --privileged=true|false: 是否给执行命令以高权限，默认值为 false
+* -t, --tty=true|false: 分配伪终端，默认值为 false
+* -u, --user="": 执行命令的用户名或 ID
+
+常用的用法：``docker exec -it CONTAINER /bin/bash``，该命令会进入容器终端。
+
+例如，进入 nginx 容器，修改nginx.conf文件，然后重新load：
+
+（1）查看 nginx 容器ID：
+
+----
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+8e94ba3d7cc3        nginx               "nginx -g 'daemon of…"   25 minutes ago      Up 2 seconds
+----
+
+（2）进入 nginx 容器
+
+----
+root@ubuntu:~# docker container exec -it 8e9 /bin/bash
+root@8e94ba3d7cc3:/# cd /etc/nginx/
+root@8e94ba3d7cc3:/etc/nginx# ls
+conf.d  fastcgi_params  koi-utf  koi-win  mime.types  modules  nginx.conf  scgi_params  uwsgi_params  win-utf
+----
+
+（3）修改 ``nginx.conf`` 然后重新load，最后使用 exit 退出容器终端
+
+----
+root@8e94ba3d7cc3:/etc/nginx# vi nginx.conf
+root@8e94ba3d7cc3:/etc/nginx# nginx -s reload 
+2019/07/11 09:18:22 [notice] 15#15: signal process started
+root@8e94ba3d7cc3:/etc/nginx# exit
+----
+
+=== 删除容器
+
+删除容器的命令语法如下：
+
+----
+docker [container] rm [-f|--force] [-l|--link] [-v|--volumns] CONTAINER [CONTAINER ...]
+----
+
+选项：
+
+* -f, --force: 是否强制删除容器
+* -l, --link: 删除容器的连接，但保留容器
+* -v, --volumns: 删除容器挂载的数据卷
+
+运行的容器不能直接删除，删除时会异常提示：
+
+----
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+2442cb173404        ubuntu              "/bin/bash"         26 hours ago        Up 26 hours                             db1
+root@ubuntu:~# docker rm 244
+Error response from daemon: You cannot remove a running container 2442cb1734041e3618ed23000853ae8029728fc3eea6bb2faa0e906c6b086631. Stop the container before attempting removal or force remove
+----
+
+正确的做法是，先停止容器在进行删除。如果非要强制删除，则也可以使用 ``-f`` 选项：
+
+----
+root@ubuntu:~# docker rm -f 244
+244
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+----
+
+=== 导入和导出容器
+ 
+
+镜像可以支持存储和载入，同样，容器也支持导入和导出，在做容器迁移的时候非常方便。
+
+* **导出容器**
+
+命令语法：
+
+----
+docker [container] export [-o|--output=[FILE]] CONTAINER
+----
+
+也可以直接使用重定向来导出：
+
+----
+docker [container] export CONTAINER > FILE
+----
+
+选项：
+
+* -o, --output: 指定导出的 ``tar`` 文件名
+
+例如，导出hello-world容器：
+
+----
+root@ubuntu:~# docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS                     PORTS               NAMES
+91d30c52b5be        hello-world         "/hello"            2 minutes ago       Exited (0) 2 minutes ago                       adoring_allen
+root@ubuntu:~# docker export -o hello.tar 91d
+root@ubuntu:~# ls
+dockertest  hello.tar
+----
+
+* **导入容器**
+
+导出容器后，就可以导入tar包了。
+
+命令语法：
+
+----
+docker import [OPTIONS] file|URL|- [REPOSITORY[:TAG]]
+----
+
+选项：
+
+* -c,--change list: 导入的同时执行修改容器的Dockerfile文件
+* -m,--message string: 设置commit信息
+
+例如，导入刚才导出的文件（导入前先删除本地已有的容器，以免冲突）：
+ 
+
+----
+root@ubuntu:~# docker import hello.tar hello1
+sha256:f5f98ce7b622bf27d5ae7972b0deb611724e602733e2b1acacd16d7de00c32b0
+----
+ 
+
+此外，docker还支持多种导入模式，这里简单介绍一下，详细信息见官方文档：
+
+
+1、导入远程文件
+ 
+----
+$ docker import http://example.com/exampleimage.tgz
+----
+
+2、导入本地文件
+
+通过 ``pipe`` 和 ``STDIN`` 导入本地文件：
+
+----
+$ cat exampleimage.tgz | docker import - exampleimagelocal:new
+----
+
+导入本地文件并设置 commit message ：
+
+----
+$ cat exampleimage.tgz | docker import --message "New image imported from tarball" - exampleimagelocal:new
+----
+
+通过文件路径导入本地文件：
+
+----
+$ docker import /path/to/exampleimage.tgz
+----
+
+从本地目录导入：
+
+----
+$ sudo tar -c . | docker import - exampleimagedir
+----
+
+从本地目录导入并设置新的参数：
+
+----
+$ sudo tar -c . | docker import --change "ENV DEBUG true" - exampleimagedir
+----
+
+如果 linux 系统的 tar 文件可以直接导入，如果是其他格式，可以使用 pipe 和 STDIN 方式导入。
+
+=== 加载镜像和导入容器的区别
+
+用户既可以使用 ``docker load`` 来导入镜像存储文件到本地镜像库，也可以使用 ``docker import`` 来导入一个容器快照到本地镜像库。这两者的区别在于容器快照文件将丢弃所有的历史记录和元数据信息（即仅保存容器当时的快照状态），而镜像存储文件将保存完整记录，体积也要大。此外，从容器快照文件导入时可以重新指定标签等元数据信息。
+
+=== 其他容器命令
+
+* **复制文件**
+
+1、命令语法
+
+``container cp``命令支持在容器和宿主机之间复制文件。
+
+----
+docker [container] cp [OPTIONS] CONTAINER:SRC_PATH DEST_PATH|-
+docker [container] cp [OPTIONS] SRC_PATH|- CONTAINER:DEST_PATH
+----
+
+选项：
+
+* -a, --archive: 打包模式,复制文件会带有原始的uid/gid
+* -L, --follow-link: 跟随软连接
+
+2、示例
+
+我们建一个test文件。然后在宿主机与容器之间来拷贝该文件。
+
+（1）在宿主机创建一个test文件，内容为this is test：
+
+----
+root@ubuntu:~# vi test
+----
+
+（2）拷贝test文件到容器的 ``/root`` 目录
+
+----
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+c7117b649a39        nginx               "nginx -g 'daemon of…"   3 hours ago         Up 3 hours          80/tcp              objective_lederberg
+root@ubuntu:~# docker container cp test objective_lederberg:/root
+root@ubuntu:~# docker exec -it c711 /bin/bash
+root@c7117b649a39:/# ls
+bin  boot  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  test  tmp  usr  var
+root@c7117b649a39:/# cd /root/
+root@c7117b649a39:~# ls
+test
+root@c7117b649a39:~# exit
+exit
+----
+ 
+
+可以看到，test文件已经成功拷贝到容器下。
+
+（3）删除宿主机的test文件，然后从容器上拷贝回来
+
+----
+root@ubuntu:~# ls
+dockertest  test
+root@ubuntu:~# rm test 
+root@ubuntu:~# ls
+dockertest
+root@ubuntu:~# docker container cp objective_lederberg:/root/test .
+root@ubuntu:~# ls
+dockertest  test
+root@ubuntu:~# cat test 
+this is test.
+----
+ 
+
+可以看到test文件又从容器拷贝回来了。
+
+* ****查看变更**
+ 
+
+可以通过 ``diff`` 命令跟踪容器内**相对于容器创建时**的文件变化。
+
+命令语法：
+
+----
+docker [container] diff CONTAINER
+----
+
+示例：
+ 
+
+----
+root@ubuntu:~# docker container diff objective_lederberg 
+C /root
+A /root/.bash_history
+A /root/test
+C /run
+A /run/nginx.pid
+A /test
+C /var
+C /var/cache
+C /var/cache/nginx
+A /var/cache/nginx/client_temp
+A /var/cache/nginx/fastcgi_temp
+A /var/cache/nginx/proxy_temp
+A /var/cache/nginx/scgi_temp
+A /var/cache/nginx/uwsgi_temp
+root@ubuntu:~#
+----
+ 
+
+结果的A、C表示文件的更改和创建。
+ 
+
+* 查看端口映射
+ 
+
+使用 ``port`` 命令来查看容器端口映射。
+
+命令语法：
+
+----
+``docker [container] port CONTAINER``
+----
+
+示例：
+
+----
+root@ubuntu:~# docker run -d -p 8080:80 nginx
+306642f66c40a06972a2164aae5f9e995d15055b0cb98d3c8587242998ec3dc3
+root@ubuntu:~# docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                  NAMES
+306642f66c40        nginx               "nginx -g 'daemon of…"   3 seconds ago       Up 1 second         0.0.0.0:8080->80/tcp   brave_antonelli
+c7117b649a39        nginx               "nginx -g 'daemon of…"   3 hours ago         Up 3 hours          80/tcp                 objective_lederberg
+root@ubuntu:~# docker port brave_antonelli 
+80/tcp -> 0.0.0.0:8080
+----

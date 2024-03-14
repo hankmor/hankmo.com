@@ -1,0 +1,93 @@
+---
+title: IntelliJ IDEA 2019.2.x激活
+slug: intellij-idea-2019.2-crack
+img: /images/thumbnail/attachment/20191012/fe9d81996a36420387d68bf26ae01bc9.png
+categories:
+  - 工具软件
+tags:
+  - idea
+  - 破解
+description: IntelliJ IDEA 2019版本激活、破解流程详细说明。
+date: 2019-10-12 15:18:29
+updated: 2019-10-12 15:25:33
+---
+
+= IntelliJ IDEA 2019.2.x激活
+:author: belonk.com
+:date: 2019-10-12
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: Intellij idea激活，2019版本激活,IDEA破解,IDEA激活码
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: idea,破解
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+IntelliJ IDEA 2019.2.x版本已经可以成功激活了，理论上此种激活方式适合2019的所有版本，不过笔者仅测试了2.3版本。具体激活步骤如下：
+
+1、下载最新版本的idea, 目前版本为2019.2.3
+
+2、下载用于激活的代理压缩包，下载地址如下：
+
+[horizontal]
+链接:: https://pan.baidu.com/s/1bsG4E9P744VlgG_kwgZ40w[https://pan.baidu.com/s/1bsG4E9P744VlgG_kwgZ40w]
+密码:: z98a
+
+3、解压缩下载的代理包，得到jetbrains-agent.jar，把它放到你认为合适的文件夹内
+
+4、启动IDE，如果需要注册，选择：试用（Evaluate for free）进入IDE
+
+5、点击你要注册的IDE菜单："Configure" 或 "Help" -> "**Edit Custom VM Options ...**"
+如果提示是否要创建文件，请点"Yes"，在打开的vmoptions编辑窗口末行添加：
+
+----
+-javaagent:/absolute/path/to/jetbrains-agent.jar
+----
+
+一定要自己确认好路径(不要使用中文路径)，要使用绝对路径，填错会导致IDE打不开！
+
+一个vmoptions内只能有一个``-javaagent``参数。
+
+示例:
+
+----
+mac: -javaagent:/Users/neo/jetbrains-agent.jar
+linux: -javaagent:/home/neo/jetbrains-agent.jar
+windows: -javaagent:C:\Users\neo\jetbrains-agent.jar
+----
+ 
+如果还是填错了，参考这篇文章编辑vmoptions补救： https://intellij-support.jetbrains.com/hc/en-us/articles/206544519[https://intellij-support.jetbrains.com/hc/en-us/articles/206544519]
+
+[IMPORTANT]
+.注意
+这是最重要的一步，不要直接在IDEA目录下修改配置文件，而是在IDEA启动后通过菜单来修改，否则可能不能成功激活**
+
+6、重启你的IDE
+
+7、点击IDE菜单 "Help" -> "Register..." 或 "Configure" -> "Manage License..."
+
+支持两种注册方式：License server 和 Activation code:
+
+1). 选择License server方式，地址填入：**http://jetbrains-license-server** （可能会自动填上）
+
+或者点击按钮："Discover Server"来自动填充地址。
+
+2). 选择Activation code方式离线激活，请使用压缩包内的ACTIVATION_CODE.txt中的注册码激活
+
+OK，激活成功！
+
+代理包连接失效请留言，我会第一时间补上！
+
+此项目仅供交流学习用，请勿用于商业用途，若资金允许，请购买正版！
+
+image::/images/attachment/20191012/fd62d079d86646aca5b1cc190c8c6464.png[]

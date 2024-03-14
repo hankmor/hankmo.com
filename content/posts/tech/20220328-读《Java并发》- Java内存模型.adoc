@@ -1,0 +1,296 @@
+---
+title: 读《Java并发》— Java内存模型
+slug: jcip-jmm
+img:
+categories:
+  - 并发编程
+tags:
+  - 并发
+  - jmm
+  - Java并发编程实战
+description: 这一章称为"对象的共享"，书中重点介绍了如何共享和发布对象，这两章是并发编程中非常基础却很重要的部分。在本章，首先介绍了什么是可见性问题，然后介绍了Java内存模型，讨论什么是内存可见性以及java保证内存可见性的方式，在此基础上介绍如何设计线程安全的对象，如何使用线程封闭技术和设计不可变对象来避免同步，最后再重点探讨如何安全地发布对象。由于内容较多，我将这一章分为两篇来阐述自己对本章的理解，这是上篇。Java的并发机制基于共享内存，要理解对象间的共享关系，则离不开对象间的内存关系，这涉及到本章要介绍的一个重要概念：Java内存模型，又称 JMM。
+date: 2022-03-28 00:00:00
+updated: 2022-03-28 00:00:00
+---
+
+[[object-share]]
+= 读《Java并发》— Java内存模型
+:author: belonk.com
+:date: 2022/03/28
+:doctype: book
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir:
+:keywords: 并发,Java
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: 书籍,电子书,并发
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+
+<</2022/01/25/jcip-concurrency-thread-safety#, 上一章>> 介绍了线程安全性，这一章称为"对象的共享"，书中重点介绍了如何共享和发布对象，这两章是并发编程中非常基础却很重要的部分。在本章，首先介绍了什么是可见性问题，然后介绍了Java内存模型，讨论什么是内存可见性以及java保证内存可见性的方式，在此基础上介绍如何设计线程安全的对象，如何使用线程封闭技术和设计不可变对象来避免同步，最后再重点探讨如何安全地发布对象。由于内容较多，我将这一章分拆为几篇来阐述自己对本章的理解，这是第一篇。
+
+Java的并发机制基于共享内存，要理解对象间的共享关系，则离不开对象间的内存关系，这涉及到本章要介绍的一个重要概念：Java内存模型，又称 JMM。
+
+== 内存可见性
+
+上边提到，Java的并发机制是采用的是 *共享内存模型*，因此，在并发环境中保证对象间的内存可见性是并发编程解决的主要问题。
+
+什么是内存可见性？可见性是一个复杂的问题，它表示程序中的变量在写入值后是否能够立即读取到。在单线程环境中，由于写入变量和读取变量都是在单线程中进行的，因此能够保证总能读取到修改后的值。但在多线程环境下，却无法保证，可能一个线程修改变量的值，而另外的线程并不能正确读取被修改的变量的值，除非我们使用变量同步等机制来保证可见性。
+
+为什么多线程环境下变量就不能保证可见性了呢？稍后介绍<<#jmm,JMM>>时再来讨论，先看一个示例。
+
+[NOTE]
+====
+内存可见性（Memory Visibility）：某些线程修改了变量的值，正在读该变量的线程能够立即读取到修改后的值。
+====
+
+[source,java]
+----
+@NotThreadSafe
+public class UnsafeSequence {
+	private int count;
+	public void increment() {
+		count++;
+	}
+	public int getCount() {
+		return count;
+	}
+}
+----
+
+上边的示例，count变量被多个线程共享，因此不能保证 `getCount()` 总能读取到 `increment()` 增加后的值。那是不是在 `increment()` 方法上使用 `synchronized` 进行同步就能保证可见性了呢？答案是不行。虽然使用同步能够保证只有一个线程修改count的值，但是其他多个线程仍然可能读到 *失效的值*，因此必须在 `getCount()` 上也使用同步，见<</2022/01/05/jcip-concurrency-thread-safety#sync-var,这里>>。
+
+再看一个示例，如下边的代码：
+
+[source,java]
+----
+@NotThreadSafe
+public class NoVisibility {
+	private static boolean ready;
+	private static int anInt;
+	private static class VariableReader implements Runnable {
+		@Override
+		public void run() {
+			while (!ready) {
+				Thread.yield();
+			}
+			System.out.println(anInt);
+		}
+	}
+	public static void main(String[] args) {
+		new Thread(new VariableReader(), "read").start();
+		anInt = 47;   // <1>
+		ready = true; // <2>
+	}
+}
+----
+
+这个示例期望输出的值为47，但实际上可能陷入死循环，也可能输出0，因为没有任何机制保证 `ready` 和 `anInt` 的修改操作会发生在 read 线程执行之前。可能 read 线程看到 `ready` 值修改了，但是却看不到 `anInt` 值的修改，代码执行的顺序与编写的顺序并不一致，可能标记2的代码在标记1前执行，这种现象被称为 *指令重排序*（Reordering）。
+
+要了解什么是 *指令重排序*，首先需要介绍Java对于内存划分的一个逻辑概念：*Java内存模型（JMM）*。
+
+[[jmm]]
+== Java内存模型
+
+多线程之间存在数据共享，一个线程修改了数据，如何保证其他线程能够读取到修改后的数据呢？也就是说，共享的数据如何在线程之间可见？为什么 `synchronized` 可以保证共享变量的同步？要回答这些问题，首先要明白 *Java的内存模型*。并发编程关键就是处理 *线程之间如何通信和如何同步* 的问题，而Java内存模型是理解线程通信和同步的基础。
+
+Java并发中线程通信机制采用的是共享内存模型（还有一种是消息传递），也就是说，多个线程共享内存空间，通过内存完成数据的交换（读写），但是Java有专门的内存模型来规范线程之间的通信机制，这被称为 *JMM(Java Memory Model)*。
+
+.Java内存模型
+image::/images/concurrency/3-1-JMM.png[width="500"]
+
+如图所示，线程间共享的变量存储在主内存中，每个线程对应有自己的本地内存，用来存储共享变量的副本，从主内存到线程本地内存的读取和写入操作由JMM控制。线程1和线程2之间的通信需要经过两个步骤：线程1将修改后的共享变量副本写入主内存，然后线程2从主内存读取共享变量并拷贝到自己的本地内存。
+
+[IMPORTANT]
+====
+需要注意的是，JMM 仅仅是 Java 的一个逻辑上的抽象概念，物理内存并不会按照 JMM 来划分内存。JMM 涵盖了缓存、写缓冲区、寄存器以及其他的硬件和编译器优化。
+====
+
+回到前边 `UnsafeSequence` 的示例， `count+ +` 包含 "读取、修改、写入" 三个操作步骤，它们不是原子性的。假设两个线程同时执行 `count+ +` 操作，现在我们从 JMM 层面来理解未同步的  `count++`  操作，如下图所示：
+
+image::/images/concurrency/3-2-count.png[width="500"]
+
+假设 `count` 的初始值为0，此时处于主内存中；然后线程1和线程2都从主内存读取它并拷贝到自己的本地内存，接下来它们分别对其加1，各自得到的 `count` 都是1；最后，线程1和线程2分别将 `count = 1` 这个值写回主内存，最终得到的是非预期的值1，而不是2。出现这个错误的原因在于，读取、修改和写入三个步骤并不是一个原子序列，每一步中间都可能被其他线程加入而造成原有线程读取的值失效（比如都同时读取到 count 的初始值 0）。如果使用了同步，比如下面的代码：
+
+[[safe-seq]]
+[source,java]
+----
+@NotThreadSafe
+public class SafeSequence {
+	private int count;
+	public synchronized void increment() {
+		count++;
+	}
+	public synchronized int getCount() {
+		return count;
+	}
+}
+----
+
+`synchronized` 保证了 `getCount()` 和 `increment()` 这两个方法是互斥的，也就是说同一时刻只能读或者写，不能同时读写，这样就保证了总能读取到最新的值。
+
+为什么仅给 `increment()` 加锁不能保证可见性呢？因为没有保证读写的互斥性。如果 `getCount()` 不使用同步，那么虽然保证了原子性写入，但是并不能保证其他读取的线程能够获取到新写入的值。最简单的场景是，一个线程A读，一个线程B写，A、B线程并没有 *互斥*(读取时不能写入，写入时不能读取)，也就是说B在写入时A同样能够读取count的值，因为无法保证A读取的是B写入后的新值。
+
+=== 指令重排序
+
+指令重排序的定义如下 footnote:[详见《Java并发编程的艺术》第三章的内容。]：
+
+[quota,Java并发编程的艺术[3.2]]
+____
+指令重排序(Reordering)：指令重排序是指编译器或处理器为了优化程序性能而对指令序列进行重新排序的一种手段。
+____
+
+指令重排序分为三种：
+
+* 编译器优化重排序：编译器在不改变单线程语义的前提下，可以重新安排指令的执行顺序
+* 指令集并行重排序：现代处理器采用指令级并行技术（Instruction-Level Parallelism, ILP）来并行执行多条指令，如果指令不存在依赖关系，处理器可以改变语句对应的机器指令执行顺序
+* 内存系统的重排序：处理器的多级缓存和读/写缓冲区使得数据的加载和存储操作存在乱序执行
+
+.从源代码到可执行指令序列的过程示意图
+image::/images/concurrency/reorder.png[]
+
+除了编译器优化重排序，指令集和内存重排序属于处理器重排序。对于编译器重排序，JMM 通过制定编译器重排序规则来禁止特定类型的编译器重排序；而对于处理器重排序，JMM 的处理器重排序规则要求编译器在生成指令序列时插入特定类型的内存屏障（也称内存栅栏，Memory Barriers）指令来禁止特定类型的处理器重排序。
+
+请看下边的代码：
+
+[source,java]
+----
+public class ReorderingDemo {
+	private static int x = 0, y = 0;
+	private static int a = 0, b = 0;
+	public static void main(String[] args) throws InterruptedException {
+		int i = 0;
+		while (true) {
+			i++;
+			x = 0;
+			y = 0;
+			a = 0;
+			b = 0;
+			Thread t1 = new Thread(() -> { // <1>
+				a = 1;
+				x = b;
+			});
+			Thread t2 = new Thread(() -> { // <2>
+				b = 1;
+				y = a;
+			});
+			t1.start();
+			t2.start();
+			t1.join();
+			t2.join();
+			String result = "i = " + i + ", x = " + x + ", y = " + y;
+			if (x == 0 && y == 0) {
+				System.out.println(result);
+				break;
+			}
+		}
+	}
+}
+----
+
+<1> 开启一个线程，为 a，x 赋值
+<2> 再开启一个线程，为 b，y 赋值
+
+这个代码简单，不断开启两个线程分别更改 a,x 和 b,y 的值，如果 x 和 y 的都值为 0 退出循环，此时证明存在重排序，即标记1处的线程 `x = b` 被重排序到 `a = 1` 之前执行，标记2同理。运行代码，一段时间之后，一个示例输出如下：
+
+----
+i = 249266, x = 0, y = 0
+----
+
+可以看到，同一个线程内的代码执行顺序与预期的不一致，这说明存在指令重排序。
+
+指令重排序是一种程序优化，在多线程环境中，会造成内存可见性问题。指令重排序会遵守 *数据依赖性*，对于 *单个处理器中执行的指令序列和单个线程中执行的操作*，如果前后执行的代码存在依赖关系，则不会进行重排序。但是这种依赖性仅限于单个处理和单个线程内，多处理器和多线程之间存在数据依赖性的指令序列和操作仍然会被重排序。这被称为指令重排序的 `as-if-serial` 语义：不论怎么重排序，单线程程序的执行结果不会改变。
+
+比如，前边的示例代码 `ReorderingDemo` 中，单个线程内的两行操作 `a = 1` 和 `x = b` 之间不存在依赖关系，所以可能存在重排序；而两个线程之间的操作 `a = 1` 和 `y = a` 虽然存在依赖关系，但是不被编译器和处理器考虑，仍然会存在重排序。
+
+想要更明显的看到指令重排序，请参考下边的调试小提示：
+
+.多线程程序的调试小提示
+[quota,Java并发编程实战]
+____
+对于服务器应用程序，无论是在开发阶段还是在测试阶段，当启动JVM时一定都要指定 `-server` 选项。server 模式将比 client 模式的JVM进行更多的优化，比如尽可能的重排序。所以，client 模式时运行正确的代码，在 server 模式下可能运行失败。
+____
+
+理解指令重排序其实并不复杂，试想一下，如果单线程程序被指令重排序之后使得程序结果与预期不一致了，那么将会给编程代码很大的不确定性，开发者甚至无法编写出正确的代码。
+
+但是，多线程环境下，线程的执行时序是不确定的，所以线程之间的数据依赖性编译器并不保证。那么，什么时候编译期会进行重排序而什么时候不重排序呢？JVM定义了一个偏序关系，只要存在偏序关系，那么JVM不会进行重排序，这个偏序关系就是 <<#happends-before, Happens-Before规则>>。
+
+[[happends-before]]
+=== Happens-Before规则
+
+JMM 为所有操作定义了一系列偏序关系，即 *Happens-Before* 规则，这写规则说明这些操作在满足条件时，JMM 更 *偏向于以何种规则来排序这些操作*，如果两个操作之间不满足任何 Happens-Before 规则，那么 JVM 可以对他们进行任意重排序。这些规则包括：
+
+* 程序顺序规则：*代码执行顺序相同*。如果程序中操作A在操作B之前执行，那么在线程中操作A将在操作B之前执行。这里要注意，A在B之前执行并不是说代码编写的顺序，而是编译器优化后实际执行的顺序
+* 监视器锁规则：*监视器解锁先于加锁*。监视器锁的解锁操作，必须在 *同一个监视器锁* 的加锁操作之前执行
+* volatile规则：*volatile写先于读*。对 volatile 的写入操作必须在其读操作之前执行
+* 线程启动规则：*线程启动先于其他操作*。对线程调用 `Thread.start` 必须在线程中任何其他操作之前执行
+* 线程结束规则：*线程其他操作先于线程结束*。线程中的任何操作都必须在其他线程检测到该线程结束之前执行，即：要么从 `Thread.join` 中成功返回，要么 `Thread.isAlive` 返回 `false`
+* 中断规则：*线程中断调用先于中断检测*。如果线程内调用另一个线程的中断(interrupt)方法，那么该方法的调用先于这个被中断的线程被检测到中断。一句话，interrupt方法调用先于检测到线程中断。检测中断一般是通过抛出 `InterruptException`、调用 `isInterrupted` 和 `interrupted` 来实现。
+* 终结器规则：*构造器先于终结器执行*。创建对象会执行构造器(`constructor`)，对象销毁时会执行终结器(finalize)
+* 传递性规则：*规则可以传递*。如果操作A在操作B之前执行，并且操作B在操作C之前执行，那么操作A在操作C之前执行。
+
+Happens-Before 规则是Java底层由编译器提供的一种顺序保证机制，对于开发者而言，除了理解这些规则，更多的是使用java提供的机制来保证这个规则，比如 `volatile` 和 锁机制。
+
+前边的 <<#safe-seq, `SafeSequence`>>示例代码中使用了 `synchronized` 同步变量count，如果两个线程1、2同时访问，此时 Happens-Before 保证了的顺序如下图所示：
+
+.SafeSequence的执行顺序保证
+image::/images/concurrency/count-seq.png[width=80%]
+
+由于 `increment()` 方法和 `getCount()` 方法使用的同一个监视器，根据 Happens-Before 的 *监视器锁规则*，这两个方法遵循前后顺序而不可能同时执行。
+
+[[volatile]]
+=== Volatile机制
+
+Happens-Before 规则指出，对于 `volatile` 变量的写操作先于其读操作。Volatile 是Java提供的一种弱同步机制，相对于强同步的锁机制，volatile只能保证可见性和禁止指令重排序，而不能保证原子性。
+
+看下边的代码：
+
+[source,java]
+----
+class UnsafeCounter2 {
+	private volatile int count;
+	public void increment() {
+		count++;
+	}
+	public int getCount() {
+		return count;
+	}
+}
+----
+
+count变量被 `volatile` 修饰，但 `count++` 操作并不是原子的，可以通过如下的测试代码来验证：
+
+[source,java]
+----
+public static void unsafeCounterTest2() {
+	UnsafeCounter2 safeCounter = new UnsafeCounter2();
+	for (int i = 0; i < 10; i++) {
+		new Thread(() -> {
+			for (int j = 0; j < 1000; j++) {
+				safeCounter.increment();
+			}
+		}, "thread" + i).start();
+	}
+	while (Thread.activeCount() > 2) {
+		Thread.yield();
+	}
+	System.out.println(safeCounter.getCount());
+}
+----
+
+多次执行，可以看到结果小于10000，跟预期结果不一致。
+
+== 总结
+
+Java 内存模型是逻辑上的一个内存划分机制，并发的一系列操作遵守 `Happens-Before` 规则，这样减轻了开发者的负担。对于开发者而言，更直接的方式是使用 `synchronized`、`volatile` 和 `Lock` 等加锁手段来保证代码执行结果的正确性。
+
+然而，并发编程还有一些常见的对象共享机制，使得开发者可以不加锁或者少加锁也能保证并发的安全性，下一篇再来讨论之。

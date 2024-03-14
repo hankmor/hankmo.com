@@ -1,0 +1,141 @@
+---
+title: Spring boot工程Feign请求时Get请求无法传递body的问题
+slug: spring-boot-feign-get-with-body
+img: /images/thumbnail/attachment/20190615/31e9d07752ea45998fa69cd1adb576d6.png
+categories:
+  - Spring
+tags:
+  - feign
+description: >-
+  同RestTemplate类似，Feign默认情况下也使用的是JDK原生的http请求，同时也支持OkHttp、HttpClient等框架。默认情况下，原生Http请求不允许Get请求传递body，如果传递了body数据，会将当前请求转为Post请求，而实际上我们后台接收的是Get请求，所以抛出上边的异常，所以我们需要换成能够支持的HttpClient。
+date: 2019-01-22 15:54:21
+updated: 2019-06-15 08:13:31
+---
+
+= Spring boot工程Feign请求时Get请求无法传递body的问题
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: feign,spring cloud,get请求传body,声明式服务调用,ribbon
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: feign
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+前一篇，我们解决了Spring的``RestTemplate``在发送Get请求不能传递body，相比``RestTemplate``，我们更多的还是采用更方便的申明式服务调用框架Feign。本篇不会介绍Feign，而是解决Feign发送Get请求时仍然不能传递body的问题。
+
+
+== 准备
+ 
+在这里，我使用的Spring boot的版本为``1.5.10.RELEASE``，Spring Cloud版本为``Edgware.SR3``。
+
+准备三个服务：注册中心、服务生产者、服务消费，这里我们继续使用在 http://www.belonk.com/c/spring_cloud_eureka.html[Spring Cloud服务注册中心Eureka]定义的三个服务：服务注册中心``01-eureka-server``、服务提供者``01-service-demo``，同时新建一个服务消费者``01-feign-consumer``，使用feign来请求服务而不是ribbon，记得在启动类加上``@EnableFeignClients``启用Feign。
+
+1、在服务提供者``01-service-demo``添加一个接口，代码如下：
+
+[source,java]
+----
+@GetMapping("/hello/user")
+public String sayHello(@RequestBody User user) {
+    return "hello, " + user.getName() + ", give you a gift " + user.getGift();
+}
+----
+ 
+这样，Get请求需要接收body数据。
+
+2、在服务消费者``01-feign-consumer``编写如下代码：
+
+（1）在``SayHelloClient``中添加如下声明式服务请求：
+
+[source,java]
+----
+@FeignClient("hello-service")
+public interface SayHelloClient {
+    @GetMapping(value = "/hello/user")
+    String sayHello(@RequestBody User user);
+}
+----
+ 
+（2）在``SayHelloController``中调用``SayHelloClient``：
+
+[source,java]
+----
+@RestController
+public class SayHelloController {
+    private static Logger log = LoggerFactory.getLogger(SayHelloController.class);
+
+    @Autowired
+    private ApiProductClient apiProductClient;
+
+    @GetMapping("/user")
+    public String userHello() {
+        User user = new User();
+        user.setName("lily");
+        user.setGift("birthday card");
+        return sayHelloClient.sayHello(user);
+    }
+}
+----
+ 
+3、分别启动服务注册中心``01-eureka-server``、服务提供者``01-service-demo``，服务消费者``01-feign-consumer``，浏览器访问``http://localhost:9091/user``，后台先错误信息：
+
+[source,block]
+----
+feign.FeignException: status 405 reading SayHelloClient#sayHello(User); content:
+{"timestamp":1548141786602,"status":405,"error":"Method Not Allowed","exception":"org.springframework.web.HttpRequestMethodNotSupportedException","message":"Request method 'POST' not supported","path":"/hello/user"}
+	at feign.FeignException.errorStatus(FeignException.java:62) ~[feign-core-9.5.0.jar:na]
+	at feign.codec.ErrorDecoder$Default.decode(ErrorDecoder.java:91) ~[feign-core-9.5.0.jar:na]
+……
+----
+ 
+意思是请求的Post方法不被允许，很明显，我们后台必须接收Get请求，而非Post。
+
+
+== 原因
+ 
+同RestTemplate类似，Feign默认情况下也使用的是JDK原生的http请求，同时也支持OkHttp、HttpClient等框架。默认情况下，**原生Http请求不允许Get请求传递body，如果传递了body数据，会将当前请求转为Post请求**，而实际上我们后台接收的是Get请求，所以抛出上边的异常，所以我们需要换成能够支持的HttpClient。
+
+
+== 解决
+ 
+1、在服务消费者``01-feign-consumer``的pom.xml中引入第三方依赖包：
+
+[source,xml]
+----
+<dependency>
+<groupId>io.github.openfeign</groupId>
+<artifactId>feign-httpclient</artifactId>
+<version>9.4.0</version>
+</dependency>
+----
+ 
+2、在服务消费者``01-feign-consumer``的配置文件中启用httpclient：
+
+[source,block]
+----
+# feign use httpclient
+feign.httpclient.enabled=true
+----
+ 
+3、测试：
+
+分别启动服务注册中心``01-eureka-server``、服务提供者``01-service-demo``，服务消费者``01-feign-consumer``，浏览器再次访问``http://localhost:9091/user``，可以看到输出了正确的信息：
+
+
+image::/images/attachment/20190122/99cda8e9bed24932ac1da422e5366ffd.png[]
+
+
+问题解决。
+
+**示例代码： https://github.com/belonk/springcloud-demo/tree/master/02-eureka[github]**

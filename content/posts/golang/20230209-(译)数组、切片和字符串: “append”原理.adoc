@@ -1,0 +1,793 @@
+---
+title: (译)数组、切片和字符串 - “append” 原理
+slug: go-slice
+categories:
+  - GoLang
+tags:
+  - go
+  - array
+  - slice
+  - string
+  - append
+description: 要了解切片是如何工作的，有助于了解它们是如何实现的。有一个小数据结构，即切片头，即与切片变量关联的项，该头描述了单独分配的数组的一部分。当我们传递切片值时，标头会被复制，但它指向的数组始终是共享的。一旦您了解它们的工作原理，切片不仅易于使用，而且功能强大且富有表现力，尤其是在内置函数 `append`、`copy` 的帮助下。
+date: 2023/02/09
+updated: 2022/12/19
+---
+
+= (译)数组、切片和字符串: “append”原理
+
+* 原文地址: https://go.dev/blog/slices
+* 作者: Rob Pike
+* 日期: 2013 年 9 月 26 日
+
+## 介绍
+
+过程编程语言最常见的特征之一是数组的概念。数组看起来很简单，但在将它们添加到语言时必须回答许多问题，例如：
+
+- 固定尺寸还是可变尺寸？
+- 大小是类型的一部分吗？
+- 多维数组是什么样的？
+- 空数组有意义吗？
+
+这些问题的答案会影响数组是否只是语言的一个特性还是其设计的核心部分。
+
+在 Go 的早期开发中，在设计感觉正确之前，花了大约一年的时间来确定这些问题的答案。关键步骤是引入 _slices_，它建立在固定大小的 _数组_ 之上，以提供灵活、可扩展的数据结构。然而，直到今天，刚接触 Go 的程序员经常对切片的工作方式感到困惑，也许是因为其他语言的经验影响了他们的思维。
+
+在这篇文章中，我们将尝试消除混淆。我们将通过构建片段来解释 `append` 内置函数是如何工作的，以及为什么它会以这种方式工作。
+
+## 数组
+
+数组是 Go 中的一个重要构建块，但就像建筑物的基础一样，它们通常隐藏在更可见的组件之下。在我们继续讨论更有趣、更强大、更突出的切片概念之前，我们必须简单地讨论一下它们。
+
+数组在 Go 程序中并不常见，因为数组的大小是其类型的一部分，这限制了它的表达能力。
+
+以下代码:
+
+[source,go]
+----
+var buffer [256]byte
+----
+
+声明了一个数组变量 `buffer` ，`[256]byte` 表示它持有的数据类型为 `byte`，长度为 256。如果想声明 512 个字节的数组可以这样:  `[512]byte`。
+
+与数组关联的数据就是 **数组中的元素**。上边声明的数组缓冲区在内存中看起来像这样:
+
+[source,go]
+----
+buffer: byte byte byte ... 256 times ... byte byte byte
+----
+
+也就是说，该变量只保存 256 个字节的数据，仅此而已。我们可以使用熟悉的索引语法 `buffer[0]`、`buffer[1]` 到 `buffer[255]` 来访问它的元素。（索引范围 0 到 255 涵盖 256 个元素）尝试使用超出此范围的索引值访问 `buffer` 会使程序崩溃。
+
+内置函数 `len` 会返回数组、切片或其他一些数据类型中的元素数量。在我们的示例中，`len(buffer)` 返回固定值 256。
+
+数组有它们适合的使用场景 —— 例如，它们是转换矩阵的良好表示，但它们在 Go 中最常见的用途是为切片保存存储空间。
+
+## 切片：切片头
+
+要很好地使用切片，必须准确了解什么是切片以及切片的实现原理。
+
+切片是一种数据结构，描述了与切片变量本身分开存储的数组的连续部分。 _切片不是数组_，它只 _描述_ 了数组的一部分。
+
+[NOTE]
+====
+.译注
+上边这句话的意思是，内存中分配的切片变量存储地址会指向切片所依赖的底层数组，也就是说，切片底层使用的是数组来存储数据。
+
+需要记住的是，数组在 go 中是值类型，但是切片确可以看做引用类型。
+====
+
+如上一节中的数组变量 `buffer`，我们可以通过对数组进行切片来创建一个下标从 100 到 149 元素 (不包括 150) 的 _切片_：
+
+[source,go]
+----
+var slice []byte = buffer[100:150]
+----
+
+上边的代码中，`slice` 变量的类型为 `[]byte` ，即该切片为 “字节切片”，通过对 `buffer` 元素 100（包括）到 150（不包括）进行切片，从而从数组 `buffer` 中初始化。更常用的声明方式是忽略类型，让编译器自动推导：
+
+[source,go]
+----
+var slice = buffer[100:150]
+----
+
+我们可以使用简短的声明形式：
+
+[source,go]
+----
+slice := buffer[100:150]
+----
+
+可以将切片视为具有两个元素的小数据结构：长度和指向数组元素的指针。你可以把它想象成是在幕后这样构建的：
+
+[source,go]
+----
+type sliceHeader struct {
+    Length        int   // 持有的元素数量
+    ZerothElement *byte // 持有的数组元素的片段
+}
+
+slice := sliceHeader{
+    Length:        50,
+    ZerothElement: &buffer[100],
+}
+----
+
+这里只是举一个例子，但已经很好的说明了切片的底层结构。 `sliceHeader` 结构体对程序员是不可见的，并且元素指针的类型取决于元素的类型。
+
+到目前为止，我们已经对数组使用了切片操作，但我们也可以对切片进行切片，如下所示：
+
+[source,go]
+----
+slice2 := slice[5:10]
+----
+
+和之前一样，此操作创建一个新切片，在本例中包含原始切片的元素 5 到 9（包括），这意味着原始数组的元素 105 到 109。变量的底层 `sliceHeader` 结构 `slice2` 如下所示：
+
+[source,go]
+----
+slice2 := sliceHeader{
+    Length:        5,
+    ZerothElement: &buffer[105],
+}
+----
+
+请注意，此标头仍然指向存储在 `buffer` 变量中的**相同**底层数组。
+
+我们也可以 _重新切片_，也就是说对一个切片再次切片并将结果存储回原始切片结构中，如：
+
+[source,go]
+----
+slice = slice[5:10]
+----
+
+此时， `slice` 变量的 `sliceHeader` 结构与 `slice2` 变量的相同。您会看到经常使用重新切片，例如截断切片。下边的语句删除切片的第一个和最后一个元素：
+
+[source,go]
+----
+slice = slice[1:len(slice)-1]
+----
+
+> 练习：写出 `sliceHeader` 这个分配后结构的样子。
+
+你会经常听到有经验的 Go 程序员谈论“sliceHeader”，因为这确实是存储在切片变量中的内容。例如，当您调用将切片作为参数的函数时，例如 [bytes.IndexRune](https://go.dev/pkg/bytes/#IndexRune)，该标头就是传递给函数的内容。如下所示：
+
+[source,go]
+----
+slashPos := bytes.IndexRune(slice, '/')
+----
+
+将 `slice` 作为参数传递给函数 `IndexRune`，实际上传递的是一个 “sliceHeader”。
+
+“sliceHeader” 中还有一个数据项，我们将在下面讨论，但首先让我们看看当您使用切片进行编程时，切片头的存在意味着什么。
+
+## 将切片传递给函数
+
+重要的是要理解即使切片包含指针，它本身也是一个值。在底层，它是一个包含指针和长度的结构体。它 _不是_ 指向结构的指针。
+
+这很重要。
+
+当我们在前面的例子中调用 `IndexRune` 时，它被传递了一个切片头的 _副本_。这种行为具有重要的影响。
+
+考虑这个简单的函数：
+
+[source,go]
+----
+func AddOneToEachElement(slice []byte) {
+    for i := range slice {
+        slice[i]++
+    }
+}
+----
+
+就像它的名字所暗示的那样，迭代切片的索引（使用 `for` `range` 循环），将参数 `slice` 中的买一个元素都加 1。
+
+试试看：
+
+[source,go]
+----
+func main() {
+    slice := buffer[10:20]
+    for i := 0; i < len(slice); i++ {
+        slice[i] = byte(i)
+    }
+    fmt.Println("before", slice)
+    AddOneToEachElement(slice)
+    fmt.Println("after", slice)
+}
+----
+
+上述代码输出:
+
+----
+before [0 1 2 3 4 5 6 7 8 9]
+after [1 2 3 4 5 6 7 8 9 10]
+----
+
+尽管切片 _标头_ 是按值传递的，但标头包含指向数组元素的指针，因此原始切片标头和传递给函数的标头副本都描述了同一个数组。因此，当函数返回时，可以通过原始切片变量看到修改后的元素。
+
+函数的参数实际上是一个副本，如下例所示：
+
+[source,go]
+----
+func SubtractOneFromLength(slice []byte) []byte {
+    slice = slice[0 : len(slice)-1]
+    return slice
+}
+
+func main() {
+    fmt.Println("Before: len(slice) =", len(slice))
+    newSlice := SubtractOneFromLength(slice)
+    fmt.Println("After:  len(slice) =", len(slice))
+    fmt.Println("After:  len(newSlice) =", len(newSlice))
+}
+----
+
+上述代码输出：
+
+[source,go]
+----
+Before: len (slice) = 50
+After:  len(slice) = 50
+After:  len (newSlice) = 4
+----
+
+这里我们看到切片参数的 _内容_ 可以被函数修改，但它的 _头部_ 不能。存储在 `slice` 变量中的长度不会被函数调用修改，因为函数传递的是切片头的副本，而不是原始切片头。因此，如果我们想编写一个修改标头的函数，我们必须将它作为结果参数返回，就像我们在这里所做的那样。`slice` 变量不变，但返回的值具有新的长度，然后存储在 `newSlice`,
+
+[NOTE]
+====
+.译注
+数据在 go 中是值传递，也就是说，方法参数接收数组时会拷贝一份再传入方法，这无疑是对资源的浪费。切片很好的解决了这个问题，只需要拷贝一个 sliceHeader，然后传入参数，切片所指向的底层数组不会被拷贝，因此，我们可以将切片理解为引用类型传递。
+====
+
+## 指向切片的指针：方法接收器
+
+[source,go]
+----
+func PtrSubtractOneFromLength(slicePtr *[]byte) {
+    slice := *slicePtr
+    *slicePtr = slice[0 : len(slice)-1]
+}
+
+func main() {
+    fmt.Println("Before: len(slice) =", len(slice))
+    PtrSubtractOneFromLength(&slice)
+    fmt.Println("After:  len(slice) =", len(slice))
+}
+----
+
+上述代码输出:
+
+----
+Before: len(slice) = 50
+After:  len(slice) = 49
+----
+
+这里例子中看起来很笨拙，其实在方法参数上使用指针切片是没有必要的，如前一个代码所示。但有一种常见的情况会采用切片指针：将指针切片作为方法接收器。
+
+假设我们想在切片上使用一个方法，截断最后一个斜杠 `/` 和之后的字符串。我们可以这样写：
+
+[source,go]
+----
+type path []byte
+
+func (p *path) TruncateAtFinalSlash() {
+    i := bytes.LastIndex(*p, []byte("/"))
+    if i >= 0 {
+        *p = (*p)[0:i]
+    }
+}
+
+func main() {
+    pathName := path("/usr/bin/tso") // Conversion from string to path.
+    pathName.TruncateAtFinalSlash()
+    fmt.Printf("%s\n", pathName)
+}
+----
+
+如果您运行此示例，您将看到它正常工作，他会修改调用者中的切片。
+
+> 练习：将接收器的类型改为值而不是指针，然后再次运行。解释发生了什么。
+
+[NOTE]
+====
+.译注
+将接收器的类型改为值而不是指针，函数将不能正常工作。
+[source,go]
+----
+func (p path) TruncateAtFinalSlash1() {
+	fmt.Printf("%x\n", p)
+	i := bytes.LastIndex(p, []byte("/"))
+	if i >= 0 {
+		p = (p)[0:i] // <1>
+	}
+}
+----
+上述代码中 <1> 处，将 p 重新切片让后再次赋值给 p，由于 p 是原始切片的一个副本，赋值后无法改变原始切片的引用，所以函数无法正常工作。
+====
+
+另外，如果我们想将 `path` 路径中的 ASCII 字母大写，我们编写一个方法，该方法可以是一个值，因为值接收器仍将指向同一个底层数组。
+
+[source,go]
+----
+type path []byte
+
+func (p path) ToUpper() {
+    for i, b := range p {
+        if 'a' <= b && b <= 'z' {
+            p[i] = b + 'A' - 'a'
+        }
+    }
+}
+
+func main() {
+    pathName := path("/usr/bin/tso")
+    pathName.ToUpper()
+    fmt.Printf("%s\n", pathName)
+}
+----
+
+这里该 `ToUpper` 方法使用 `for`  `range` 语句中的两个变量来捕获索引和切片元素。这种形式的循环避免了 `p[i]` 在正文中多次写入。
+
+> 练习：将 `ToUpper` 方法转换为使用指针接收器，看看它的行为是否改变。
+>
+> —— 行为不会改变, 因为指针接收器仍然会修改切片的底层数组。
+
+> 进阶练习：转换 `ToUpper` 处理 Unicode 字母的方法，而不仅仅是 ASCII。
+
+## 容量
+
+查看以下将其参数切片扩展 `ints` 一个元素的函数：
+
+[source,go]
+----
+func Extend(slice []int, element int) []int {
+    n := len(slice)
+    slice = slice[0 : n+1]
+    slice[n] = element
+    return slice
+}
+----
+
+（为什么它需要返回修改后的切片？）现在运行它：
+
+[source,go]
+----
+func main() {
+    var iBuffer [10]int
+    slice := iBuffer[0:0]
+    for i := 0; i < 20; i++ {
+        slice = Extend(slice, i)
+        fmt.Println(slice)
+    }
+}
+----
+
+看看切片是如何增长的，直到……程序触发 `panic` :
+
+----
+[0]
+[0 1]
+[0 1 2]
+[0 1 2 3]
+[0 1 2 3 4]
+[0 1 2 3 4 5]
+[0 1 2 3 4 5 6]
+[0 1 2 3 4 5 6 7]
+[0 1 2 3 4 5 6 7 8]
+[0 1 2 3 4 5 6 7 8 9]
+panic: runtime error: slice bounds out of range [:11] with capacity 10
+
+goroutine 1 [running]:
+main.Extend(...)
+	/tmp/sandbox1715961098/prog.go:15
+main.main()
+	/tmp/sandbox1715961098/prog.go:26 +0xbf
+----
+
+是时候讨论切片头的第三个组成部分了：它的 _容量_。除了数组指针和长度之外，切片头还存储其容量：
+
+[source,go]
+----
+type sliceHeader struct {
+    Length        int
+    Capacity      int
+    ZerothElement *byte
+}
+----
+
+该 `Capacity` 字段记录底层数组实际有多少空间；`Length` 这是可以达到的最大值。试图使切片超出其容量将超出阵列的限制，并会引发 `panic`。
+
+在我们的示例切片由
+
+[source,go]
+----
+slice := iBuffer[0:0]
+----
+
+它的标头如下所示：
+
+[source,go]
+----
+slice := sliceHeader{
+    Length:        0,
+    Capacity:      10,
+    ZerothElement: &iBuffer[0],
+}
+----
+
+该 `Capacity` 字段等于基础数组的长度，减去切片第一个元素在数组中的索引。如果要查询切片的容量是多少，请使用内置函数 `cap` ：
+
+[source,go]
+----
+if cap(slice) == len(slice) {
+    fmt.Println("slice is full!")
+}
+----
+
+## Make
+
+如果我们想让切片超出其容量怎么办？你不能这样做！根据定义，容量是增长的极限。但是您可以通过分配一个新数组、复制数据并修改切片以描述新数组来获得等效的结果。
+
+让我们从分配开始。我们可以使用 `new` 内置函数分配一个更大的数组，然后对结果进行切片，但使用 `make` 内置函数更简单。它一次分配一个新数组并创建一个切片头来描述它。该 `make` 函数接受三个参数：切片的类型、初始长度和容量，即 `make` 分配用于保存切片数据的数组的长度。这个调用创建了一个长度为 10 的切片，还有 5 个容量（15-10），运行它可以看到：
+
+[source,go]
+----
+slice := make([]int, 10, 15)
+fmt.Printf("len: %d, cap: %d\n", len(slice), cap(slice))
+----
+
+这个片段使我们的 `int` 切片容量加倍，但长度保持不变：
+
+[source,go]
+----
+slice := make([]int, 10, 15)
+fmt.Printf("len: %d, cap: %d\n", len(slice), cap(slice))
+newSlice := make([]int, len(slice), 2*cap(slice))
+for i := range slice {
+	newSlice[i] = slice[i]
+}
+slice = newSlice
+fmt.Printf("len: %d, cap: %d\n", len(slice), cap(slice))
+----
+
+运行此代码后，切片在需要再次重新分配之前有更多的增长空间。
+
+创建切片时，长度和容量通常是相同的。`make` 内置有这种常见情况的简写。长度参数默认为容量，因此您可以省略它以将它们设置为相同的值。
+
+[source,go]
+----
+gophers := make([]Gopher, 10)
+----
+
+上述代码中，切片 `gophers` 的长度和容量都设置为 10。
+
+## 复制
+
+当我们在上一节中将切片的容量翻倍时，我们编写了一个循环来将旧数据复制到新切片中。Go 有一个内置函数 `copy` 可以让这更容易。它的参数是两个切片，它将数据从右侧参数复制到左侧参数。这是我们重写后使用的示例 `copy` ：
+
+[source,go]
+----
+newSlice := make([]int, len(slice), 2*cap(slice))
+copy(newSlice, slice)
+----
+
+`copy` 功能很智能。它只复制它可以复制的内容，并注意两个参数的长度。换句话说，它复制的元素数量是两个切片长度中的最小值，这可以节省一点空间。此外，`copy` 返回一个整数值，即它复制的元素数，尽管它并不总是值得检查。
+
+该 `copy` 函数还可以在源和目标重叠时正确处理，这意味着它可以用于在单个切片中移动项目。以下是如何使用 `copy` 将值插入切片中间的方法：
+
+[source,go]
+----
+// Insert inserts the value into the slice at the specified index,
+// which must be in range.
+// The slice must have room for the new element.
+func Insert(slice []int, index, value int) []int {
+    // Grow the slice by one element.
+    slice = slice[0 : len(slice)+1]
+    // Use copy to move the upper part of the slice out of the way and open a hole.
+    copy(slice[index+1:], slice[index:])
+    // Store the new value.
+    slice[index] = value
+    // Return the result.
+    return slice
+}
+----
+
+在这个函数中有几件事需要注意。首先，当然，它必须返回更新后的切片，因为它的长度已经改变。其次，它使用了简写的切片方式：
+
+[source,go]
+----
+slice[i:]
+----
+
+等同于：
+
+[source,go]
+----
+slice[i:len(slice)]
+----
+
+此外，虽然我们还没有使用这个技巧，但我们也可以省略切片表达式的第一个元素，它默认为零。因此：
+
+[source,go]
+----
+slice[:]
+----
+
+仅表示切片本身，这在对数组进行切片时很有用。下边的代码的使用最简单的方式将数组直接转换为了切片：
+
+[source,go]
+----
+array[:]
+----
+
+[source,go]
+----
+slice := make([]int, 10, 20) // Note capacity > length: room to add element.
+for i := range slice {
+	slice[i] = i
+}
+fmt.Println(slice)
+slice = Insert(slice, 5, 99)
+fmt.Println(slice)
+----
+
+## 附加：一个例子
+
+前几节，我们编写了一个 `Extend` 函数，将切片扩展一个元素。但它有问题，因为如果切片的容量太小，函数就会崩溃（我们的例子也有同样的问题）。现在我们已经准备好解决这个问题了，所以让我们为整数切片 `Insert` 编写一个健壮的 `Extend` 实现：
+
+[source,go]
+----
+func Extend(slice []int, element int) []int {
+    n := len(slice)
+    if n == cap(slice) {
+        // Slice is full; must grow.
+        // We double its size and add 1, so if the size is zero we still grow.
+        newSlice := make([]int, len(slice), 2*len(slice)+1)
+        copy(newSlice, slice)
+        slice = newSlice
+    }
+    slice = slice[0 : n+1]
+    slice[n] = element
+    return slice
+}
+----
+
+在这种情况下，返回切片尤其重要，因为当它重新分配结果切片时，它描述了一个完全不同的数组。这是一个小片段来演示切片容量已满时会发生什么：
+
+[source,go]
+----
+slice := make([]int, 0, 5)
+for i := 0; i < 10; i++ {
+	slice = Extend(slice, i)
+	fmt.Printf("len=%d cap=%d slice=%v\n", len(slice), cap(slice), slice)
+	fmt.Println("address of 0th element:", &slice[0])
+}
+----
+
+注意当初始大小为 5 的数组被填满时会重新 **创建数组** 并扩容。分配新数组时，第零个元素的容量和地址都会发生变化。
+
+以强大的 `Extend` 函数为指导，我们可以编写一个更好的函数，让我们将切片扩展多个元素。为此，我们使用 Go 在调用函数时将函数参数列表转换为切片的能力。也就是说，我们使用 Go 的可变参数函数工具。
+
+让我们调用函数 `Append`。对于第一个版本，我们可以重复调用 `Extend`，这样可变参数函数的机制就很清楚了。声明一个 `Append` 函数：
+
+[source,go]
+----
+func Append(slice []int, items ...int) []int
+----
+
+`Append` 需要一个切片参数，然后是零个或多个 `int` 参数。
+
+[source,go]
+----
+// Append appends the items to the slice.
+// First version: just loop calling Extend.
+func Append(slice []int, items ...int) []int {
+    for _, item := range items {
+        slice = Extend(slice, item)
+    }
+    return slice
+}
+----
+
+注意 `for` `range` 循环遍历 `items` 参数的元素，它具有隐含的 `type []int`。还要注意使用空白标识符 ` _ ` 来丢弃循环中的索引，在这种情况下我们不需要。
+
+调用：
+
+[source,go]
+----
+slice := []int{0, 1, 2, 3, 4}
+fmt.Println(slice)
+slice = Append(slice, 5, 6, 7, 8)
+fmt.Println(slice)
+----
+
+这个例子中的另一个新技术是我们通过编写一个复合文字来初始化切片，它由切片的类型和大括号中的元素组成：
+
+[source,go]
+----
+slice := []int{0, 1, 2, 3, 4}
+----
+
+这个 `Append` 函数中，我们不仅可以追加元素，我们还可以通过 `...` 在调用方法是将切片“分解”成参数来追加整个第二个切片，这被称作"解引用"：
+
+[source,go]
+----
+slice1 := []int{0, 1, 2, 3, 4}
+slice2 := []int{55, 66, 77}
+fmt.Println(slice1)
+slice1 = Append(slice1, slice2...) // The '...' is essential!
+fmt.Println(slice1)
+----
+
+当然，我们可以 `Append` 通过不超过一次的分配来提高效率，建立在以下内容的基础上 `Extend` :
+
+[source,go]
+----
+// Append appends the elements to the slice.
+// Efficient version.
+func Append(slice []int, elements ...int) []int {
+    n := len(slice)
+    total := len(slice) + len(elements)
+    if total > cap(slice) {
+        // Reallocate. Grow to 1.5 times the new size, so we can still grow.
+        newSize := total*3/2 + 1
+        newSlice := make([]int, total, newSize)
+        copy(newSlice, slice)
+        slice = newSlice
+    }
+    slice = slice[:total]
+    copy(slice[n:], elements)
+    return slice
+}
+----
+
+在这里，请注意我们使用了两次 `copy`，一次是将切片数据移动到新分配的内存，然后将附加项复制到旧数据的末尾。
+
+执行代码，行为与之前的相同：
+
+[source,go]
+----
+slice1 := []int{0, 1, 2, 3, 4}
+slice2 := []int{55, 66, 77}
+fmt.Println(slice1)
+slice1 = Append(slice1, slice2...) // The '...' is essential!
+fmt.Println(slice1)
+----
+
+## 附加：内置函数
+
+因此我们得出了设计 `append` 内置函数的动机，它与我们的 `Append` 示例完全一样，效率相当，但它适用于任何切片类型。
+
+Go 的一个弱点是任何泛型类型的操作都必须由运行时提供。将来情况可能会改变，但就目前而言，为了更轻松地使用切片，Go 提供了一个内置的通用 `append` 函数。它的工作方式与我们的 `int` 切片版本相同，适用于 _任何_ 切片类型。
+
+请记住，由于切片标头总是通过调用 `append` 来更新，因此您需要在调用后保存返回的切片。事实上，编译器不会让你在不保存结果的情况下调用 append。
+
+这里有一些与打印语句混合的单行语句。尝试它们，编辑并探索它们：
+
+[source,go]
+----
+// Create a couple of starter slices.
+slice := []int{1, 2, 3}
+slice2 := []int{55, 66, 77}
+fmt.Println("Start slice: ", slice)
+fmt.Println("Start slice2:", slice2)
+
+// Add an item to a slice.
+slice = append(slice, 4)
+fmt.Println("Add one item:", slice)
+
+// Add one slice to another.
+slice = append(slice, slice2...)
+fmt.Println("Add one slice:", slice)
+
+// Make a copy of a slice (of int).
+slice3 := append([]int(nil), slice...)
+fmt.Println("Copy a slice:", slice3)
+
+// Copy a slice to the end of itself.
+fmt.Println("Before append to self:", slice)
+slice = append(slice, slice...)
+fmt.Println("After append to self:", slice)
+----
+
+值得花点时间详细考虑该示例的最后一行，以了解切片的设计如何使这个简单的调用能够正常工作。
+
+在社区构建的 Slice Tricks Wiki https://go.dev/wiki/SliceTricks[页面] 上有更多关于 `append`、`copy` 和其他使用切片的方法的示例。
+
+## Nil
+
+顺便说一句，利用我们新发现的知识，我们可以看到 `nil` 切片的表示是什么。自然是切片头的零值:
+
+[source,go]
+----
+sliceHeader{
+    Length:        0,
+    Capacity:      0,
+    ZerothElement: nil,
+}
+----
+
+或者简写为:
+
+[source,go]
+----
+sliceHeader{}
+----
+
+关键细节是元素指针 `nil` 也是，创建的切片
+
+[source,go]
+----
+array[0:0]
+----
+
+长度为零（甚至容量为零），但它的指针不是 `nil`，所以它不是零切片。
+
+[NOTE]
+====
+.译注
+上边这句话的意思是，nil 切片头中的 `ZerothElement` 为 nil，但是 `array[0:0]` 创建的切片头中，`ZerothElement` 并不是 nil。
+====
+
+应该清楚的是，一个空切片可以增长（假设它具有非零容量），但一个 `nil` 切片没有数组可以放入值，并且永远不会增长到容纳一个元素。
+
+也就是说，`nil` 切片在功能上等同于零长度的切片，但是它不指向任何内容，它的长度为零，但是可以通过内置的 `append` 函数来添加新元素。例如，查看上面的单行代码，它通过 `append` 到切片来复制 `nil` 切片。
+
+## 字符串
+
+现在简要介绍切片上下文中 Go 中的字符串。
+
+字符串实际上非常简单：它们只是只读的字节切片，并带有语言的一些额外语法支持。
+
+因为它们是只读的，所以不需要容量（您不能增加它们），但是对于大多数用途，您可以将它们视为只读字节片。
+
+对于初学者，我们可以索引它们以访问单个字节：
+
+[source,go]
+----
+slash := "/usr/ken"[0] // yields the byte value '/'.
+----
+
+我们可以对字符串进行切片以获取子字符串：
+
+[source,go]
+----
+usr := "/usr/ken"[0:4] // yields the string "/usr"
+----
+
+现在，当我们对字符串进行切片时，幕后发生的事情应该很明显了。
+
+我们还可以获取一个普通的字节切片，并通过简单的转换从中创建一个字符串：
+
+[source,go]
+----
+str := string(slice)
+----
+
+同样，也可以将字符串转为 `[]byte` ：
+
+[source,go]
+----
+slice := []byte(usr)
+----
+
+字符串下面的数组是隐藏的；除了通过字符串之外，无法访问其内容。这意味着当我们进行任何一种转换时，都必须制作数组的副本。当然，Go 会处理这个问题，所以你不必这样做。在这些转换之后，对字节切片底层数组的修改都不会影响相应的字符串。
+
+这种类似切片的字符串设计的一个重要结果是创建子字符串非常有效。所需要做的就是创建一个两个字的字符串标题。由于字符串是只读的，因此原始字符串和切片操作产生的字符串可以安全地共享同一个数组。
+
+> 历史日志：最早的字符串实现总是分配内存的，但是当切片被添加到语言中时，它们提供了一个高效字符串处理的模型。结果，一些基准测试得到了巨大的加速。
+
+当然，字符串还有更多内容， <</2023/03/25/go-unicode#, 字符串、字节、符文和字符>> 更深入地介绍了它们。
+
+## 结论
+
+要了解切片是如何工作的，有助于了解它们是如何实现的。有一个小数据结构，即切片头，即与切片变量关联的项，该头描述了单独分配的数组的一部分。当我们传递切片值时，标头会被复制，但它指向的数组始终是共享的。
+
+一旦您了解它们的工作原理，切片不仅易于使用，而且功能强大且富有表现力，尤其是在内置函数 `append`、`copy` 的帮助下。
+
+## 更多阅读
+
+关于 Go 中的 slices 的 intertubes 周围有很多东西可以找到。如前所述， https://go.dev/wiki/SliceTricks[“切片技巧”Wiki 页面] 有很多示例。 https://blog.golang.org/go-slices-usage-and-internals[Go Slices] 博客文章用清晰的图表描述了内存布局细节。Russ Cox 的 https://research.swtch.com/godata[Go 数据结构] 文章包括对切片以及 Go 的其他一些内部数据结构的讨论。
+
+有更多可用的资料，但了解切片的最佳方法是使用它们。

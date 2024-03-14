@@ -1,0 +1,109 @@
+---
+title: windows全能终端神器MobaXterm9.4破解版下载
+slug: mobaxterm-9.4-crack
+img: /images/thumbnail/attachment/20180402/0830727db8f048b09ae298ed57ee0c1b.png
+categories:
+  - 工具软件
+tags:
+  - mobaxterm
+  - 下载
+  - ssh
+  - linux
+description: >-
+  MobaXterm是远程计算的终极工具箱。在一个单独的Windows应用程序中，它为程序员、网站管理员、it管理员和几乎所有需要以更简单的方式处理远程工作的用户提供了大量的功能。Mobaxterm为用户提供了多标签和多终端分屏选项，内置sftp文件传输以及xerver。MobaXterm提供了所有重要的远程网络工具、协议(SSH、X11、RDP、VNC、FTP、MOSH、…)和Unix命令(bash、ls、cat、sed、grep、awk、rsync、…)到Windows桌面。
+date: 2018-04-02 11:52:34
+updated: 2018-05-29 12:18:30
+---
+
+= windows全能终端神器MobaXterm9.4破解版下载
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: mobaxterm,ssh,ftp,windows
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: mobaxterm,下载,ssh,linux
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+== 简介
+
+MobaXterm是远程计算的终极工具箱。在一个单独的Windows应用程序中，它为程序员、网站管理员、it管理员和几乎所有需要以更简单的方式处理远程工作的用户提供了大量的功能。
+
+Mobaxterm为用户提供了多标签和多终端分屏选项，内置sftp文件传输以及xerver，让用户可以远程运行X窗口程序，ssh连接后会自动将远程目录展示在ssh面版中，方便用户上传下载文件。
+
+MobaXterm提供了所有重要的远程网络工具、协议(SSH、X11、RDP、VNC、FTP、MOSH、…)和Unix命令(bash、ls、cat、sed、grep、awk、rsync、…)到Windows桌面。
+
+MobaXterm小巧简单，仅有一个可执行文件。
+
+官方地址： https://mobaxterm.mobatek.net/[https://mobaxterm.mobatek.net/]
+
+image::/images/attachment/20180402/0830727db8f048b09ae298ed57ee0c1b.png[]
+
+== 功能介绍
+
+1、支持各种连接SSH，X11，RDP，VNC，FTP，MOSH……
+
+image::/images/attachment/20180402/3ce0f830359c4d2485c57435ab7d7e97.png[]
+
+2、内建XServer
+
+image::/images/attachment/20180402/29944d53697645f9899eb22889b16c15.png[]
+
+3、连接SSH终端后支持SFTP传输文件
+
+image::/images/attachment/20180402/67cfca0b253649dab87d0a523e411ca0.png[]
+
+除了上边的一排工具，还可以拖拽上传哦。
+
+4、友好的颜色设计
+
+image::/images/attachment/20180402/f850d6c0de334ce8b054c75f3a675073.png[]
+
+你已经看到了，MobaXterm配色看起来非常舒适，关键信息都以不同颜色区分，例如，ERROR的日志自动标记为红色，警告信息标记为黄色，等等。
+
+5、支持多标签和多终端分屏
+
+image::/images/attachment/20180402/4ed1610318b840fcaa6154d62dd58b4d.png[]
+
+6、支持远程连接windows
+
+MobaXterm直接支持VNC/RDP/Xdmcp等多种远程连接方式。
+
+7、支持多种工具
+
+image::/images/attachment/20180402/46483e4c79104eb2b868edabba50c445.png[]
+
+在Tool侧边栏里，有多种工具，例如文件夹比较工具MobaFoldersDiff，网络扫描器Network&nbsp;scanner，等等。
+
+其他的功能不一一列举了，具体介绍和使用参见官方详细说明。
+
+== 下载
+
+MobaXTerm有免费版本，但是保存的session有上限。这里提供的是专业破解版本下载，百度云有限速，下载链接如下：
+
+[horizontal]
+链接:: https://pan.baidu.com/s/1ONu6aVnV5vLFSNiUH8mDUA[https://pan.baidu.com/s/1ONu6aVnV5vLFSNiUH8mDUA]
+密码:: 95gl
+
+下载完成后解压，里边包含一个破解的MobaXterm.exe文件，执行即可。
+
+image::/images/attachment/20180402/c84991e70e7f4e37ac4c026d120df155.png[]
+
+== 申明
+
+1、破解软件博主亲测安全可用，不过建议下载后进行病毒查杀，博主不对软件的安全性负任何责任；
+
+2、分享破解软件仅供个人使用，切勿用于商业用途；
+
+3、开发一款好的产品真心不易，有条件的朋友请支持正版软件。

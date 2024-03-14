@@ -1,0 +1,388 @@
+---
+title: Nginx学习——nginx的下载、安装和启动
+slug: nginx-download-install-and-start
+img: /images/thumbnail/attachment/20180228/472b73c1847d4e28a757f9ce2d3d420d.png
+categories:
+  - 开发运维
+tags:
+  - nginx
+  - 下载
+  - 安装
+description: >-
+  Nginx作为轻量级、高并发、高性能的web服务器，目前使用非常广泛。本文讲解了windows和linux下nginx的下载、安装和启动、停止等常规操作，一般建议Nginx部署在Linux服务器上，以发挥其高并发、高性能的特点。
+date: 2017-05-15 17:28:11
+updated: 2018-05-29 14:10:08
+---
+
+= Nginx学习——nginx的下载、安装和启动
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: Nginx,下载,安装,部署,Windows,Linux,启动,停止,重启,升级,重新加载配置
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: nginx,下载,安装
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+
+Nginx作为一款轻量级WEB服务服务器，除了作为http代理和反向代理服务器，还更广泛的运用于负载均衡、高级http服务、邮件代理服务等。接下来，我们开始学习如何下载安装Nginx服务器，包括windows平台和linux平台。
+
+== Nginx版本
+ 
+Nginx的官方网址： http://nginx.org[http://nginx.org]
+
+Nginx下载地址： http://nginx.org/en/download.html[http://nginx.org/en/download.html]
+
+image::/images/attachment/20170515/3c23be754da54db6b73a2bd1cf2752d4.png[]
+
+如上图所示，目前nginx官方分为三个版本：
+
+* 主线开发版本（Mainline version）：即功能较新的处于开发中的版本，可以用于学习，但不太稳定，不适合商用；
+* 稳定版本（Stable version）：功能稳定，适合商用；
+* 历史遗留版本（Legacy versions）：较早的历史版本。
+* 其他链接
+* 图1中的CHANGES的链接，是对于此版本的更新日志记录；
+* 图1中的nginx-x.x.x的链接，对应的是nginx特定版本的源代码；
+* 图1中的pgp链接，记录的是使用GPG加密软件计算后的签名信息，用于下载文件的验证，防止文件被篡改；
+* 图1中的nginx/Windows-x.x.x对应的是nginx的windows版本的下载链接。
+
+
+== Windows
+
+1、下载安装
+ 
+下载图1中的nginx/Windows-1.12.0，得到window版本的nginx压缩包。
+
+windows版本为绿色版本，解压即用，无须安装。解压下载的压缩包，得到如下的目录结构：
+
+image::/images/attachment/20170515/cc5e8471454b48c4a14c1a146cb5b428.png[]
+
+2、启动
+
+**双击nginx.exe启动**
+
+直接运行图2的nginx.exe即启动了nginx，同时可以在任务管理器中看到有两个nginx.exe的进程。
+
+**Windows命令行启动**
+ 
+运行cmd，进入nginx目录，运行命令
+
+----
+$ nginx.exe
+----
+
+这种方式会使命令行一直处于执行中，无法进行后续操作
+
+或者
+
+----
+$ start nginx
+----
+推荐的方式。
+
+如果启动未出现异常信息，表明启动成功，任务管理器中会出现两个nginx.exe的进程。
+
+
+3、停止
+ 
+
+*杀进程*
+ 
+直接在任务管理器中kill掉nginx进程，不推荐。
+
+
+*命令行*
+ 
+运行cmd，进入nginx目录，输入命令
+
+----
+$ nginx.exe –s quit
+----
+
+推荐，这种方式是平缓停止，完整有序的停止nginx，并保存相关信息
+
+或者
+
+----
+$ nginx.exe –s stop
+----
+
+快速停止nginx，不保存相关信息。
+
+
+4、重新加载配置文件
+ 
+运行cmd，进入nginx目录，输入命令
+
+----
+$ nginx –s reload
+----
+
+5、重新打开日志文件
+ 
+运行cmd，进入nginx目录，输入命令
+
+----
+$ nginx –s reopen
+----
+
+6、Nginx版本查看
+ 
+----
+$ ./sbin/nginx –v
+----
+
+或者
+
+----
+$ ./sbin/nginx –V
+----
+
+大写的V会输出更多的版本及编译配置信息。
+
+== Linux
+ 
+
+1、准备工作
+ 
+由于linux下的nginx大多是编译源码进行安装，我们需要检查编译nginx的必备条件。
+
+* 内核版本
+
+首先我们需要一个内核为Linux 2.6及以上版本的操作系统，因为Linux 2.6及以上内核才支持epoll，而在Linux上使用select或poll来解决事件的多路复用，是无法解决高并发压力问题的。查看linux内核版本：
+
+----
+[root@iZwz9g2hqiikgs5lncf7f7Z ~]# uname -a
+Linux iZwz9g2hqiikgs5lncf7f7Z 2.6.32-642.13.1.el6.x86_64 #1 SMP Wed Jan 11 20:56:24 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux
+[root@iZwz9g2hqiikgs5lncf7f7Z ~]#
+----
+ 
+* 磁盘空间
+
+保证磁盘空间够大，虽然nginx本身不需要太大的磁盘空间，但是随着第三方模块的加入，所需要的磁盘空间会增大。
+
+* GCC编译器：编译c语言程序 
+
+* PCRE库：支持rewrite模块
+
+PCRE（Perl Compatible Regular Expressions，Perl兼容正则表达式）是由Philip Hazel开发的函数库，目前为很多软件所使用，该库支持正则表达式。Nginx的HTTP模块要靠它来解析正则表达式。
+
+
+----
+$ yum install –y pcre pcre-devel
+----
+
+pcre-devel是使用PCRE做二次开发时所需要的开发库，包括头文件等，这也是编译Nginx所必须使用的。
+
+* ZLIB库：支持gzip模块
+
+zlib库用于对HTTP包的内容做gzip格式的压缩，如果我们在nginx.conf里配置了gzip on，并指定对于某些类型（content-type）的HTTP响应使用gzip来进行压缩以减少网络传输量，那么，在编译时就必须把zlib编译进Nginx。其yum安装方式如下：
+
+----
+$ yum install -y zlib zlib-devel
+----
+
+同理，zlib是直接使用的库，zlib-devel是二次开发所需要的库
+
+* Openssl库：支持ssl模块
+
+如果服务器需要在安全的SSL协议上传输HTTP，或者使用MD5、SHA1等散列函数，需要安装该模块。
+
+----
+$ yum install –y openssl openssl-devel
+----
+ 
+
+2、安装
+ 
+下载图1中的nginx-1.12.0，解压到指定目录：
+
+----
+$ tar xf nginx-1.12.0.tar.gz
+----
+
+image::/images/attachment/20170515/3e55769f587d4e91850e50876645c613.png[]
+
+* auto：存放大量脚本，与根目录configure文件相关；
+* conf：存放nginx的配置文件；
+* html：存放nginx首页面和其他的html页面；
+* man：存放nginx的的帮助文档，安装文成后可以使用man命令查看帮助；
+* src：存放nginx源代码
+* configure文件：脚本文件，做一些准备工作，包括系统内核检测、必须软件库检测、参数解析、中间目录生成，生成makefile文件等等；
+
+然后执行如下三个命令：
+
+----
+./configure
+make
+make install
+----
+ 
+configure文件做一些准备工作；
+
+make命令根据configure命令生成的makefile文件编译nginx工程，并生成目标文件、最终的二进制文件；
+
+make install命令根据configure执行时的参数将nginx部署到指定的按照目录，包括相关目录的简历和二进制文件、配置文件的复制等。
+
+
+3、启动
+ 
+* 直接执行二进制程序
+
+----
+[root@iZwz9g2hqiikgs5lncf7f7Z nginx]# pwd
+/usr/local/nginx
+[root@iZwz9g2hqiikgs5lncf7f7Z nginx]#
+[root@iZwz9g2hqiikgs5lncf7f7Z nginx]# ./sbin/nginx
+----
+
+这时，会读取nginx安装目录下的配置文件：/usr/local/nginx/conf/nginx.conf
+
+* 指定配置文件的方式启动
+
+----
+$ /usr/local/nginx/sbin/nginx –c /tmp/nginx.conf
+----
+
+这时，会读取-c参数后指定的nginx.conf配置文件来启动nginx。
+
+* 指定安装目录的方式启动
+
+----
+$ /usr/local/nginx/sbin/nginx –p /usr/local/nginx/
+----
+
+* 指定全局配置项的启动方式
+
+----
+$ /usr/local/nginx/sbin/nginx –g “pid /var/nginx/test.pid”
+----
+
+这意味着nginx的pid文件会写入到指定的目录。-g参数不能与默认路径下的nginx.conf配置冲突，否则无法成功启动。
+
+4、停止
+
+* 快速停止
+ 
+（1）终止进程
+
+----
+$ kill –s SIGTERM [pid]
+----
+ 
+或
+
+----
+Kill –s SIGINT [pid]
+----
+
+（2）使用stop命令
+
+----
+$ ./sbin/nginx –s stop
+----
+
+当快速停止服务时，worker进程与master进程在收到信号后会立刻跳出循环，退出进程。
+
+* 平滑停止
+ 
+停止master进程：
+
+----
+$ ./sbin/nginx –s quit
+----
+
+等同于
+
+----
+$ kill -s SIGQUIT
+----
+
+停止work进程：
+
+
+----
+$ kill -s SIGWINCH
+----
+
+平滑停止服务时，首先会关闭监听端口，停止接收新的连接，然后把当前正在处理的连接全部处理完，最后再退出进程。
+
+
+5、重新加载配置文件
+ 
+
+----
+$ /usr/local/nginx/sbin/nginx -s reload
+----
+
+Nginx会先检查新的配置项是否有误，如果全部正确就以“优雅”的方式关闭，再重新启动Nginx来实现这个目的。类似的，-s是发送信号，仍然可以用kill命令发送HUP信号来达到相同的效果。
+
+
+----
+$ kill -s SIGHUP
+----
+ 
+
+6、日志文件回滚
+ 
+使用-s reopen参数可以重新打开日志文件，这样可以先把当前日志文件改名或转移到其他目录中进行备份，再重新打开时就会生成新的日志文件。这个功能使得日志文件不至于过大。例如：
+
+
+----
+$ /usr/local/nginx/sbin/nginx -s reopen
+----
+
+当然，这与使用kill命令发送USR1信号效果相同。
+
+
+----
+$ kill -s SIGUSR1
+----
+
+
+7、平滑升级nginx
+
+Nginx支持不重启服务来完成新版本的平滑升级，步骤如下。
+
+（1）通知正在运行的旧版本Nginx准备升级。通过向master进程发送USR2信号可达到目的。例如：
+
+----
+$ kill -s SIGUSR2
+----
+
+这时，运行中的Nginx会将pid文件重命名，如将/usr/local/nginx/logs/nginx.pid重命名为/usr/local/nginx/logs/nginx.pid.oldbin，这样新的Nginx才有可能启动成功。
+
+（2）启动新版本的Nginx，可以使用以上介绍过的任意一种启动方法。这时通过ps命令可以发现新旧版本的Nginx在同时运行。
+
+（3）通过kill命令向旧版本的master进程发送SIGQUIT信号，以“优雅”的方式关闭旧版本的Nginx。随后将只有新版本的Nginx服务运行，此时平滑升级完毕。
+
+
+8、Nginx版本查看
+ 
+----
+$ ./sbin/nginx –v
+----
+
+或者
+
+----
+$ ./sbin/nginx –V
+----
+
+大写的V会输出更多的版本及编译配置信息。
+
+
+== 总结
+ 
+Nginx作为轻量级、高并发、高性能的web服务器，目前使用非常广泛。本文讲解了windows和linux下nginx的下载、安装和启动、停止等常规操作，一般建议Nginx部署在Linux服务器上，以发挥其高并发、高性能的特点。

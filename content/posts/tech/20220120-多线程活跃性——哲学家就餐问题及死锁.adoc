@@ -1,0 +1,558 @@
+---
+title: 多线程活跃性——哲学家就餐问题及死锁
+slug: deadlock
+date: 2022/01/20
+updated: 2022/01/21
+img:
+categories:
+  - 并发编程
+tags:
+  - 并发
+  - 死锁
+  - 活跃性
+description: 死锁是多线程编程中最常见的一种"活跃性问题"，除了死锁还包括"饥饿"和"活锁"，这些活跃性问题给并发编程带来极大的挑战。比如出现死锁时，定位和分析问题相对困难，一旦出现死锁，通常只能重启应用程序。本文通过死锁最经典的"哲学家就餐问题"来介绍死锁的产生原因和解决办法。死锁指的是多个线程相互等待彼此而进入永久暂停状态。比如，线程 T1 持有锁 L1 去申请锁 L2，但是线程 T2 持有锁 L2 申请锁 L1，此时它们都在等待对象释放锁，从而进入永久阻塞状态。这就好比两个小朋友，他们各有一个玩具，但都不愿意分享给对方，却希望获得对方的玩具，最终互不相让，只能彼此干瞪眼了。
+---
+
+[[deadlock]]
+= 多线程活跃性——哲学家就餐问题及死锁
+:key_word:
+:author: belonk.com
+:email: belonk@126.com
+:date: 2022/1/20
+:revision: 1.0
+:website: https://blog.belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+死锁是多线程编程中最常见的一种"活跃性问题"，除了死锁还包括"饥饿"和"活锁"，这些活跃性问题给并发编程带来极大的挑战。比如出现死锁时，定位和分析问题相对困难，一旦出现死锁，通常只能重启应用程序。本文通过死锁最经典的"哲学家就餐问题"来介绍死锁的产生原因和解决办法。
+
+== 死锁
+
+死锁指的是多个线程相互等待彼此而进入永久暂停状态。比如，线程 T1 持有锁 L1 去申请锁 L2，但是线程 T2 持有锁 L2 申请锁 L1，此时它们都在等待对象释放锁，从而进入永久阻塞状态。这就好比两个小朋友，他们各有一个玩具，但都不愿意分享给对方，却希望获得对方的玩具，最终互不相让，只能彼此干瞪眼了。
+
+image::/images/concurrency/deadlock-sample.png[]
+
+写一个死锁的程序很简单，比如下边的代码：
+
+[source,java]
+----
+public class DeadLockTest {
+	private static final Object lock1 = new Object();
+	private static final Object lock2 = new Object();
+	public static void main(String[] args) {
+		new Thread(new MyThread1(lock1, lock2)).start();
+		new Thread(new MyThread2(lock1, lock2)).start();
+	}
+}
+class MyThread1 implements Runnable {
+	private final Object lock1;
+	private final Object lock2;
+	public MyThread1(Object lock1, Object lock2) {
+		this.lock1 = lock1;
+		this.lock2 = lock2;
+	}
+	@Override
+	public void run() {
+		while (true) {
+			synchronized (lock1) { // <1>
+				System.out.println("using lock1");
+				synchronized (lock2) {
+					System.out.println("using lock2");
+				}
+			}
+		}
+	}
+}
+class MyThread2 implements Runnable {
+	private final Object lock1;
+	private final Object lock2;
+	public MyThread2(Object lock1, Object lock2) {
+		this.lock1 = lock1;
+		this.lock2 = lock2;
+	}
+	@Override
+	public void run() {
+		while (true) {
+			synchronized (lock2) { // <2>
+				System.out.println("using lock2");
+				synchronized (lock1) {
+					System.out.println("using lock1");
+				}
+			}
+		}
+	}
+}
+----
+
+<1> `MyThread1` 持有 `lock1` 去申请 `lock2`
+<2> `MyThread2` 持有 `lock2` 去申请 `lock1`
+
+执行 `main` 方法，程序显示一直输出如下的内容，然后很快僵死（没有任何输出，程序卡住了）：
+
+[source,text]
+----
+using lock1
+using lock2
+...
+----
+
+此时就发生了死锁，如果你不重启，那么程序就一直卡在那儿。怎么知道产生了死锁呢？除了现象判断，更准确的是通过一些线程分析工具来进行分析，<<#analysis, 后文>> 再细说。
+
+一般而言开发者不会写这样的代码，死锁更经典的问题是哲学家就餐问题。
+
+== 哲学家就餐问题
+
+描述死锁现象有一个经典的"哲学家就餐"问题， https://zh.wikipedia.org/zh-hans/%E5%93%B2%E5%AD%A6%E5%AE%B6%E5%B0%B1%E9%A4%90%E9%97%AE%E9%A2%98[维基百科]上的描述如下：
+
+[quota,维基百科]
+____
+哲学家就餐问题（英语：Dining philosophers problem）是在计算机科学中的一个经典问题，用来演示在并发计算中多线程同步（Synchronization）时产生的问题。
+
+在1971年，著名的计算机科学家艾兹格·迪科斯彻提出了一个同步问题，即假设有五台计算机都试图访问五份共享的磁带驱动器。后来，这个问题被托尼·霍尔重新表述为哲学家就餐问题。这个问题可以用来解释死结和资源耗尽。
+
+假设有五位哲学家围坐在一张圆形餐桌旁，做以下两件事情之一：吃饭，或者思考。吃东西的时候，他们就停止思考，思考的时候也停止吃东西。餐桌上有五碗义大利面，每位哲学家之间各有一支餐叉。因为用一支餐叉很难吃到义大利面，所以假设哲学家必须用两支餐叉吃东西。他们只能使用自己左右手边的那两支餐叉。哲学家就餐问题有时也用米饭和五根筷子而不是义大利面和餐叉来描述，因为吃米饭必须用两根筷子。
+____
+
+.哲学家就餐问题示意
+image::/images/concurrency/哲学家就餐问题.png[width="600"]
+
+哲学家就餐问题不考虑意大利面有多少，也不考虑哲学家的胃有多大。假设两者都是无限大。问题在于如何设计一套规则，使得在哲学家们在完全不交谈，也就是无法知道其他人可能在什么时候要吃饭或者思考的情况下，可以在这两种状态下永远交替下去。<<#resolve-philosopher, 稍后>> 再讨论如何解决这个问题，先来分析死锁是如何产生的。
+
+=== 分析死锁产生的原因
+
+每个哲学家可以看做一个线程，拿起餐叉相当于线程加锁，其他人无法获取，放下餐叉相当于释放锁。假设哲学家总是不断重复思考、用餐的过程。五位哲学家入座后，某一时刻可能同时拿起自己一边的餐叉，然后都在等待获取另一边的餐叉，造成了所有哲学家都在等待餐叉的情况，如下图所示：
+
+.死锁产生过程示意
+image::/images/concurrency/哲学家就餐问题-死锁的产生.png[width="650"]
+
+左图显示的是初始状态，右图展示的是死锁状态：哲学家入座并开始思考和就餐后，某一个时刻所有哲学家都拿到自己右边的餐叉，同时在等待获取左边的餐叉。
+
+=== 代码描述
+
+现在用代码来描述这个问题，我们先创建哲学家对象和叉子对象：
+
+.哲学家对象
+[source,java]
+----
+public class Philosopher implements Runnable {
+	private static int number = 0;
+	private static final Random random = new Random(47);
+	private final int id = number++;
+	private final Fork left;
+	private final Fork right;
+	public Philosopher(Fork left, Fork right) {
+		this.left = left;
+		this.right = right;
+	}
+	@Override
+	public void run() {
+		try {
+			while (true) {
+				this.thinking();
+				synchronized (this.left) { // <1>
+					System.out.println(this + " got " + this.left);
+					TimeUnit.MILLISECONDS.sleep(500); // <2>
+					synchronized (this.right) { // <3>
+						System.out.println(this + " got " + this.right);
+						this.eating();
+					}
+				}
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	public void thinking() throws InterruptedException { // <4>
+		System.out.println(this + " is thinking...");
+		TimeUnit.MILLISECONDS.sleep(20 + random.nextInt(50));
+	}
+	public void eating() throws InterruptedException { //<5>
+		System.out.println(this + " is eating...");
+		TimeUnit.MILLISECONDS.sleep(10 + random.nextInt(50));
+	}
+	@Override
+	public String toString() {
+		return "philosopher" + id;
+	}
+}
+----
+
+<1> 让哲学家先获取他左边的餐叉
+<2> 获取左边的餐叉后，休眠一段时间，这样死锁就更快发生
+<3> 获取右边的餐叉，此时拿到了两个餐叉，可以用餐了
+<4> 采用休眠随机时间来模拟思考
+<5> 采用休眠随机时间来模拟吃饭
+
+.餐叉类
+[source,java]
+----
+public class Fork {
+	private static int number = 0;
+	private final int id = number++;
+	@Override
+	public String toString() {
+		return "fork" + id;
+	}
+}
+----
+
+可以看到，这里我们给每一个哲学家和餐叉一个 `id`，然后通过随机数来模拟思考和吃饭的停顿时间。现在，编写客户端代码：
+
+[source,java]
+----
+public class PhilosopherDinnerDeadlock {
+	public static void main(String[] args) {
+		int cnt = 5;
+		Fork[] forks = new Fork[cnt]; // <1>
+		for (int i = 0; i < cnt; i++) {
+			forks[i] = new Fork();
+		}
+		for (int i = 0; i < cnt; i++) { // <2>
+			Philosopher philosopher = new Philosopher(forks[i], forks[(i + 1) % cnt]);
+			new Thread(philosopher).start();
+		}
+	}
+}
+----
+
+<1> 先创建5个餐叉
+<2> 创建5个哲学家，为其指定左右的餐叉，并启动线程
+
+上边餐叉的分配是按照从小到大的编号顺序，小的在左，大的再右，只是最后的这位哲学家与之相反。
+
+运行程序，很快就会产生死锁，此时输出如下：
+
+[source,text]
+----
+philosopher0 is thinking...
+philosopher3 is thinking...
+philosopher1 is thinking...
+philosopher2 is thinking...
+philosopher4 is thinking...
+philosopher2 got fork2
+philosopher0 got fork0
+philosopher3 got fork3
+philosopher1 got fork1
+philosopher4 got fork4
+----
+
+可以看到，哲学家都拿到了左边的餐叉，都在等待去拿右边的。
+
+[[analysis]]
+== 死锁的分析
+
+上边的哲学家程序很快进入僵死状态，我们知道产生了死锁，那么如何来分析之？java 提供了一系列工具，比如 `jstack` 分析线程的状态、图形化界面的 `jconsole` 和 `visualVM`（使用方法见 https://belonk.com/tags/visualvm/[这里]）等，我们这里以 `jstack` 为例来分析。
+
+1、首先，查询运行的java进程
+
+使用java的 `jps` 查看java进程，找到产生死锁程序的进程id：
+
+[source,text]
+----
+➜  thinking-in-jcip git:(main) ✗ jps
+15072
+19861
+21866 PhilosopherDinnerDeadlock
+19914 RemoteJdbcServer
+21867 Launcher
+19899 RemoteJdbcServer
+21932 Jps
+20782 RemoteMavenServer
+----
+
+这里的进程id为 `21866`。
+
+2、使用 `jstack` dump 线程的详细信息
+
+从一大堆的线程dump日志中可以看到如下的输出：
+
+[source,text]
+----
+Found one Java-level deadlock:
+=============================
+"Thread-4":
+  waiting to lock monitor 0x00007f7c18049c08 (object 0x000000076ac24328, a com.koobyte.concurrency.c01.Fork),
+  which is held by "Thread-0"
+"Thread-0":
+  waiting to lock monitor 0x00007f7c1804c808 (object 0x000000076ac24338, a com.koobyte.concurrency.c01.Fork),
+  which is held by "Thread-1"
+"Thread-1":
+  waiting to lock monitor 0x00007f7c1800d8a8 (object 0x000000076ac24348, a com.koobyte.concurrency.c01.Fork),
+  which is held by "Thread-2"
+"Thread-2":
+  waiting to lock monitor 0x00007f7c1804b208 (object 0x000000076ac24358, a com.koobyte.concurrency.c01.Fork),
+  which is held by "Thread-3"
+"Thread-3":
+  waiting to lock monitor 0x00007f7c1800b018 (object 0x000000076ac24368, a com.koobyte.concurrency.c01.Fork),
+  which is held by "Thread-4"
+----
+
+这个信息告诉我们，发现了java的死锁，各个线程正在等待加锁(即锁监视器，lock monitor)，监视器的锁对象为 `com.koobyte.concurrency.c01.Fork`，并告诉了十六进制的内存地址，线程持有锁信息如下：
+
+[source,text]
+----
+Thread0: 持有 0x000000076ac24328，申请 0x000000076ac24338
+Thread1: 持有 0x000000076ac24338，申请 0x000000076ac24348
+Thread2: 持有 0x000000076ac24348，申请 0x000000076ac24358
+Thread3: 持有 0x000000076ac24358，申请 0x000000076ac24368
+Thread4: 持有 0x000000076ac24368，申请 0x000000076ac24328
+----
+
+可以看到，从thread0 到 thread4，持有锁和申请锁的过程 陷入了一个死循环，这种情况称为 *抱死*(Deadly Embrace)。
+
+== 死锁的产生和避免
+
+死锁产生存在4个必要条件：
+
+* 互斥条件：线程中使用的资源至少有一个是不能共享的。例如，哲学家就餐问题中的左和右边的餐叉只能被一个哲学家使用
+* 请求与保持条件：至少有一个线程持有一个资源并且正在另一个被别的线程持有的资源。例如，一名哲学家左手拿着餐叉而等待其右手边的哲学家放下持有的餐叉
+* 不可抢占条件：线程使用的资源不会被线程之间抢占，只能被其持有线程主动释放。例如，哲学家们很懂礼貌，不会从别的哲学家手中抢餐叉，只能由持有该叉子的哲学家线程主动释放
+* 循环等待条件：多个线程之间形成一种首尾相接的循环等待资源关系。比如前边所说的 "抱死" 现象
+
+要产生死锁，上边的这4个条件必须同时满足，缺一不可。
+
+如何避免死锁？
+
+只要破坏这4个条件中的一个，就可以避免死锁。对程序而言，最容易破坏的条件就是第4个：循环等待条件。比如前边的哲学家就餐问题，我们分析了产生死锁的原因是由于产生了循环等待而抱死，只要不让哲学家们顺序（如先拿做再拿右）获取餐叉就不会产生死锁，来看看具体解法。
+
+[[resolve-philosopher]]
+== 哲学家就餐问题的解法
+
+我们说只要破坏死锁产生的这四个条件中的一个，就可以避免死锁。哲学家就餐问题的解法很多，我们列举几个。由于互斥条件在这里是不能避免的，我们看看如何破坏其他三个条件。
+
+=== 破坏循环等待条件
+
+破坏循环等待条件，让这5名哲学家获取餐叉的顺序不同。我们可以避免让哲学家们按照相同的顺序（如先拿左再拿右）获取餐叉，这种做法很简单。比如，可以让最后一个哲学家先获取右边的，再获取左边的餐叉，与其他4名顺序相反；还可以按照奇偶数来更改获取餐叉的顺序；还有一种方法是，定义一种全局统一的资源获取顺序，比如都按照先获取小编号的餐叉，再获取大编号。
+
+让最后一名哲学家按照相反的顺序获取餐叉，示例代码如下：
+
+.最后一名哲学家获取餐叉的顺序相反
+[source,java]
+----
+public class PhilosopherDinnerResolve2 {
+	public static void main(String[] args) {
+		int cnt = 5;
+		Fork[] forks = new Fork[cnt];
+		for (int i = 0; i < cnt; i++) {
+			forks[i] = new Fork();
+		}
+		for (int i = 0; i < cnt; i++) {
+			Philosopher philosopher;
+			if (i < cnt - 1) {
+				philosopher = new Philosopher(forks[i], forks[(i + 1) % cnt]); // <1>
+			} else {
+				philosopher = new Philosopher(forks[(i + 1) % cnt], forks[i]); // <2>
+			}
+			new Thread(philosopher).start();
+		}
+	}
+}
+----
+
+<1> 前4名哲学家按照先拿左再拿右的顺序获取餐叉
+<2> 最后一名哲学家获取餐叉的顺序相反
+
+按照全局的餐叉获取顺序，注意这里 "先左后右" 并不是程序中的全局顺序，而应该是诸如按照餐叉编号大小等这样的顺序。比如我们希望按照餐叉id从小到大依次获取，示例代码如下：
+
+.按照全局顺序规则获取餐叉的哲学家
+[source,java]
+----
+public class GlobalForkOrderPhilosopher extends Philosopher {
+	public GlobalForkOrderPhilosopher(Fork left, Fork right) {
+		super(left, right);
+	}
+	@Override
+	public void run() {
+		try {
+			while (true) {
+				this.thinking();
+				// 按照id从小到大获取
+				if (this.left.getId() < this.right.getId()) {
+					synchronized (this.left) {
+						System.out.println(this + " got " + this.left);
+						TimeUnit.MILLISECONDS.sleep(500);
+						synchronized (this.right) {
+							System.out.println(this + " got " + this.right);
+							this.eating();
+						}
+					}
+				} else if (this.left.getId() > this.right.getId()) {
+					synchronized (this.right) {
+						System.out.println(this + " got " + this.left);
+						TimeUnit.MILLISECONDS.sleep(500);
+						synchronized (this.left) {
+							System.out.println(this + " got " + this.right);
+							this.eating();
+						}
+					}
+				} else {
+					// id不可能相同
+					throw new IllegalStateException();
+				}
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+}
+----
+
+由于示例创建餐叉的顺序是固定的，所以这种方式与上边的示例是一样的。
+
+=== 破坏请求与保持条件
+
+既然哲学家们先拿了一个餐叉，然后再去获取另一个，我们可以让他们每次必须同时获取两个餐叉，这样就破坏了 "请求与保持条件"。
+
+1、创建支持判断可用的餐叉，这里简单使用 `Lock.tryLock()` 方法
+
+[source,java]
+----
+public class LockFork extends Fork {
+	private static final Lock lock = new ReentrantLock();
+	public boolean canUse() { // <1>
+		return lock.tryLock();
+	}
+}
+----
+
+<1> 餐叉可用返回 `true`
+
+2、修改哲学家类，必须同时获取两个餐叉才能就餐
+
+[source,java]
+----
+public class BothForkPhilosopher extends Philosopher {
+	private final LockFork lockForkLeft;
+	private final LockFork lockForkRight;
+	public BothForkPhilosopher(LockFork left, LockFork right) {
+		super(left, right);
+		this.lockForkLeft = left;
+		this.lockForkRight = right;
+	}
+	@Override
+	public void run() {
+		try {
+			while (true) {
+				this.thinking();
+				if (this.lockForkLeft.canUse() && this.lockForkRight.canUse()) { // <1>
+					System.out.println(this + " got " + this.left + " and " + this.right);
+					TimeUnit.MILLISECONDS.sleep(500);
+					this.eating();
+				}
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+}
+----
+
+<1> 同时获得了两把餐叉，可以用餐
+
+3、客户端代码：
+
+[source,java]
+----
+public class PhilosopherDinnerResolve4 {
+	public static void main(String[] args) {
+		int cnt = 5;
+		LockFork[] forks = new LockFork[cnt];
+		for (int i = 0; i < cnt; i++) {
+			forks[i] = new LockFork();
+		}
+		for (int i = 0; i < cnt; i++) {
+			Philosopher philosopher = new BothForkPhilosopher(forks[i], forks[(i + 1) % cnt]);
+			new Thread(philosopher).start();
+		}
+	}
+}
+----
+
+这种方式虽然避免了死锁，但是缺点也很明显：并发性大大降低。有可能很长一段时间都没有两把餐叉可用的情况，此时哲学家们可能 "活活饿死" 了。
+
+=== 破坏不可抢占条件
+
+不可抢占条件表明，线程之间不能抢占资源，而应该由持有它的线程主动释放资源。要主动释放资源，不能使用 `synchronized`,因为它获取不到锁就进入阻塞状态。我们只能使用java的 `Lock` 接口，它支持超时的 `tryLock(long, TimeUnit)` 方法，可以让哲学家获取不到餐叉就主动放弃。看代码：
+
+1、编写一个支持等待一段时间的餐叉类：
+
+[source,java]
+----
+public class DelayLockFork extends LockFork {
+	public boolean waitUsing(long time, TimeUnit timeUnit) throws InterruptedException { // <1>
+		return lock.tryLock(time, timeUnit);
+	}
+}
+----
+
+<1> 等待一段时间，如果这段时间内餐叉可用，则使用之，否则，放弃
+
+2、哲学家类
+
+[source,java]
+----
+public class WaitingForkPhilosopher extends Philosopher {
+	private final DelayLockFork lockForkLeft;
+	private final DelayLockFork lockForkRight;
+	public WaitingForkPhilosopher(DelayLockFork left, DelayLockFork right) {
+		super(left, right);
+		this.lockForkLeft = left;
+		this.lockForkRight = right;
+	}
+	@Override
+	public void run() {
+		try {
+			while (true) {
+				this.thinking();
+				if (this.lockForkLeft.waitUsing(10 + random.nextInt(100), TimeUnit.MILLISECONDS)) { // <1>
+					System.out.println(this + " got " + this.left);
+					TimeUnit.MILLISECONDS.sleep(500);
+					if (this.lockForkRight.waitUsing(10 + random.nextInt(100), TimeUnit.MILLISECONDS)) { // <2>
+						System.out.println(this + " got " + this.right);
+						this.eating();
+					}
+				}
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+}
+----
+
+<1> 一段时间内，左边的餐叉可用则拿起
+<2> 拿到了左边的餐叉，如果一段时间内，右边的餐叉可用则可以用餐了，否则主动放弃左边的餐叉
+
+3、客户端代码
+
+[source,java]
+----
+public class PhilosopherDinnerResolve5 {
+	public static void main(String[] args) {
+		int cnt = 5;
+		DelayLockFork[] forks = new DelayLockFork[cnt];
+		for (int i = 0; i < cnt; i++) {
+			forks[i] = new DelayLockFork();
+		}
+		for (int i = 0; i < cnt; i++) {
+			Philosopher philosopher = new WaitingForkPhilosopher(forks[i], forks[(i + 1) % cnt]);
+			new Thread(philosopher).start();
+		}
+	}
+}
+----
+
+哲学家很绅士的等一段时间，如果自己获取不到餐叉就主动放弃让别人使用，有效的避免了永久阻塞，从而避免了死锁。
+
+== 总结
+
+多线程编程中，活跃性问题是非常复杂的问题，通常难以定位和分析。本文以 *哲学家就餐* 问题为核心，探讨了死锁的产生原因和避免方法。除了 *死锁*，活跃性问题还包括 *饥饿* 和 *活锁*，后边再详细讨论它们。
+
+本文示例代码见： https://github.com/koobyte/thinking-in-jcip/tree/main/src/main/java/com/koobyte/concurrency/c01[github].

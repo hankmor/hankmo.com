@@ -1,0 +1,464 @@
+---
+title: Spring Cloud Config之配置集成化
+slug: springcloud-config-center-with-git
+img: /images/thumbnail/attachment/20190615/1522e29194544c648ce3dd9c93d2096b.png
+categories:
+  - Spring
+tags:
+  - springcloud
+  - springcloudconfig
+description: >-
+  Spring Cloud
+  Config是一款配置集中管理的组件，它提供了分布式系统的客户端和服务端外部化配置支持，由git(也支持svn、本地文件系统等)存储库支持的集中式外部配置管理，实现了配置的外部化存储。
+date: 2018-08-14 17:35:26
+updated: 2019-10-30 12:21:49
+---
+
+= Spring Cloud Config之配置集成化
+:author: belonk.com
+:date: 2019-10-30
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring cloud,config,config server, config client,git,配置集成化,配置仓库,git配置中心
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: springcloud,springcloudconfig
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在 __Spring Cloud简介__中，我们了解了Spring Cloud的基本概念、特点、各大组件和其作用，还介绍了Spring Cloud的版本定义和发布规则，对Spring Cloud应该有了一定的了解。在本篇，我们来看看实现配置集成化的重要组件----Spring Cloud Config。
+
+
+== 简介
+ 
+Spring Cloud Config是一款配置集中管理的组件，它提供了分布式系统的客户端和服务端外部化配置支持，由git(也支持svn、本地文件系统等)存储库支持的集中式外部配置管理，实现了配置的外部化存储。
+
+Spring Cloud Config有几个核心的概念：
+
+* 配置仓库：集中存储配置文件的地方， 推荐git仓库，也可以使用svn仓库或者本地文件系统；
+* Server：配置管理服务端，提供配置文件管理服务，通过server可以按照一定规则读取配置文件，它直接访问配置仓库；
+* Client：配置客户端，即需要从Server读取配置的应用，它并不直接访问配置仓库，而是通过Server读取配置信息；
+
+
+image::/images/attachment/20180814/254b49283bfd493596cafcaecf8e61d1.png[]
+
+
+git仓库本身使用频率高，可以进行版本跟踪等特点，所以spring推荐使用git仓库，本文也将重点介绍基于git仓库的配置中心。
+
+
+== 配置服务端
+ 
+服务端支持的配置仓库有git、svn和native本地文件，``spring.profiles.active``配置项用于启用配置文件支持的配置仓库，默认为git。在使用git配置仓库有几个重要概念：
+
+* application: 访问配置服务的名称，默认为application，可以通过``spring.config.name``配置
+* profile：激活的profile配置文件，多个以逗号分隔
+* label：通常为git的分支，默认为master，也可以为commit id、tag名称；如果分支或tag名称包含斜线“/”，那么在HTTP URL中需要更换为"``(_)``"
+
+
+
+下边先简单介绍使用本地文件和本地git仓库搭建配置服务端。
+
+
+=== 使用本地文件
+ 
+1、新建``config-server-native``工程，引入依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+----
+ 
+2、启动类加上``@EnableConfigServer``注解，表明该工程为配置服务端
+
+3、新建本地配置仓库文件夹：
+
+
+----
+``mkdir /Users/sun/Desktop/belonk/config-native``
+----
+
+在config-native文件夹中建三个文件：``application-dev.properties``,``application-uat.properties``,``application-pro.properties``，分别配置部分内容以区别不同环境（profile）。
+
+4、``application.properties``添加如下配置：
+
+[source,block]
+----
+spring.profiles.active=native
+# 采用推荐的8888端口
+server.port=8888
+spring.config.name=config
+# 配置本地文件目录地址
+spring.cloud.config.server.native.searchLocations=/Users/sun/Desktop/belonk/config-native
+spring.cloud.config.server.native.addLabelLocations=true
+# 配置本地git仓库地址
+#spring.cloud.config.server.git.uri=file:///Users/sun/Desktop/belonk/config-center/
+----
+ 
+* ``spring.profiles.active``：默认为git，改为native启用本地文件系统配置仓库
+* ``spring.config.name``：访问URL的application名称
+* ``spring.cloud.config.server.native.searchLocations``：配置本地搜索配置文件的位置，默认包括[classpath:/, classpath:/config, file:./, file:./config]
+
+5、启动应用，浏览器访问``http://localhost:8888/config/pro,dev``，可以看到显示了正确pro和dev的配置信息，需要注意的是这里的config来自``spring.config.name``配置。
+
+由于本地文件系统没有版本控制，不便于管理和追述，建议仅仅用于测试，不建议生产上使用。
+
+
+=== 使用本地git仓库
+ 
+git仓库在本地文件系统，并未push到远端，可用于快速测试。我们在``config-server-native``工程上稍作修改，改为本地git仓库。
+
+1、引入依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+----
+ 
+2、启动类加上``@EnableConfigServer``注解，表明该工程为配置服务端
+
+3、创建本地git仓库：
+
+[source,block]
+----
+~> cd Desktop/
+ Desktop> cd belonk
+ belonk> mkdir config-center
+ belonk> cd config-center
+ gitconfig> git init
+ gitconfig> vi application.properties
+ gitconfig> git add .
+ gitconfig> git commit -m 'add config'
+----
+ 
+4、``application.properties``添加如下配置：
+
+[source,block]
+----
+spring.profiles.active=git
+# 采用推荐的8888端口
+server.port=8888
+spring.config.name=config
+# 配置本地git仓库地址
+spring.cloud.config.server.git.uri=file:///Users/sun/Desktop/belonk/config-center/
+----
+ 
+
+  本地git仓库访问同本地文件系统一样，使用file://协议访问。 
+
+5、启动应用，浏览器访问``http://localhost:8888/config-dev.properties``，``http://localhost:8888/config/dev,uat``，能够获取正确的配置信息。
+
+
+==== git仓库访问规则
+ 
+这里重点说一下**git仓库配置访问规则**：
+
+* /{application}/{profile}[/{label}]
+* /{application}-{profile}.yml
+* /{label}/{application}-{profile}.yml
+* /{application}-{profile}.properties
+* /{label}/{application}-{profile}.properties
+
+. application:默认为application，可以通过``spring.config.name``修改，这里为config
+. profile：激活的配置文件，可以逗号分隔
+. label：git的分支，可选，默认为master，也可以为tag、commit的版本号等
+
+e.g.
+
+根据前边的例子，访问``http://localhost:8888/master/config-dev.properties``，``http://localhost:8888/config/dev,uat,pro``，``http://localhost:8888/config/dev/master``，``http://localhost:8888/config-dev.properties``都能正确获取结果。
+
+
+==== 配置中心公用配置
+ 
+同一般Spring Boot工程一样，不同环境相同的配置也可以在Config server中抽取到公用的配置文件``application.properties``，通过``application/default``来访问，例如：``http://localhost:8888/application/default``，当然，其他配置会继承并覆盖该配置文件的内容。
+
+
+
+
+=== 使用远端git仓库
+ 
+远端仓库与本地git仓库有所不同，主要在于，需要配置远端仓库访问方式，例如``https``或者``ssh``，而https访问表明必须要知道远端仓库的访问用户名和密码，ssh访问需要知道访问的私钥信息。
+
+
+==== 基于https访问
+ 
+1、新建``config-server-remote``工程，引入依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+----
+ 
+2、启动类加上``@EnableConfigServer``注解，表明该工程为配置服务端
+
+3、新建远端仓库，将前边本地git仓库push到远端
+
+4、在``application.properties``添加配置信息：
+
+[source,block]
+----
+server.port=8888
+spring.config.name=config
+spring.application.name=config-server
+# 设置git仓库clone到本地的存储位置
+spring.cloud.config.server.git.basedir=/Users/sun/Desktop/belonk/config
+# git仓库配置搜索路径，对应文件夹
+spring.cloud.config.server.git.search-paths=/
+# 配置git仓库访问的用户信息，http需要配置用户名和密码
+spring.cloud.config.server.git.uri=
+https://github.com/belonk/config-center.git
+spring.cloud.config.server.git.username=
+spring.cloud.config.server.git.password=
+----
+ 
+5、启动应用，浏览器访问``http://localhost:8888/config-dev.properties``，``http://localhost:8888/config/dev,uat``，能够获取正确的配置信息。
+
+
+==== 基于ssh访问
+ 
+推荐的访问方式，我们来修改``config-server-remote``工程，将``application.properties``配置修改如下：
+
+[source,block]
+----
+server.port=8888
+spring.config.name=config
+spring.application.name=config-server
+# 设置git仓库clone到本地的存储位置
+spring.cloud.config.server.git.basedir=/Users/sun/Desktop/belonk/config
+# 配置文件地址，自建git仓库
+spring.cloud.config.server.git.uri=git@192.168.0.17:/data/code/config-center.git
+# git仓库配置搜索路径，对应文件夹
+spring.cloud.config.server.git.search-paths=/
+# 激活基于ssh的配置
+spring.cloud.config.server.git.ignore-local-ssh-settings=true
+spring.cloud.config.server.git.private-key=|\
+-----BEGIN RSA PRIVATE KEY-----\
+MIIEpAIBAAKCAQEA4LrVzqgH3cK3R3yUATlAlGlke5UgJtn+2kJ9/mJ9YRF2lqzo\
+wCSa2hxQ5b75ylF3Qe2ivsb+fabpeQ0FfF0IVAc4azIZWR0enyGxk0BHIaYYx2Rb\
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
+emIMYRch5uJ6yTYiB217ypEuL1nKaeumV1AdGgELvosb5o7UsV+i1GmeMez3wI1P\
+uMhaQUO9n8ZF9tVlTByh8F75fEa4xxK9lPpgA+qpwIpAjRpCxHF/dA==\
+-----END RSA PRIVATE KEY-----
+----
+ 
+* spring.cloud.config.server.git.search-paths：git仓库搜索路径，对应仓库存放的文件夹路径，如果配置存在根目录，无需配置或为“/”，如果需要 **实现每个应用一个文件夹存放配置信息，则配置为``{application}``**； 
+
+* spring.cloud.config.server.git.ignore-local-ssh-settings：配置为true，以激活远程ssh访问
+* spring.cloud.config.server.git.private-key：配置访问仓库的私钥信息
+
+需要注意的是，使用``.properties``配置文件时，私钥的每一行需要以``“”``进行连接，同时最开始为``"|"``线开头，而使用.yml配置文件时，每行不需要进行连接，具体可以见本文末尾的github示例代码。
+
+
+==== 强制pull到本地
+ 
+由于Spring cloud会将远端仓库克隆到本地，如果处于某种原因，本地仓库不能从远端仓库更新，那么就无法获取最新的配置信息。测试可以使用``force pull``，只需简单配置：``spring.cloud.config.server.git.force-pull=true``默认是false。
+
+
+==== 删除无法跟踪的分支
+ 
+
+  某些情况下，可能远端删除了分支，但是spring cloud拉去的本地分支仍然可用。此时，可以使用 ``deleteUntrackedBranches``配置强制删除无法跟踪的这些分支： ``spring.cloud.config.server.git.delete-untracked-branches=true``，默认是false 
+
+
+
+
+==== 配置git clone保存路径
+ 
+默认情况下，spring cloud会将远端仓库拉取到系统的临时目录存放，格式为``config-repo-<randomId>``，某些操作系统可能对临时目录会进行清理，导致本地仓库被删除，然后造成各种问题。可以使用如下配置来修改clone的git仓库在本地的存储位置：
+
+[source,block]
+----
+# 设置git仓库clone到本地的存储位置
+spring.cloud.config.server.git.basedir=/Users/sun/Desktop/belonk/config
+----
+ 
+注意是文件夹，远端仓库的内容都会直接保存在该文件夹下。
+
+
+== 配置客户端
+ 
+服务端介绍完毕，接下来看看客户端如果获取配置信息。
+
+1、新建``config-client``工程，引入依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+----
+ 
+2、``application.properties``配置如下：
+
+[source,block]
+----
+server.port=8082
+spring.config.name=config-client
+# config server的application名称
+spring.cloud.config.name=config
+# 要激活的profile
+spring.cloud.config.profile=dev
+# config server的访问地址
+spring.cloud.config.uri=http://localhost:8888/
+# config server的分支
+spring.cloud.config.label=master
+----
+ 
+3、编写一个controller，来获取配置信息：
+
+[source,java]
+----
+@RestController
+@RefreshScope
+public class ConfigClientController {
+    private static Logger log = LoggerFactory.getLogger(ConfigClientController.class);
+
+    @Value("${user.local.name}")
+    private String username;
+    @Value("${user.local.password}")
+    private String password;
+
+    @RequestMapping("/")
+    public String userInfo() {
+        return "username : " + username + ", password : " + password;
+    }
+}
+----
+ 
+这里的``@RefreshScope``表明刷新配置时此类会被刷新（后续文章讨论）。
+
+4、启动应用，访问``http://localhost:8081/``，能够获取正确的配置信息。
+
+也可以将配置中心的配置引入本地配置文件，而非直接使用：
+
+[source,block]
+----
+user.local.name=${user.name}
+user.local.password=${user.password}
+----
+ 
+
+=== application配置和bootstrap配置
+ 
+bootstrap.properties（yml）用来程序引导时执行，应用于更加早期配置信息读取，例如：可以使用来配置application.yml中使用到参数等，而application.properties（yml）应用程序特有配置信息，可以用来配置后续各个模块中需使用的公共参数等。
+
+典型的使用场景：配置bootstrap.properties在引导时来配置服务注册中心地址，以便从服务注册中心获取配置中心的地址，服务启用后便可以正确从服务配置中心获取配置，例如``bootstrap.properties``的一个配置示例：
+
+[source,block]
+----
+# ======================== 服务相关配置 ========================
+# active profile
+spring.profiles.active=uat
+# ======================== 安全相关配置 ========================
+management.security.enabled=false
+# ======================== 注册中心相关配置 ========================
+# 服务注册中心地址
+eureka.client.service-url.defaultZone=http://${service-center.hostname}:9999/eureka
+# ======================== 配置中心相关配置 ========================
+# 从git仓库获取配置的application名称
+spring.cloud.config.name=api-gateway
+# git仓库的label：分支、提交记录id、tag
+spring.cloud.config.profile=${spring.profiles.active}
+spring.cloud.config.label=master
+# 启用服务发现
+spring.cloud.config.discovery.enabled=true
+# 配置中心的服务id
+spring.cloud.config.discovery.service-id=config-server
+----
+ 
+上边的配置，先配置了服务注册中心地址，然后再配置了配置中心的serviceId，即是说，在引导时就已经确定了配置中心的地址，引用启用完成后才能正确加载配置信息。
+
+
+=== 配置刷新
+ 
+上边引入了``actuator``依赖，该组件用于监控和手动刷新配置，即：当配置仓库进行了更新，服务端可以获取最新的配置信息，但是客户端并不能，最简单的方案是手动刷新：
+
+1、引入依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+----
+ 
+用于监控系统，包括/refresh端点。
+
+2、关闭权限认证，默认是开启的：
+
+
+----
+``management.security.enabled=false``
+----
+
+不关闭会抛出未授权异常
+
+3、在需要刷新的类上加上@RefreshScope注解
+
+4、服务端修改了配置后，客户端调用/refresh接口（必须POST请求），此时会将修改的配置进行刷新，客户端能够获取最新配置。
+
+还有更好的自动刷新方案，后续再进行讨论。
+
+
+== 每个服务单独文件夹存放配置
+ 
+其实前边已经介绍了，主要用到``spring.cloud.config.server.git.search-paths``配置：
+
+该配置用于表明从配置仓库搜索的路径，默认为“/”，可以使用占位符：``{application}``&nbsp;、&nbsp;``{profile}``&nbsp;和``{label}``，要实现每个服务单独文件夹存放配置信息，配置服务端可将其配置如下：
+
+[source,block]
+----
+# git仓库配置搜索路径，对应文件夹
+spring.cloud.config.server.git.search-paths={application}
+----
+ 
+官网配置带单引号，实测不需要，有单引号反而不正确。
+
+然后客户端配置上访问的应用名称即可：
+
+[source,block]
+----
+# 从git仓库获取配置的application名称
+spring.cloud.config.name=api-gateway
+----
+ 
+通过上述配置，则服务``api-gateway``的配置会从配置仓库根目录``/api-gateway``下边去获取。
+
+
+== 总结
+ 
+本文简单介绍了配置集成化的服务端和客户端的一些基本情况，服务端建议使用git配置仓库，除了可以方便的进行版本管理，也是Spring Cloud官方推荐并支持的方式。
+
+对于配置刷新，本文仅仅简单介绍了使用``actuator``的``/refresh``端点进行手动刷新的方式，更多自动化的方式将在后续文章来学习和讨论。
+
+* 本文示例代码：
+https://github.com/belonk/springcloud-demo/tree/master/06-config[github]
+* 参考文章： 
+** http://cloud.spring.io/spring-cloud-static/Edgware.SR4/single/spring-cloud.html#_spring_cloud_config[Spring Cloud官方文档]

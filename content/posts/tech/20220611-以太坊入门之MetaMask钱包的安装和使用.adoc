@@ -1,0 +1,208 @@
+---
+title: 以太坊入门之MetaMask钱包的安装和使用
+slug: metamask-guide
+categories:
+  - 高新技术
+tags:
+  - 区块链
+  - 以太坊
+  - MetaMask
+description: 区块链中，与用户直接相关的一个重要组件是钱包。用户通过钱包来访问链上的资金、查看账户地址、转账交易等操作。可以说，没有钱包，用户就不能正常访问链上资金，可见其重要程度。而诸多钱包中，MetaMask是一款可以直接在浏览器中使用的、实现了钱包标准 BIP-39 的钱包，也是大多数使用者选择的入门级钱包。
+date: 2022-06-11 21:45:36
+updated: 2022-06-11 21:45:42
+---
+
+= 以太坊入门之MetaMask钱包的安装和使用
+:author: belonk.com
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir:
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+区块链中，与用户直接相关的一个重要组件是钱包。用户通过钱包来访问链上的资金、查看账户地址、转账交易等操作。可以说，没有钱包，用户就不能正常访问链上资金，可见其重要程度。而诸多钱包中，MetaMask是一款可以直接在浏览器中使用的、实现了钱包标准 BIP-39 的钱包，也是大多数使用者选择的入门级钱包。
+
+== 区块链钱包简介
+
+与普通的实物钱包不同，区块链钱包的核心目的是用来保存用户的公钥和私钥，从而保证访问区块链中账户资金的权限，即：证明钱是你的，而不是存储资金。
+
+.区块链钱包(图片来源网络)
+image::/images/blockchain/wallet.png[width=60%,align=center]
+
+钱包的一个重要的误区是：钱包存储资金。其实，钱包并不会直接存储区块链上的资金。可以将其看做一个银行账户，当你需要取钱时，只需告诉银行要取多少钱，然后银行就可以检查账户的余额是否充足并进行取款，账户只是一个逻辑划分，钱始终是存在银行。同理，区块链钱包也只是在区块链上开了一个账户，钱始终在区块链网络中。
+
+开通银行账户，我们必须设置交易密码，已验证你有访问账户的权限；同样的，区块链钱包中，私钥就相当于账户密码，每产生一笔交易时，都需要通过钱包的私钥来进行签名，已验证你拥有操作账户资金的权限。
+
+但是，与银行账户不同，银行是中心化的资金机构，除了验证账户密码，还有其他手段比如身份证来验证取款人身份，忘记密码还可以重置。但在区去中心化的区块链中，私钥是你唯一的凭证，一旦私钥泄露，那么任何人都可以访问你的账户。
+
+因此，钱包可以看成是一个私钥圈，保存了多组公钥私钥对。现在的钱包大多采用随机串生成助记词，再加密生成种子密钥，最后再以种子密钥为根生成密钥树的方式来生成密钥。这里仅说明钱包的概念，关于钱包的底层原理，后续在详细讨论。
+
+.钱包中的密钥树(图片来源网络)
+image::/images/blockchain/wallet-secret.png[width=60%,align=center]
+
+== 什么是MetaMask
+
+https://metamask.io/[MetaMask] 是一款简单易用的区块链钱包，除了 App 版本的钱包，它还提供了基于浏览器的插件，包括 Chrome、Firefox等，而且它内置了 Web3，可以直接与以太坊区块链交互并开发 DApp 网页应用，这也是大多开发者选择它的原因。
+
+image::/images/blockchain/metamask.png[width=60%,align=center]
+
+== 安装MetaMask
+
+安装 MetaMask 很简单，以 Chrome 为例，直接从 Google 商店安装即可，前提是需要自带梯子。步骤如下：
+
+1、进入google应用商店，直达地址在 https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn[这里]，也可以自己搜索MetaMask，第一个小狐狸头像的就是
+
+image::/images/blockchain/metamask-install-1.png[width=80%, align=center]
+
+2、点击 "添加至Chrome"，然后弹出框点击"添加至扩展"即可，然后会下载 Chrome 插件，耐心等待
+
+3、下载完成后，Chrome会自动安装，完成后会进入扩展插件地址
+
+image::/images/blockchain/metamask-install-2.png[width=60%,align=center]
+
+点击开始使用，进入钱包创建页面
+
+4、创建钱包
+
+image::/images/blockchain/metamask-install-3.png[width=60%,align=center]
+
+如果您以前有钱包，并记得助记词，那么可以直接通过助记词导入钱包，没有则点击"创建钱包"按钮新建，下一步点击"我同意"，进入密码设置页面：
+
+image::/images/blockchain/metamask-install-4.png[width=60%,align=center]
+
+设置并牢记自己的密码，以后登录钱包是需要用到，然后点击"创建"按钮后，会出现一个介绍的视频页面，直接点击"下一步"
+
+5、**备份助记词**
+
+这一步很重要，助记词作为恢复秘钥的唯一手段，需要十分安全地做备份，一般建议手抄写在纸上并保存，其他电子存储方式均存在泄漏风险
+
+image::/images/blockchain/metamask-install-5.png[width=60%,align=center]
+
+[NOTE]
+====
+.什么是助记词？
+按照密钥生成策略分，钱包分为两类：非确定性钱包和确定性钱包，前者的每一个私有都是由不同的随机数生成的，私钥间没有任何关联，备份和恢复非常麻烦；而确定性钱包则是通过一个随机串作为种子密钥来生成各种私钥，只要备份种子密钥就可以恢复出所有的私钥。
+
+但是，由于种子密钥长度长而且毫无规律，非常难以记录和输入，因此人们为这个种子密钥按照一定的算法来为其匹配单词表中的一组顺序固定、数量固定(与种子密钥长度有关)的单词，这样便于备份和恢复，这有点类似密码本，这些单词就成为助记词（mnemonic）。
+
+因此，助记词可以看做种子密钥的别名，其安全性与之等同，必须安全保存。
+====
+
+备份好好点击下一步，开始确认助记词
+
+6、确认助记词
+
+按顺序点击刚才备份的助记词，然后确认即可
+
+7、完成创建
+
+image::/images/blockchain/metamask-install-6.png[width=60%,align=center]
+
+现在，所有工作都完成了，您已经拥有了自己的钱包。为了方便使用，可以将 MetaMask 固定到工具栏上，以后就可以直接点击小狐狸按钮打开钱包了：
+
+image::/images/blockchain/metamask-install-7.png[width=60%,align=center]
+
+== MetaMask的使用
+
+点击工具栏的小狐狸图标，打开MetaMask主界面，如下：
+
+image::/images/blockchain/metamask-main.png[width=60%,align=center]
+
+钱包中几个重要概念：
+
+* 区块链网络：区块链网络表示该钱包可以连接和访问的区块链网络，默认是以太坊主网，MetaMask还自带了以太坊的测试网络，这些测试网络功能与主网络相同，只是以测试为目的而搭建的，可以从测试网络上免费获得测试用的ETH（实际并无任何价值），这些测试网络包括 Ropsten、Rinkeby等。此外，MetaMask 还包括本地客户端的网络 localhost，如果默认网络中没有需要的网络则可以自己添加
+
+image::/images/blockchain/metamask-network.png[width=60%,align=center]
+
+* 账户地址：账户地址是一个 ECDSA 公钥通过 Keccak 哈希计算后最后边的160位（40个十六进制字符）字符，简单而言就是通过你的公钥进行哈希计算后的一个40长度的字符串，相同于银行账户的账号，区块链上的资金往来必须要知道账户地址，并且地址的所有数据（比如交易记录、资金余额等）都是公开透明的。MetaMask中，点击一下账户地址可以快速复制
+
+* 代币：区块链网络上发行的虚拟货币，钱包可以访问到区块链网络并查询账户地址对应的代币余额，并进行代币购买、发送给其他账户等操作，默认代币为 ETH，没有也可以通过代币符号或发行代币的智能合约地址导入
+
+这几个概念之间的关系：钱包中可以包含多个账号，每个账号都有唯一的地址，这个地址可以持有多个代币，比如以太坊的 ETH 等。
+
+=== 获得测试ETH
+
+接下来，我们尝试从以太坊的Ropsten测试网络中获得测试ETH（以太币）。
+
+测试网络功能与主网（正式网络）相同，但是以测试为目的而搭建的，测试网络都提供了水龙头（faucet），这是一个专门获得测试代币的网站，以太坊 Ropsten 网络的水龙头地址为： https://faucet.metamask.io/ ，这是MetaMask为Ropsten提供的水龙头，如果不知道地址可以直接通过MetaMask打开它，只需要切换到 Ropsten 网络，然后点击购买，再向下翻找到测试水管点击即可：
+
+image::/images/blockchain/metamask-faucet.png[width=60%,align=center]
+
+打开水龙头页面，界面如下：
+
+image::/images/blockchain/metamask-faucet-1.png[width=60%,align=center]
+
+可以看到水龙头的合约地址、当前余额、用户的地址、余额等信息，这里我还没有连接到钱包，所以地址显示undefined，点击"request 1 ether from faucet"按钮，此时会发起连接钱包请求，MetaMask会自动弹出：
+
+image::/images/blockchain/metamask-connect.png[width=60%,align=center]
+
+连接钱包后再次点击即可获得测试ETH。
+
+由于测试水龙头网络原因，经常不能正常获得测试ETH，下边会出现红色错误信息。此时，可以多试几次，或者搜索一些其他的测试水龙头。
+
+=== 添加多个账号
+
+上过上一步，我已经获得了1个测试ETH，现在，我们再添加一个账号。
+
+点击右上角的头像，在弹出界面中选择"创建账户"：
+
+image::/images/blockchain/metamask-add-account.png[width=60%,align=center]
+
+然后给账户起一个名字，点击创建按钮即可。
+
+现在，我们的钱包中就有了两个账号，同样点击右上角的头像可以切换账号。开发时，钱包可能存在多个账号，为了能够直观的知道当前使用的哪一个账号，可以为账号修改别名，最好改为账号的顺序+账号地址的后4位，比如改为"1-1234"。点击账号右边的三个圆点，选择账号详情：
+
+image::/images/blockchain/metamask-account-alias.png[width=60%,align=center]
+
+弹出的界面中点击笔的图标即可更改别名：
+
+image::/images/blockchain/metamask-account-alias1.png[width=60%,align=center]
+
+=== 多个账号间发送ETH
+
+现在，我们将使用有测试ETH的账号(账号1)向另一个账号(账号2)发送0.1个ETH。
+
+1、先切换到账号2，点击账号地址复制；
+
+2、切换到账号1，点击"发送"按钮：
+
+image::/images/blockchain/metamask-send.png[width=60%,align=center]
+
+弹出界面中粘贴复制的账号地址，在数额一栏填写需要发送的数量 0.1，然后点击下一步
+
+3、确认交易信息
+
+这一步很重要，因为涉及到资金的交易，需要确认区块链网络、账号、支付金额、GAS费用等信息，如下图所示：
+
+image::/images/blockchain/metamask-tx-confirm.png[width=60%,align=center]
+
+关于GAS费用 <</2022/05/09/ethereum-intro#gas, 上一篇>> 已经介绍过了，后边介绍交易的时候还会再细说。
+
+确认信息读准确无误后，点击确认发起交易。
+
+4、等到交易完成
+
+交易发出后，需要等待链上确认并打包，这个过程可能比较耗时，需要耐心等待。所有的交易可以在"活动"一页查看：
+
+image::/images/blockchain/metamask-tx-records.png[width=60%,align=center]
+
+可以看到刚才发起的交易失败了，点击可以查看交易详情。这里应该是GAS费用不够，链上无法打包。我们改为发送0.001ETH，等到打包的交易是这样：
+
+image::/images/blockchain/metamask-tx-waig.png[width=60%,align=center]
+
+可以点击加速按钮调高GAS费来加速这笔交易。
+
+等待一会儿，然后查看，可以看到这次的交易成功了。
+
+== 总结
+
+本文介绍了钱包的基本概念和MetaMask的使用，通过几个案例操作来熟悉MetaMask的基本操作，最后一个案例通过转账来了解了基本的交易。所有的交易信息都可以在区块链上查询，怎么查询？交易有哪些信息呢？我们将在下一篇介绍。

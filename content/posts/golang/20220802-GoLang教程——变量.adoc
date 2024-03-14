@@ -1,0 +1,189 @@
+---
+title: GoLang教程——变量
+slug: go-var
+categories:
+  - GoLang
+tags:
+  - go
+description: 本质上，变量是一个持有一类值的数据存储空间的命名，我们声明变量其实就是在申请存储空间，之后引用变量其实就是在使用这块存储空间中的值。GoLang是一门强类型语言，每一个声明的变量都对应着一种类型，但是声明变量的方式却有多种。
+date: 2022/08/02
+updated: 2022/08/02
+---
+
+= GoLang教程——变量
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+本质上，变量是一个持有一类值的数据存储空间的命名，我们声明变量其实就是在申请存储空间，之后引用变量其实就是在使用这块存储空间中的值。GoLang是一门强类型语言，每一个声明的变量都对应着一种类型，但是声明变量的方式却有多种。
+
+== 变量的定义
+
+https://go.dev/ref/spec#Variables[Go语言规范]中对变量的定义如下：
+
+[NOTE]
+====
+变量是保存着值的一块存储空间，存储什么样的值由变量的类型决定。
+====
+
+变量的概念在各个语言中都有，本质上变量就是为一块存储空间取一个名字，以便开发者后续引用这个名字来使用存储空间中存储的值。至于存储什么样的值，这必须有变量的类型来决定，所以Go、Java这种强类型语言在变量声明时必须指定变量类型。
+
+== 变量的声明
+
+<</2022/07/30/go-style#unused_var, 上一篇>>中提到：变量声明过后，必须被使用，否则编译错误。Go中变量的声明有两种方式：
+
+* 使用 `var` 声明一个变量，适用于大多数情况，可以不用赋初始值时
+* 使用 `:=` 声明变量并初始化它，适用于需要为变量直接赋初始值时，比如直接声明变量接收方法的返回值
+
+第一种，使用 `var` 关键字声明变量：
+
+[source,go]
+----
+var v0 rune   // 声明字符类型的变量 v0
+var v1 int    // 声明整型变量 v1
+var v2 string // 声明字符串类型的变量 v2
+v0 = 'A'      // 给变量赋初始值
+----
+
+这种方式可以先声明变量然后赋值，也可以直接在声明时赋值，此时可以省略类型，编译器会自动推导出类型：
+
+[source,go]
+----
+var i1 = 1
+fmt.Printf("i1 = %d\n", i1)
+----
+
+在声明多个变量时，可以使用如下简写的语法：
+
+[source,go]
+----
+var (
+    v3 [2]int          // 数组
+    v4 []int           // 数组切片
+    v5 struct{ i int } // 结构体
+    v6 *int            // 指针
+    v7 map[string]int  // map
+)
+----
+
+第二种方式，使用 `:=` 声明变量，此时必须初始化变量：
+
+[source,go]
+----
+v9 := 10 // 声明变量 v9 并初始化，自动推导类型
+fmt.Printf("v9 = %d, type: %T \n", v9, v9)
+
+a, b := func1() // 直接声明变量并接收方法的返回值
+fmt.Println(a, b)
+----
+
+这种方式可以简化变量的声明，适用于需要声明变量同时赋值的情况，比如上边示例代码中的直接声明变量接收方法的返回值。
+
+[IMPORTANT]
+====
+使用 `var` 声明的变量，不能再使用 `:=` 来赋值，因为两者都是在 *声明一个新的变量*，会导致重复声明。
+
+[source,go]
+----
+var v10 = "hello"
+v10 := "go" // 编译失败：no new variables
+fmt.Println(v10)
+----
+
+这也是初学者经常犯的错误之一，容易将 `:=` 视为赋值语句。
+====
+
+== 变量的初始化和赋值
+
+使用 `var` 声明变量后，可以不用赋初始值，此时变量也已经初始化为其类型对应的初始值：
+
+[source,go]
+----
+// 变量的初始化
+var v1 int
+fmt.Println(v1) // 0
+var v2 string
+fmt.Println(v2) // ""
+var v3 map[string]int
+fmt.Println(v3) // map[]
+var v4 *map[string]int
+fmt.Println(v4) // nil
+----
+
+变量类型的初始值，由其类型决定，每一种类型都有其默认值（初始值），如 `int`、`float` 等数值类型为0，`bool` 类型为 `false`, `string` 为空字符串，引用类型为 `nil` 等。我们将在后边专门介绍 Go 中的基本类型和引用类型，Go语言规范中的类型介绍可以看 https://go.dev/ref/spec#Types[这里]。
+
+使用 `:=` 声明变量时必须初始化，前边已经介绍过了。
+
+变量初始化后，可以通过赋值更改其对应的存储空间的值：
+
+[source,go]
+----
+func main() {
+	var v1 int
+	fmt.Println("init value: ", v1)
+	v1 = 1
+	fmt.Println("assigned: ", v1)
+	v2 := 100
+	fmt.Println("init value: ", v1)
+	v2 = 1
+	fmt.Println("assigned: ", v2)
+}
+----
+
+Go支持多重赋值，这样可以很方便的一条语句更改多个变量的值，而不需要借助临时变量：
+
+[source,go]
+----
+i, j := 10, 100
+j, i = i, j // 多重赋值，快速交换i, j的值，不需要临时变量
+fmt.Printf("i = %d, j = %d \n", i, j)
+----
+
+[[a_var]]
+== 匿名变量
+
+<</2022/07/30/go-style#unused_var, 上一篇>>中提到：变量声明了必须使用，但是可以使用 `_` 忽略不使用的变量，其实这里的 `_` 代表的就是一个匿名变量，用它来代替某一个不需要的变量，保证正常编译的同时也提升了代码的可阅读性：
+
+[source,go]
+----
+func main() {
+	// 使用匿名变量
+
+	a := 10
+	b := 2
+	mul, div, mod := calc(a, b)
+	fmt.Printf("multiply = %d, divide = %d, mod = %d \n", mul, div, mod)
+
+	_, _, mod1 := calc(a, b) // 使用匿名变量忽略不需要的返回值
+	fmt.Printf("mod = %d \n", mod1)
+}
+
+func calc(a int, b int) (int, int, int) {
+	return a * b, a / b, a % b
+}
+----
+
+上边的代码中，调用 `calc` 函数返回3个值，但是如果不需要其中的几个，可以使用匿名变量 `_` 来忽略它，这样代码更优雅简洁、阅读性更好。
+
+== 总结
+
+本文介绍了 Go 中变量的声明和使用：
+
+. 变量声明有两种方式，各有使用场景
+. 变量声明后初始值为对应类型的默认值
+. Go支持多种赋值，可以更简单的交换变量的值，而不需要借助临时变量
+. 使用匿名变量可以是的代码更简洁、可阅读
+
+文本示例代码见 https://github.com/huzhouv/go-guide/tree/main/03-var[github]。

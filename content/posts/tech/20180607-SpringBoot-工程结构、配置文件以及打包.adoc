@@ -1,0 +1,434 @@
+---
+title: SpringBoot-工程结构、配置文件以及打包
+slug: springboot-project-overview
+img: /images/thumbnail/attachment/20190614/839494e7c5744dbc81eba186462b05f2.png
+categories:
+  - Spring
+tags:
+  - springboot
+description: >-
+  Spring Boot默认以jar方式来打包运行程序，与传统war不同的是，Spring
+  Boot规定了web项目的配置文件、静态资源和模板存放位置，同时也提供了可执行jar包的目录规范和打包插件。通常，我们不需要更改Spring
+  Boot的默认配置，如果有特殊需求，同样可以简单的修改application.properties配置项来实现自定义，例如自定义日志、自定义参数、随机参数、自定义WEB文件存放目录等。
+date: 2018-06-07 17:43:26
+updated: 2019-06-15 08:46:51
+---
+
+= SpringBoot-工程结构、配置文件以及打包
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring boot,可执行jar,配置,application.properties,日志配置,自定义日志,随机参数,自定义参数
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: springboot
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+前一篇，我们简单介绍了SpringBoot的概念，然后逐步构建了一个HelloWorld的Web应用。现在，我们来整体认识一下SpringBoot，包括：工程结构、配置文件、可执行Jar包等。
+
+== 工程结构
+ 
+本质上而言，SpringBoot是一个遵循Maven标准的Maven工程，但是如果开发的是Web项目，与标准Maven存在一定的差别：默认情况下，SpringBoot打包为jar（简单方便，使用自带容器，不需要部署到tomcat等java容器，当然也可以打包为可执行war），此时，不能使用Maven的webapp目录来存放web资源（js、css、图片、页面等），SpringBoot有一套自己的规范，整个工程结构如下：
+
+[source,block]
+----
+\---src
+    +---main
+    |   +---java               // java后台代码
+    |   \---resources          // 资源文件目录
+    |       application.properties  // 配置文件
+    |       +---static         // 存放静态文件，如js、css、图片等
+    |       \---templates      // 存放模板文件
+    \---test
+        \---java               // 测试代码
+----
+ 
+默认情况下，Spring boot规定将静态资源存放到``resources/static``目录，而页面存放到``resources/templates``目录，也可以通过配置文件修改默认存放目录。
+
+
+== 代码结构
+ 
+Spring Boot推荐的后台代码结构如下：
+
+[source,block]
+----
++---src
+|   +---main
+|   |   +---java
+|   |   |   \---com
+|   |   |       \---belonk
+|   |   |           |   WebappViewStarter.java       // 包含main方法的启用类
+|   |   |           +---config
+|   |   |           |       CustomParamConfig.java
+|   |   |           |       RandomParamConfig.java
+|   |   |           +---domain
+|   |   |           +---service
+|   |   |           \---web
+|   |   |                   HomeController.java
+----
+ 
+不推荐使用默认包（无包），因为这往往会引发各种问题。Spring Boot推荐按照java的包名规范来命名（倒域名），同时，将程序的启用类放到包的根位置，与其他类以示区别，这里为``com.belonk.WebappViewStarter.java，``通常，在启动类上都会加上``@SprintBootApplication``注解，这么做的好处在于Spring Boot的自动配置扫描机制：
+
+``@SprintBootApplication``隐式地定义了某些项目的基本“搜索包”。例如，如果您正在编写一个JPA应用程序，那么Spring Boot将使用``@ springbootapplication``带注释的类的包来搜索``@Entity``项，同时，还允许组件扫描只应用于项目。
+
+加上``@SprintBootApplication``注解，那么相当于配置了如下注解：
+
+* ``@EnableAutoConfiguration``: 启动Spring Boot的启动配置机制
+* ``@ComponentScan``: 在应用程序包上开启自动Bean扫描
+* ``@Configuration``: 在Spring Context中注册额外的Bean或导入额外的配置类
+
+ 
+[source,java]
+----
+@SpringBootApplication
+public class WebappViewStarter {
+
+    public static void main(String[] args) {
+        SpringApplication.run(WebappViewStarter.class, args);
+    }
+}
+----
+ 
+
+== 配置文件
+ 
+Spring boot配置文件位于resources目录下，默认名称为``application.properies``，支持两种格式：传统的``properties``和更为简洁的``yaml``，这里采用的是``properties``。
+
+在使用IDEA开发的时候，大多数情况下配置项IDEA都能够给出正确的提示，开发很方便，如下图所示：
+
+
+image::/images/attachment/20180607/2de43e4c820e4cdbbdee2ca7e514777a.png[]
+
+=== 配置项引用
+ 
+Spring boot配置文件可以通过${}的形式引用已有的配置项：
+
+----
+app.name=MyApp
+app.description=${app.name} is a Spring Boot application
+----
+
+=== 多环境配置
+ 
+Spring Boot采用``application-{env}.properties``文件的形式来配置多环境，其中env为环境名称，每个环境对应一个环境名称，例如：
+
+----
+application.properties
+application-dev.properties
+application-pro.properties
+application-test.properties
+----
+
+这里分别创建了dev开发环境、pro生产环境、test测试环境三个配置文件，具体需要激活那个配置文件需要在``application.properties``文件中配置：
+
+----
+spring.profiles.active=dev
+----
+
+如果配置项冲突，那么特定环境的配置会覆盖``application.properties``的配置。
+
+也可以通过``@Profile``注解来定义当前的配置Bean在哪个环境及进行加载，如果需要编程来实现环境Profile激活，那么可以调用``SpringApplication``实例的``setAdditionalProfiles(…​)``方法。
+
+
+=== 自定义配置项
+ 
+如果需要应用自定义配置项，也可以使用``application.properties``文件，然后通过创建配置Bean文件，由Spring注入即可获取配置项的值。例如，配置项如下：
+
+----
+user.name=belonk
+user.department=tech
+----
+
+然后创建一个对应的配置Bean，这里命名为``CustomParamConfig``，代码如下：
+
+[source,java]
+----
+@Configuration
+public class CustomParamConfig {
+    @Value("${user.name}")
+    private String name;
+    @Value("${user.department}")
+    private String department;
+
+    // 省略Getter Setter
+}
+----
+ 
+这里使用了Spring的``@Value``注解来将配置项与类属性绑定，使用的时候只需注入该类，即可获取属性值：
+
+[source,java]
+----
+@Autowired
+private CustomParamConfig customParamConfig;
+----
+ 
+
+=== 配置随机值
+ 
+在某些情况下，需要配置项的值随机生成，例如在微服务的时候启用随机端口，又或者是给应用随机生成id等。例如如下配置：
+
+----
+# random string
+com.belonk.blog.id=${random.value}
+# random uuid
+com.belonk.blog.sign=${random.uuid}
+# random int
+com.belonk.blog.articleNumber=${random.int}
+# random long
+com.belonk.blog.articleSize=${random.long}
+# random int with range
+com.belonk.blog.visitNumber=${random.int(10)}
+# random int with range
+com.belonk.blog.commentNumber=${random.int[10,100]}
+----
+ 
+随机值支持随机字符串、uuid、``int``、``long``等，int和long还支持自定义随机范围，具体可以看``RandomValuePropertySource``的注入规则。
+
+
+=== 日志配置
+ 
+**日志格式**
+
+Spring Boot的内部日志都是使用Common loggin来实现，但是底层日志实现是可配置的，默认提供对``Java Util Logging``, ``Log4J2``和``Logback``的支持。默认情况下，Spring boot启动器使用Logback。一般而言，日志框架保持默认即可。Spring Boot默认的日志输入如下：
+
+[source,block]
+----
+2018-06-07 15:06:15.373  INFO 12544 --- [  restartedMain] com.belonk.WebappViewStarter             : Starting WebappViewStarter on DESKTOP-SUN with PID 12544 (started by belonk in D:\work\03-编码\springboot-demo)
+2018-06-07 15:06:15.375  INFO 12544 --- [  restartedMain] com.belonk.WebappViewStarter             : The following profiles are active: dev
+2018-06-07 15:06:15.375 DEBUG 12544 --- [  restartedMain] o.s.boot.SpringApplication               : Loading source class com.belonk.WebappViewStarter
+2018-06-07 15:06:16.418 DEBUG 12544 --- [  restartedMain] o.s.b.c.c.ConfigFileApplicationListener  : Activated profiles dev
+2018-06-07 15:06:16.421 DEBUG 12544 --- [  restartedMain] o.s.b.c.c.ConfigFileApplicationListener  : Loaded config file 'file:/D:/work/03-%e7%bc%96%e7%a0%81/springboot-demo/02-webapp-view/target/classes/application.properties' (classpath:/application.properties)
+----
+ 
+包括以下内容；
+
+* 日期和时间：精确到毫秒
+* 日志级别：包括``ERROR``, ``WARN``, ``INFO``, ``DEBUG``和``TRACE``
+* 进程ID
+* 日志分隔符：---，表示后边是实际的日志信息
+* 线程名称：由中括号包围
+* Logger名称：一般是包简写的类名称
+* 实际的日志信息
+
+默认情况下，Spring Boot未开启``debug``模式，所以打印的日志级别是``INFO``以上，可以在配置文件中配置``debug=true``来开启debug模式，此时打印日志为``DEBUG``以上。
+
+**日志级别**
+
+同大多数日志框架一样，使用``logging.level=LEVEL``的形式自定义日志级别：
+
+----
+logging.level.java.sql=DEBUG
+----
+
+**开启日志颜色**
+
+----
+spring.output.ansi.enabled=always
+----
+
+**日志输出到文件**
+
+默认情况下，Spring Boot并没有将日志输出到文件，而是只打印到控制台，开启文件支持需要配置``logging.file``或者``logging.path``:
+
+* logging.file: 自定义日志文件存储位置和文件名称
+* logging.path: 自定义日志文件存储位置，日志文件名称为spring.log
+
+这两个配置不能都生效，优先使用``logging.file``的配置。
+
+Spring boot日志文件大小为10M，超过则会进行循环写。
+
+**自定义日志**
+
+如果不想使用默认的日志格式，比如想要每天生成一个日志文件，Spring Boot也支持自定义日志配置文件，Spring Boot会在Classpath下加载配置文件：
+
+
+|====
+|Logging System|Customization
+
+|
+Logback
+|
+``logback-spring.xml``,&nbsp;``logback-spring.groovy``,&nbsp;``logback.xml``&nbsp;or&nbsp;``logback.groovy``
+
+|
+Log4j2
+|
+``log4j2-spring.xml``&nbsp;or&nbsp;``log4j2.xml``
+
+|
+JDK (Java Util Logging)
+|
+``logging.properties``
+
+|====
+ 
+例如，我想要自定义logback日志配置，那么在resources目录下增加logback-spring.xml配置文件即可，配置如下：
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration debug="false">
+
+<property name="LOG_HOME" value="logs"/>
+
+<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+</encoder>
+</appender>
+
+<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+
+<FileNamePattern>${LOG_HOME}/02-webapp-view-%d{yyyy-MM-dd}.log</FileNamePattern>
+
+<MaxHistory>30</MaxHistory>
+</rollingPolicy>
+<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+</encoder>
+
+<triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+<MaxFileSize>10MB</MaxFileSize>
+</triggeringPolicy>
+</appender>
+
+<root level="INFO">
+<appender-ref ref="STDOUT"/>
+</root>
+</configuration>
+----
+ 
+这样，就可以实现每天一个日志文件。
+
+
+=== 配置静态资源和页面
+ 
+前边说过，spring boot默认使用的静态资源目录为static，模板为templates，也可以通过配置来修改：
+
+----
+# thymeleaf模板文件存储的位置
+spring.thymeleaf.prefix=classpath:/pages/view/
+# 访问静态资源的路径，默认/**表示从存储位置开始
+# 例如：资源在/static/img/logo.png，则默认访问路径为：/img/logo.png
+# 如果通过该选项进行配置，例如，配置为/public/static/**，如果资源存储在/public/static/img/logo.png，则访问路径为/public/static/img/logo.png
+spring.mvc.static-path-pattern=/pages/static/**
+# 静态资源存储位置
+spring.resources.static-locations=classpath:/pages/static/
+----
+ 
+上边的配置，将静态资源和模板位置分别放到了resources目录下的/pages/static和/pages/view中。
+
+**网站图标**
+
+Spring Boot支持自定义网站图标，会从静态资源存储目录的根位置查找``favicon.ico``文件，没有则从classpath根位置查找。
+
+== 在IDEA中开发
+ 
+IDEA是一款非常优秀的JAVA IDE，在IDEA开发Spring boot项目，要做一些配置。
+
+
+=== 启动类配置
+ 
+不想每次找到启动类，右键来执行main方法，那么可以新建一个启动配置，就可以通过工具栏的按钮来运行程序了。
+
+首先，点击工具栏的Edit Configuration菜单：
+
+image::/images/attachment/20180607/ce3f416f59684547b8d31aa8b81c3e8d.png[]
+
+
+然后，在弹出框中点击左上角的加号，新增一个启动类，填写Spring Boot启动类的全限定名：
+
+
+image::/images/attachment/20180607/e2f4f750e58944cb924f009fa6d4004e.png[]
+
+
+运行的时候，在工具栏运行配置按钮下拉选择新建的启动类，就可以使用Run\Debug\Stop按钮快速启动、调试和停止引用了。
+
+
+=== 热部署
+ 
+修改了类或页面，直接按``Ctrl+F9``快捷键，IDEA会自动重新Build工程，加载修改的类和页面，而不需要重新启动应用。
+
+
+== 打可执行jar包
+ 
+
+=== 可执行jar
+ 
+与标准jar不同，Spring Boot的jar是一个可以运行的web工程，除了包含编译后的class文件，还包括嵌入的jar包、静态资源、页面等。所以，Spring Boot自定义了一套规范来存储文件和打包、运行。
+
+Spring Boot通过``spring-boot-loader``来提供对可执行jar和war包的支持。可执行jar的结构：
+
+[source,block]
+----
+example.jar
+ |
+ +-META-INF
+ |  +-MANIFEST.MF
+ +-org
+ |  +-springframework
+ |     +-boot
+ |        +-loader
+ |           +-<spring boot loader classes>
+ +-BOOT-INF
+    +-classes
+    |  +-mycompany
+    |     +-project
+    |        +-YourClasses.class
+    +-lib
+       +-dependency1.jar
+       +-dependency2.jar
+----
+ 
+如上所示，目录结构分为三部分：
+
+* META-INF：存放应用描述文件和配置文件，例如main方法的class、maven的配置等；
+* spring boot loader：即org目录下的类文件，是Spring Boot提供的对可执行jar和可执行war支持的类；
+* BOOT-INF：应用编译后的文件，包括classes、lib包，静态资源和页面均是放到classes下边
+
+这里仅仅简单了解一下，需要更详细的了解具体技术细节，可以参看 https://docs.spring.io/spring-boot/docs/1.5.12.RELEASE/reference/htmlsingle/#executable-jar[这里]。
+
+
+=== 打包
+ 
+要打包成如上所示的目录结构，需要Spring Boot提供的maven插件支持，在pom.xml引入如下配置：
+
+[source,xml]
+----
+<build>
+<plugins>
+<plugin>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-maven-plugin</artifactId>
+</plugin>
+</plugins>
+</build>
+----
+ 
+然后进行maven打包即可（``mvn clean package``），等到打包完成，执行jar：
+
+
+----
+``jave -jar target/myproject-0.0.1-SNAPSHOT.jar``
+----
+ 
+
+== 总结
+ 
+Spring Boot默认以jar方式来打包运行程序，与传统war不同的是，Spring Boot规定了web项目的配置文件、静态资源和模板存放位置，同时也提供了可执行jar包的目录规范和打包插件。通常，我们不需要更改Spring Boot的默认配置，如果有特殊需求，同样可以简单的修改application.properties配置项来实现自定义，例如自定义日志、自定义参数、随机参数、自定义WEB文件存放目录等。
+
+至此，我们已经从宏观上了解了Spring Boot的工程结构、配置文件和打包方式，下一篇，我们将开始学习Spring Boot JPA。

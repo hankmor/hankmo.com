@@ -1,0 +1,335 @@
+---
+title: (译)Go1.13中处理错误
+slug: go-err-113
+categories:
+  - GoLang
+tags:
+  - go
+  - module
+description: 在过去的十年中，Go 将错误作为值来处理 ，这对我们很有帮助。尽管标准库对错误的支持很少 —— 只有 `errors.New` 和 `fmt.Errorf` 函数，它们产生的错误只包含一条消息 —— 内置 `error` 接口允许 Go 程序员添加他们想要的任何信息。它所需要的只是一个实现 `Error` 方法的类型
+date: 2023/05/05
+updated: 2022/12/19
+---
+
+= (译)Go1.13中处理错误
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+Damien Neil 和 Jonathan Amsterdam, 2019 年 10 月 17 日, 原文地址： https://go.dev/blog/go1.13-errors
+
+## 介绍
+
+在过去的十年中，Go 将 <</2023/04/30/go-err-handle#, 错误作为值>> 来处理 ，这对我们很有帮助。尽管标准库对错误的支持很少 —— 只有 `errors.New` 和 `fmt.Errorf` 函数，它们产生的错误只包含一条消息 —— 内置 `error` 接口允许 Go 程序员添加他们想要的任何信息。它所需要的只是一个实现 `Error` 方法的类型：
+
+[source, go]
+----
+type QueryError struct {
+    Query string
+    Err   error
+}
+
+func (e *QueryError) Error() string { return e.Query + ": " + e.Err.Error() }
+----
+
+像这样的错误类型无处不在，它们存储的信息千差万别，从时间戳到文件名再到服务器地址。通常，该信息包括另一个较低级别的错误以提供额外的上下文。
+
+一个错误包含另一个错误的模式在 Go 代码中非常普遍，经过 https://go.dev/issue/29934[广泛讨论] 后，Go 1.13 添加了对它的明确支持。这篇文章描述了提供该支持的标准库的新增内容：`errors` 包中的三个新函数，以及 `fmt.Errorf`.
+
+在详细描述更改之前，让我们回顾一下在该语言的先前版本中如何检查和构造错误。
+
+## Go 1.13 之前的错误
+
+### 检查错误
+
+Go 错误是值。程序以几种方式根据这些值做出决策。最常见的是比较错误以 `nil` 查 看操作是否失败。
+
+[source, go]
+----
+if err != nil {
+    // something went wrong
+}
+----
+
+有时我们将错误与已知的 _标记_ 值进行比较，以查看是否发生了特定错误。
+
+[source, go]
+----
+var ErrNotFound = errors.New("not found")
+
+if err == ErrNotFound {
+    // something wasn't found
+}
+----
+
+错误值可以是满足语言定义 `error` 接口的任何类型。程序可以使用类型断言或类型开关将错误值视为更具体的类型。
+
+[source, go]
+----
+type NotFoundError struct {
+    Name string
+}
+
+func (e *NotFoundError) Error() string { return e.Name + ": not found" }
+
+if e, ok := err.(*NotFoundError); ok {
+    // e.Name wasn't found
+}
+----
+
+### 添加信息
+
+函数经常将错误传递到调用堆栈，同时向其添加信息，例如错误发生时发生的情况的简短描述。一种简单的方法是构造一个新错误，其中包含前一个错误的文本：
+
+[source, go]
+----
+if err != nil {
+    return fmt.Errorf("decompress %v: %v", name, err)
+}
+----
+
+创建一个新错误并 `fmt.Errorf` 丢弃除文本之外的原始错误中的所有内容。正如我们在上面看到的那样 `QueryError`，有时我们可能想要定义一个包含底层错误的新错误类型，并保留它以供代码检查。如 `QueryError` ：
+
+[source, go]
+----
+type QueryError struct {
+    Query string
+    Err   error
+}
+----
+
+程序中可以查看一个 `*QueryError` 值的内部数据，以根据潜在的错误做出决策。您有时会看到这被称为“展开”错误。
+
+[source, go]
+----
+if e, ok := err.(*QueryError); ok && e.Err == ErrPermission {
+    // query failed because of a permission problem
+}
+----
+
+标准库中的类型 `os.PathError` 是一个错误包含另一个错误的另一个例子。
+
+## Go 1.13 中的错误
+
+### 展开方法
+
+Go 1.13 为标准库包引入了新功能 `errors`、`fmt` 以简化处理包含其他错误的错误。其中最重要的是约定而不是更改：包含另一个错误的错误可能会实现 `Unwrap` 返回底层错误的方法。如果 `e1.Unwrap()` 返回 `e2`，那么我们说 `e1` _包装_ 了  `e2` ， 并且您可以_解包装_ `e1` 得到 `e2`。
+
+按照这个约定，我们可以给上面的 `QueryError` 类型添加一个 `Unwrap` 方法返回它包含的错误的方法：
+
+[source, go]
+----
+func (e *QueryError) Unwrap() error { return e.Err }
+----
+
+解包错误的结果本身可能有一个 `Unwrap` 方法；我们称重复包装的错误序列为错误链。
+
+### 用 Is 和 As 检查错误
+
+Go 1.13 的 `errors` 包包含两个用于检查错误的新函数：`Is` 和 `As`.
+
+`errors.Is` 函数将错误与值进行比较：
+
+[source, go]
+----
+// Similar to:
+//   if err == ErrNotFound { … }
+if errors.Is(err, ErrNotFound) {
+    // something wasn't found
+}
+----
+
+`As` 函数测试错误是否为特定类型：
+
+[source, go]
+----
+// Similar to:
+//   if e, ok := err.(*QueryError); ok { … }
+var e *QueryError
+// Note: *QueryError is the type of the error.
+if errors.As(err, &e) {
+    // err is a *QueryError, and e is set to the error's value
+}
+----
+
+在最简单的情况下，`errors.Is` 函数的行为类似于与目标错误的比较，并且 `errors.As` 函数的行为类似于类型断言。但是，在对包装错误进行操作时，这些函数会考虑链中的所有错误。让我们再看看上面的例子，解包 `QueryError` 来检查潜在的错误：
+
+[source, go]
+----
+if e, ok := err.(*QueryError); ok && e.Err == ErrPermission {
+    // query failed because of a permission problem
+}
+----
+
+使用该 `errors.Is` 函数，我们可以将其写为：
+
+[source, go]
+----
+if errors.Is(err, ErrPermission) {
+    // err, or some error that it wraps, is a permission problem
+}
+----
+
+该 `errors` 包还包括一个新 `Unwrap` 函数，该函数返回调用错误方法的 `Unwrap` 结果，当错误没有 `Unwrap` 方法时返回 `nil`。但是，通常最好使用 `errors.Is` 或 `errors.As`，因为这些函数将在一次调用中检查整个链。
+
+注意：虽然用指针指向指针可能会让人觉得奇怪，但在这种情况下它是正确的。将其视为指向错误类型值的指针；在这种情况下，返回的错误恰好是指针类型。
+
+### 用 %w 包装错误
+
+如前所述，通常使用 `fmt.Errorf` 函数向错误添加附加信息：
+
+[source, go]
+----
+if err != nil {
+    return fmt.Errorf("decompress %v: %v", name, err)
+}
+----
+
+在 Go 1.13 中，`fmt.Errorf` 函数支持一个新的 `%w` 动词。当这个动词存在时，`fmt.Errorf` 返回的错误将有一个 `Unwrap` 方法返回参数 `%w` 对应的值，这必须是一个错误。在所有其他方面，`%w` 等同于 `%v`。
+
+[source, go]
+----
+if err != nil {
+    // Return an error which unwraps to err.
+    return fmt.Errorf("decompress %v: %w", name, err)
+}
+----
+
+`%w` 包装的错误可用 `errors.Is` 和 `errors.As` 判断：
+
+[source, go]
+----
+err := fmt.Errorf("access denied: %w", ErrPermission)
+...
+if errors.Is(err, ErrPermission) ...
+----
+
+### 是否包装
+
+当使用 `fmt.Errorf` 或通过实现自定义类型向错误添加额外的上下文时，您需要决定新错误是否应该包装原始错误。这个问题没有单一的答案，这取决于创建新错误的上下文。包装错误以将其暴露给调用者，当这样做会暴露实现细节时不要包装错误。
+
+举个例子，假设一个 `Parse` 函数从 `io.Reader` 读取读取复杂的数据结构，如果发生错误，我们希望报告发生错误的行号和列号。如果在读取时发生错误，我们希望包装该错误以允许检查底层问题。由于调用者向函数提供了 `io.Reader`，因此公开它产生的错误是有意义的。
+
+相反，对数据库进行多次调用的函数可能不应该返回一个错误，该错误会解包为其中一个调用的结果。如果函数使用的数据库是一个实现细节，那么暴露这些错误就违反了抽象。比如，你的 `pkg` 包使用了 Go 的 `database/sql` 包，你调用了 `LookupUser` 函数，那么它可能会遇到 `sql.ErrNoRows` 错误。如果您使用 `fmt.Errorf("accessing DB: %v", err)` 返回该错误，则调用者无法查看内部以找到 `sql.ErrNoRows`。但如果你包装错误，返回 `fmt.Errorf("accessing DB: %w", err)`，那么调用者可以合理地编写代码来判断错误类型：
+
+[source, go]
+----
+err := pkg.LookupUser(...)
+if errors.Is(err, sql.ErrNoRows) …
+----
+
+到那时，如果您不想破坏您的客户端代码，该函数必须始终返回 `sql.ErrNoRows` 的包装错误，即使您切换到不同的数据库包也是如此。换句话说，包装错误会使该错误成为您的 API 的一部分。如果您不想在将来承诺将该错误作为 API 的一部分进行支持，则不应包装该错误。
+
+重要的是要记住，无论你是否对错误进行包装，错误文本都是一样的。_试图理解错误的人_ 将获得相同的信息；包装的选择在于，是给 _程序_ 额外的信息以便他们做出更明智的决定，还是保留该信息以保留抽象层。
+
+## 使用 Is 和 As 方法自定义错误测试
+
+该 `errors.Is` 函数检查链中的每个错误是否与目标值匹配。 https://go.dev/ref/spec#Comparison_operators[默认情况下，如果两者相等，] 则错误匹配目标。此外，链中的错误可能通过实现 `Is` _方法_ 来声明它与目标匹配。
+
+作为一个例子，考虑来自 https://commandcenter.blogspot.com/2017/12/error-handling-in-upspin.html[Upspin 错误包] 包的如下代码，它将错误与模板进行比较，只考虑模板中非零的字段：
+
+[source, go]
+----
+type Error struct {
+    Path string
+    User string
+}
+
+func (e *Error) Is(target error) bool {
+    t, ok := target.(*Error)
+    if !ok {
+        return false
+    }
+    return (e.Path == t.Path || t.Path == "") &&
+           (e.User == t.User || t.User == "")
+}
+
+if errors.Is(err, &Error{User: "someuser"}) {
+    // err's User field is "someuser".
+}
+----
+
+## 错误和包 API
+
+一个返回错误的包（大多数都这样做）应该描述程序员可能依赖的这些错误的哪些属性。一个设计良好的包也将避免返回不应该依赖的属性的错误。
+
+最简单的规范是说操作要么成功要么失败，分别返回 nil 或非 nil 错误值。在许多情况下，不需要进一步的信息。
+
+如果我们希望一个函数返回一个可识别的错误条件，例如“找不到项目”，我们可能会返回一个包含标记的错误。
+
+[source, go]
+----
+var ErrNotFound = errors.New("not found")
+
+// FetchItem returns the named item.
+//
+// If no item with the name exists, FetchItem returns an error
+// wrapping ErrNotFound.
+func FetchItem(name string) (*Item, error) {
+    if itemNotFound(name) {
+        return nil, fmt.Errorf("%q: %w", name, ErrNotFound)
+    }
+    // ...
+}
+----
+
+还有其他现有模式可以提供调用者可以在语义上检查的错误，例如直接返回标记值、特定类型或可以使用谓词函数检查的值。
+
+在所有情况下，都应注意不要将内部细节暴露给用户。正如我们在上面的“是否包装”中提到的，当您从另一个包返回错误时，您应该将错误转换为不暴露底层错误的形式，除非您愿意承诺在将来返回该特定错误.
+
+[source, go]
+----
+f, err := os.Open(filename)
+if err != nil {
+    // The *os.PathError returned by os.Open is an internal detail.
+    // To avoid exposing it to the caller, repackage it as a new
+    // error with the same text. We use the %v formatting verb, since
+    // %w would permit the caller to unwrap the original *os.PathError.
+    return fmt.Errorf("%v", err)
+}
+----
+
+如果一个函数被定义为返回一个错误包装一些哨兵或类型，不要直接返回底层错误。
+
+[source, go]
+----
+var ErrPermission = errors.New("permission denied")
+
+// DoSomething returns an error wrapping ErrPermission if the user
+// does not have permission to do something.
+func DoSomething() error {
+    if !userHasPermission() {
+        // If we return ErrPermission directly, callers might come
+        // to depend on the exact error value, writing code like this:
+        //
+        //     if err := pkg.DoSomething(); err == pkg.ErrPermission { … }
+        //
+        // This will cause problems if we want to add additional
+        // context to the error in the future. To avoid this, we
+        // return an error wrapping the sentinel so that users must
+        // always unwrap it:
+        //
+        //     if err := pkg.DoSomething(); errors.Is(err, pkg.ErrPermission) { ... }
+        return fmt.Errorf("%w", ErrPermission)
+    }
+    // ...
+}
+----
+
+## 结论
+
+虽然我们讨论的变化只是三个函数和一个格式化动词，但我们希望它们能大大改善 Go 程序中错误处理的方式。我们希望通过包装来提供额外的上下文将变得司空见惯，帮助程序做出更好的决策并帮助程序员更快地找到错误。
+
+正如 Russ Cox 在他的 https://blog.golang.org/experiment[GopherCon 2019 主题演讲] 中所说，在通往 Go 2 的道路上，我们进行实验、简化和发布。现在我们已经发布了这些更改，我们期待着接下来的实验。

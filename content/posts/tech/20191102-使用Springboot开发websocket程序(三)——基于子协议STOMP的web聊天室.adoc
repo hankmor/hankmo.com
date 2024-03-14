@@ -1,0 +1,650 @@
+---
+title: 使用Springboot开发websocket程序(三)——基于子协议STOMP的web聊天室
+slug: springboot-websocket-chatroom-with-stomp
+img: /images/thumbnail/attachment/20191103/7b43b58900804f0a96db75aab5b8f5f7.png
+categories:
+  - Spring
+tags:
+  - websocket
+  - springboot
+description: >-
+  WebSocket
+  RFC定义了子协议的使用规范。在握手阶段，客户端和服务端使用Sec-WebSocket-Protocol请求头来通知彼此使用子协议，即更高级的、应用级的协议。当然，也可以不使用子协议，但是客户端和服务端仍然需要定义消息的格式。使用更规范的通用消息协议，更能让应用程序开发和维护变得简单。STOMP就是这样的一个消息协议，Spring框架提供了对其的支持。
+date: 2019-11-02 14:36:19
+updated: 2019-11-06 18:18:05
+---
+
+= 使用Springboot开发websocket程序(三)——基于子协议STOMP的web聊天室
+:author: belonk.com
+:date: 2019-11-06
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: STOMP,websocket,springboot,messagemapping,frame,聊天室,发布订阅
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: websocket,springboot
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+我们使用Spring Boot对原生WebSocket的支持来编写了一个简单的聊天室程序。它仅支持群发，如果要做到点对点消息，我们还需要编写代码自己实现。本篇，我们将使用websocket的子协议STOMP来更新我们的聊天室程序，使其可以支持单聊。
+
+== STOMP
+ 
+
+=== 为什么要支持子协议
+ 
+**WebSocket是一种简单的通信协议，而并非消息协议。它是TCP之上的非常薄的一层，所做的事情仅仅是将字节流转换为消息流(文本或二进制)**。至于消息是什么含义，怎么路由和解析，都交由应用程序自身来决定。HTTP协议是一种应用级协议，它明确告诉我们请求的地址、格式、编码等等信息，但是websocket与之不同，websocket并不提供详细的信息来告诉我们如何路由和处理消息。因此，对于开发大型应用程序而言，websocke级别太低了，要实现非常复杂的功能，我们需要进行大量的编码工作。这就好比，大多JAVA WEB开发都会选择使用Spring框架，而不是基于Servlet API来实现。
+
+基于这个原因，WebSocket RFC定义了 https://tools.ietf.org/html/rfc6455#section-1.9[子协议]的使用规范。在握手阶段，客户端和服务端使用``Sec-WebSocket-Protocol``请求头来通知彼此使用子协议，即更高级的、应用级的协议。当然，也可以不使用子协议，但是客户端和服务端仍然需要定义消息的格式。使用更规范的通用消息协议，更能让应用程序开发和维护变得简单。STOMP就是这样的一个消息协议，Spring框架提供了对其的支持。
+
+
+=== 什么是STOMP
+ 
+** https://stomp.github.io/stomp-specification-1.2.html#Abstract[STOMP]即Simple (or Streaming) Text Orientated Messaging Protocol，中文称简单(流)文本定向消息协议，它是一种简单的互操作协议**，旨在通过消息代理在客户端之间传递异步消息，STOMP协议具有简单行和互操作性，因此在多种语言和多种平台上得到广泛地应用。。
+
+STOMP是由于需要通过脚本语言（例如Ruby，Python和Perl）连接到企业消息代理而产生的，旨在对消息进行简单的消息处理，例如可靠地发送单个消息并断开连接或在给定目的地上消耗所有消息等等。它是其他开放消息协议（例如AMQP）和JMS代理（例如OpenWire）中使用的实现特定wire protocol的替代。STOMP仅仅实现部分常用的消息API，而不是实现完整的消息API，因此更加轻量和简单。
+
+STOMP除了支持文本消息外，也支持二进制消息，默认使用UTF-8的编码格式。
+
+STOMP有几个比较重要的概念：
+
+* frame：帧，即STOMP客户端和服务端发送的数据
+* COMMAND: frame的命令，由STOMP规范定义，用来表示消息的特定用途，比如连接服务端、发送消息等，每个frame都有命令
+* destination：消息发送的目的地址，通过消息头来表示，如``destination:/topic/chat``
+
+**STOMP基于frame，frame的模型源于HTTP，一个frame由命令、一组可选的标头和可选的主体组成**，客户端和服务端发送frame来进行通信。frame的格式如下:
+
+[source,block]
+----
+COMMAND
+header1:value1
+header2:value2
+
+Body^@
+----
+ 
+frame分为两个部分：消息头和消息体。消息头第一行为命令，然后跟``key:value``格式的头信息；然后是消息体，消息体跟消息头之间用一个空行分隔。最后，消息体后跟八位空字节(上文用``^@``表示)。另外，frame的命令和消息头信息都区分大小写。
+
+STOMP客户端支持的命令包括：SEND、SUBSCRIBE、UNSUBSCRIBE、BEGIN、COMMIT、ABORT、ACK、NACK、DISCONNECT、CONNECT、STOMP
+
+服务端支持的命令包括：CONNECTED、MESSAGE、RECEIPT、ERROR
+
+**只有几种消息可以包含消息体：SEND、MESSAGE、ERROR**
+
+举个例子，客户端连接到服务端，则会想服务端发送如下的frame：
+
+[source,block]
+----
+CONNECT
+accept-version:1.0,1.1,2.0
+host:stomp.github.org
+
+^@
+----
+ 
+服务端接收连接请求则会发送下边的frame给客户端，否则发送ERROR frame：
+
+[source,block]
+----
+CONNECTED
+version:1.2
+
+^@
+----
+ 
+
+=== 使用STOMP的优点
+ 
+使用STOMP作为子协议，与使用原生WebSocket相比，Spring框架和Spring Security可以提供更丰富的编程模型。具体的优点有以下几点：
+
+* 无需自定义消息协议和消息格式
+* 可以使用STOMP客户端，包括Spring框架中的Java客户端
+* 消息代理（例如RabbitMQ，ActiveMQ和其他代理）可以用于管理订阅和广播消息
+* 可以在任意数量的``@Controller``中组织应用程序逻辑，并根据STOMP消息头将消息路由给它们，而对于给定的连接，可以使用单个``WebSocketHandler``处理原始WebSocket消息
+* 可以使用Spring Security基于STOMP 目标（destinations）和消息类型来对消息进行安全处理
+
+详细内容请看STOMP规范： https://stomp.github.io/stomp-specification-1.2.html[https://stomp.github.io/stomp-specification-1.2.html]
+
+
+== Spring Boot中使用STOMP
+ 
+使用STOMP有如此多的好处，我们看看Spring中如何使用。
+
+在Spring boot中使用STOMP，大概需要以下几步：
+
+1、首先，添加配置类，配置STOMP端点；然后，配置消息代理，Spring内置有简单消息代理（基于内存），也支持如RabbitMQ、ActiveMQ等专业消息代理中间件；配置哪些消息路径由应用程序处理
+
+2、编写Controller处理消息，消息处理方法上加上``@MessageMapping``，结合``@SendTo``、``@SendToUser``
+
+3、根据实际业务需要，编写消息拦截处理器、事件处理器
+
+4、编写客户端，使用``stomp.js``启用STOMP客户端，订阅并处理消息
+
+
+=== 聊天室改造
+ 
+现在我们来看看Spring中如何使用它，基础的集成步骤请看 http://www.belonk.com/c/sb_websocket_without_stomp.html[基于原生websocket的web聊天室]一篇。
+
+
+==== 整体功能
+ 
+在原来的聊天室基础上，我们添加一个点对点聊天的功能：
+
+.聊天室界面
+image::/images/attachment/20191102/e01edf6e4cc24f66968ef2a7ec28a7ee.png[]
+
+为了简单起见，我们还是让用户自己输入要对话的用户名称。
+
+
+==== 实现步骤
+ 
+
+一、**服务端**
+ 
+1、创建Spring Boot工程websocket-stomp，然后添加依赖并创建执行主类
+
+依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-websocket</artifactId>
+</dependency>
+----
+ 
+主运行类：
+
+[source,java]
+----
+@SpringBootApplication
+public class SpringWebsocketApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SpringWebsocketApplication.class, args);
+    }
+}
+----
+ 
+2、创建配置类
+
+[source,java]
+----
+@Configuration
+// 启用STOMP协议消息代理来传递消息
+@EnableWebSocketMessageBroker
+public class WebSocketConfig extends AbstractWebSocketMessageBrokerConfigurer {
+    /**
+     * 注册STOMP端点
+     *
+     * @param registry STOMP端点注册器
+     */
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // 客户端连接的websocket握手地址（端点）
+        registry.addEndpoint("/websocket")
+                // .setAllowedOrigins("*") // 设置允许的客户端请求源，默认只能在同域名下，不能跨域，设置为*可允许所有客户端请求
+                .withSockJS(); // 启用socketjs
+    }
+
+    /**
+     * 消息代理配置，使用基于内存的消息代理
+     *
+     * @param registry 消息代理注册表
+     */
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        // 如果消息端点是/topic或/queue开头的，则直接转发给消息代理(内存或其他MQ，如RabbitMQ等)
+        registry.enableSimpleBroker("/topic", "/queue");
+        // 端点以app开头的消息将会自动路由给@MessageMapping标注的Controller方法上
+        registry.setApplicationDestinationPrefixes("/app");
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(new ChannelInterceptorAdapter() {
+            @Override
+            public Message<?> preSend(Message<?> message, MessageChannel channel) {
+                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+                // 握手时客户端传递userName头信息来标识登录人
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    String userName = accessor.getNativeHeader("userName").get(0);
+                    Principal principal = new PrincipalImpl(userName);
+                    accessor.setUser(principal);
+                }
+                return message;
+            }
+        });
+    }
+
+}
+----
+ 
+代码说明如下：
+
+1)、``@EnableWebSocketMessageBroker``：启用STOMP协议消息代理来传递消息
+
+2)、配置类继承``AbstractWebSocketMessageBrokerConfigurer``类，用于配置STOMP消息代理
+
+3)、``registerStompEndpoints``方法用来注册Stomp端点，客户端握手时会请求该端点定义的URI地址，``setAllowedOrigins("*")``设置允许websocket客户端的域名，默认是跟服务端在统一域名，这里的``*``表示允许所有域名
+
+4)、``configureMessageBroker``方法用来配置消息代理，先使用``registry.enableSimpleBroker``来启用简单消息代理(基于内存)，目标地址以``/topic``和``/queue``开头的消息会路由给它处理，然后，通过``registry.setApplicationDestinationPrefixes("/app")``设置以``/app``开头的消息都路由给控制器来处理，消息处理的方法上需要使用``@MessageMapping``来标注。
+
+基本内存的消息代理存在很多缺陷，尽量在测试时使用，一般我们会接入其他第三方支持STOMP的MQ，比如RabbitMQ，先确保STOMP功能已经开启，然后启用：
+
+[source,java]
+----
+@Override
+public void configureMessageBroker(MessageBrokerRegistry registry) {
+    // 启用其他MQ(RabbitMQ、ActiveMQ等)消息代理，他们需要支持并启用STOMP
+    registry.setPathMatcher(new AntPathMatcher("."));
+    registry.enableStompBrokerRelay("/topic", "/queue");
+    // 端点以app开头的消息将会自动路由给@MessageMapping标注的Controller方法上
+    registry.setApplicationDestinationPrefixes("/app");
+}
+----
+ 
+需要注意，Spring默认的消息目标都是以``“/”``来分隔的，这点与RabbitMQ等消息代理不同，需要改为``“.”``，即上边的``registry.setPathMatcher``。
+
+5)、``configureClientInboundChannel``方法用来配置客户端传入的消息，这里注册了一个拦截器，绑定客户端消息头上传递的userName信息给消息，后续消息处理时就可以获取到用户名称了。这里只是为了简单，一般肯定是通过登录或者集成Spring Security来传入用户信息的
+
+3、编写消息处理控制器
+
+[source,java]
+----
+@Controller
+@RequestMapping
+public class WebSocketController {
+    @Resource
+    private SimpMessagingTemplate simpMessagingTemplate;
+    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    @RequestMapping("/hello")
+    @ResponseBody
+    public String customSendMsg(String name) {
+        // 手动发送消息
+        simpMessagingTemplate.convertAndSend("/topic/chat", "hello, i am " + name);
+        return "success";
+    }
+
+    /**
+     * 发送群聊消息
+     *
+     * @param content
+     * @return
+     */
+    // 路由消息，可用在类和方法上，用在类上表示控制器中所有方法之间共享映射。格式为/foo*，/foo/**和/foo/{id}(使用@DestinationVariable来引用传递的参数)
+    @MessageMapping("/say")
+    // 将消息的返回值直接发送到指定的目标地址上
+    @SendTo("/topic/chat")
+    public String sayAll(String content, Principal principal) {
+        String curUserName = principal.getName();
+        return formatter.format(LocalDateTime.now()) + ", " + curUserName + " say : " + content;
+    }
+
+    @MessageMapping("/say/{userName}")
+    public String send2User(String content, @DestinationVariable String userName, Principal principal) {
+        System.out.println("userName : " + userName);
+        String curUserName = principal.getName();
+        // return formatter.format(LocalDateTime.now()) + ", " + curUserName + " say : " + content;
+        String s = formatter.format(LocalDateTime.now()) + ", " + curUserName + " say : " + content;
+        simpMessagingTemplate.convertAndSendToUser(userName, "/queue/" + principal + "/chat", s);
+        return s;
+    }
+
+    @MessageExceptionHandler
+    @SendTo("/queue/errors")
+    public String handleException(Throwable exception) {
+        return exception.getMessage();
+    }
+}
+----
+ 
+方法参数``Principal``代表登录的用户信息，该信息是在配置类的``configureClientInboundChannel``方法中传入的，``sayAll``方法用来进行聊天室聊天，消息将发送到``/topic/chat``这个地址中，只要客户端订阅了该地址则会收到消息。``send2User``方法则是用来进行点对点处理的，客户端发送消息时传递``userName``指明消息发给谁。
+
+Spring提供了``SimpMessagingTemplate``来处理消息的发送，如控制器的``customSendMsg``方法，我们请求``/app/hello``，会向订阅客户端发送一条消息。
+
+* ``@MessageMapping``注解用来指定处理目标消息
+* ``@SendTo``注解表明：将方法的返回值作为消息内容发送给注解注定的目标路径
+* ``@SendToUser``注解：给指定的某一个用户发送信息，服务端能够处理的消息目标地址格式为``/user/{username}``，其中``username``会从消息头上获取，客户端发送时目标地址需要添加``/user``前缀
+* ``@MessageExceptionHandler``注解：用来将消息处理失败时的信息路由到该注解标注的方法上
+
+被``@MessageMapping``标注的方法支持以下参数：
+
+* ``Message``：消息对象，可以获取消息详细信息
+* ``@Payload``注解标记的参数：通过``org.springframework.messaging.converter.MessageConverter``将消息体转换为``@Payload``注解标记的对象，也支持使用``@Validated``参数验证注解
+* ``@Header``注解标记的参数：获取消息的请求头，按需调用``org.springframework.core.convert.converter.Converter``进行对象转换
+* ``@Headers``标记的``Map``：用来获取所有消息头
+* ``MessageHeaders``：可获取所有消息头
+* ``MessageHeaderAccessor``、``SimpMessageHeaderAccessor``和``StompHeaderAccessor``：消息头访问器，访问不同消息协议的请求头
+* ``@DestinationVariable``标记的参数：类似``@PathVariable``注解，用来访问消息目标(destinations)的模板变量，在``@MessageMapping``中定义，如``@MessageMapping("/say/{userName}")``
+* ``java.security.Principal``对象：获取在握手阶段登录的用户信息
+
+除了``@MessageMapping``，也可以使用``@SubscribeMapping``注解来定义消息订阅方法，此时消息直接返回给客户端而不是消息代理，当然也可以通过``@SendTo``发送到消息代理。
+
+到这里，服务端已经准备好了，接下来准备客户端。
+
+
+二、**客户端**
+ 
+在 http://www.belonk.com/c/websocket_info.html[什么是websocket]中，我们介绍了websocket的备选方案SocketJS，Spring也对其进行了支持以兼容更多的浏览器。接着上一篇的index.html页面，只是我们这里使用SocketJS来开发客户端。
+
+1、首先，我们需要引入额外的两个JS库
+
+[source,xml]
+----
+<!--stomp js-->
+<script src="https://cdn.bootcss.com/stomp.js/2.3.3/stomp.js"></script>
+<!--sockjs-client-->
+<script src="https://cdn.bootcss.com/sockjs-client/1.4.0/sockjs.js"></script>
+----
+ 
+stomp.js就是浏览器端的stomp协议客户端实现，socketjs.js则是SocketJS JavaScript Client。
+
+2、在进行连接服务器时，与之前的代码稍有不同
+
+[source,javascript]
+----
+function connect() {
+    // 基于SocketJS
+    var socket = new SockJS('/websocket');
+    ws = Stomp.over(socket);
+    // 传递header信息，用来后台登录认证
+    ws.connect({userName: $username.val()}, function (frame) {
+        setConnected(true);
+        console.log("connected : " + frame);
+        // 订阅聊天内容
+        ws.subscribe('/topic/chat', function (data) {
+            console.log(data);
+            showMessage(data.body);
+        });
+        // 订阅错误信息
+        ws.subscribe('/queue/errors', function (data) {
+            console.log("error : " + data);
+            showMessage(data.body);
+        });
+    }, function (error) {
+        console.log("STOMP error : " + error);
+    });
+}
+----
+ 
+我们没有使用原生的WebSocket对象，而是换成了SockJS对象；然使用``Stomp.over``来返回一个支持STOMP的对象实例；在connect时，这里传递了userName消息头，服务端通过拦截器获取并放入消息中以便后续使用；最后，使用``ws.subscribe``来订阅感兴趣的消息。
+
+点对点订阅：
+
+[source,javascript]
+----
+// 订阅某一个人, 注意客户端订阅必须以/user开头，后台并没有
+ws.subscribe('/user/queue/' + $oneuser.val() + '/chat', function (data) {
+    console.log(data);
+    showOneUserMessage(data.body);
+});
+----
+ 
+注意订阅某一特定用户时，需要在地址前缀上添加``/user``，这样就仅会收到指定用户发送的消息。
+
+消息发送的代码：
+
+[source,javascript]
+----
+function send() {
+    if (oneUserChat) {
+        ws.send('/app/say/' + $oneuser.val(), {}, $content.val());
+        $oneuserMsg.append("  
+" + dateFormat(new Date()) + " 你对" + $oneuser.val() + "说：" + $content.val())
+    } else {
+        ws.send('/app/say', {}, $content.val());
+    }
+}
+----
+ 
+这里先判断是不是点对点发送，如果是，则需要传递用户名。
+
+其他详细代码不贴了，请看文末的源码。
+
+现在，客户端和服务端都编写完成。启动工程，启动多个浏览器，访问``http://localhost:8081/index.html``，输入用户名连入聊天室，就可以聊天了，如果想要与特定的用户聊天，单聊界面输入用户名就可以了。
+
+.聊天室界面
+image::/images/attachment/20191102/b37ae94542ac4d0d8dcc46f675184e2d.png[]
+
+
+=== Spring中STOMP的消息流
+ 
+通过前边的例子，我们已经了解stomp的用法。一旦消息端点设定成功，Spring应用就成为一个STOMP消息代理。那么，消息在Spring中是如何流转的呢？
+
+Spring对消息支持是在spring-messaging模块，包括几部分的消息组件：
+
+* https://docs.spring.io/spring-framework/docs/4.3.16.RELEASE/javadoc-api/org/springframework/messaging/Message.html[Message]：消息实体的抽象，包括消息头和消息体
+* https://docs.spring.io/spring-framework/docs/4.3.16.RELEASE/javadoc-api/org/springframework/messaging/MessageHandler.html[MessageHandler]：消息处理抽象
+* https://docs.spring.io/spring-framework/docs/4.3.16.RELEASE/javadoc-api/org/springframework/messaging/MessageChannel.html[MessageChannel]：消息发送渠道，生产者和消费者之间消息发送的抽象
+* https://docs.spring.io/spring-framework/docs/4.3.16.RELEASE/javadoc-api/org/springframework/messaging/SubscribableChannel.html[SubscribableChannel]：消息订阅渠道，订阅和取消订阅消息的抽象
+* https://docs.spring.io/spring-framework/docs/4.3.16.RELEASE/javadoc-api/org/springframework/messaging/support/ExecutorSubscribableChannel.html[ExecutorSubscribableChannel]：消息订阅渠道的一种，负责使用``Executor``向订阅者发送消息
+
+前边的``@EnableWebSocketMessageBroker``将启用这些组件来处理消息流。消息流转如下图所示：
+
+.Spring中STOMP消息流转过程
+image::https://docs.spring.io/spring/docs/4.3.16.RELEASE/spring-framework-reference/html/images/message-flow-broker-relay.png[message flow broker relay]
+
+
+黄色部分表示外部消息中间件，如RabbitMQ。图3有三种消息渠道：
+
+* ``clientInboundChannel``：消息入站渠道，用来解析所接收的客户端消息
+* ``clientOutboundChannel``：消息出站渠道，发送服务端消息给客户端
+* ``brokerChannel``：消息代理渠道，用来将服务端的消息转发给消息代理
+
+客户端的消息目的地(``destination``)前缀不同，以``/app``开头的交给``SimpAnnotationMethodMessageHandler``处理(它会交给我们定义的``Controller``中被``@MessageMapping``或``@SubscribeMapping``标注的方法)，``/topic``开头的交给``StompBrokerRelayMessageHandler``来处理(它会将消息发送给STOMP消息代理)，最终Controller的消息处理方法又会将消息通过brokerChannel发送给``StompBrokerRelayMessageHandler``。
+
+按照前边聊天室的例子，我们看看消息如何流转。聊天室关键代码如下：
+
+[source,java]
+----
+@Configuration
+@EnableWebSocketMessageBroker
+public class WebSocketConfig extends AbstractWebSocketMessageBrokerConfigurer {
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/websocket").withSockJS();
+    }
+
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        registry.enableSimpleBroker("/topic", "/queue");
+        registry.setApplicationDestinationPrefixes("/app");
+    }
+
+    ……
+}
+
+@Controller
+@RequestMapping
+public class WebSocketController {
+    @Resource
+    private SimpMessagingTemplate simpMessagingTemplate;
+    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    @MessageMapping("/say")
+    @SendTo("/topic/chat")
+    public String sayAll(String content, Principal principal) {
+        String curUserName = principal.getName();
+        return formatter.format(LocalDateTime.now()) + ", " + curUserName + " say : " + content;
+    }
+
+    ……
+}
+----
+ 
+[source,javascript]
+----
+var socket = new SockJS('/websocket');
+ws = Stomp.over(socket);
+ws.connect({userName: $username.val()}, function (frame) {
+    ……
+
+    ws.subscribe('/topic/chat', function (data) {
+        console.log(data);
+        showMessage(data.body);
+    });
+    ……
+});
+
+ws.send('/app/say', {}, $content.val());
+----
+ 
+1、我们说过，STOMP通过frame来传递信息，客户端通过``http://localhost:8080/websocket``连接到服务端，一旦建立成功，则frame就开始流动；
+
+2、客户端调用``subscribe``方法时，会发送``SUBSCRIBE`` frame，这个frame带有``/websocket``的目的地址，服务器接收到订阅消息将其发送到``clientInboundChannel``，然后将消息路由到消息代理进行订阅信息的存储
+
+3、客户端调用``send``方法发送``SEND`` frame到``/app/say``端点，后台配置了``registry.setApplicationDestinationPrefixes("/app")``告诉Spring：将客户端``/app``开头的消息交给Controller来处理，具体的处理方法是去掉``/app``后``@MessageMapping``注解value为``/say``的方法来处理，这里就是``sayAll``方法
+
+4、``sayAll``方法的返回值会被封装为一个新的``Message``对象(通过``MessageConverter``)，其``payload``属性的值就是方法的返回值，然后发送到``brokerChannel``，交给消息代理处理。默认情况下，消息的目的地跟原始消息相同，只是会自动添加``/topic``前缀，如果是客户端添加的前缀则会替换，例如客户端请求的目的地``/app/say``，那么方法返回值会继续发送到``/topic/say``(topic替换app)。也可以使用``@SendTo``和``@SendToUser``来自定义消息目的地，以替换默认值。
+
+5、最后，消息代理查找匹配的订阅者，并通过``clientOutboundChannel``发送``MESSAGE``&nbsp;frame给每一个匹配的订阅者
+
+
+=== 事件监听和拦截器
+ 
+监听websocket的事件也很简单，实现``ApplicationListener``接口，然后指定监听的事件类型即可，有几种事件类型：
+
+* ``BrokerAvailabilityEvent``：消息代理可用或不可用时触发
+* ``SessionConnectEvent``：当收到客户端发送来的STOMP ``CONNECT``命令时触发，连接还未建立完成
+* ``SessionConnectedEvent``：服务端发送STOMP ``CONNECTED``给客户端，并发布该事件，表明连接建立完成
+* ``SessionSubscribeEvent``：收到STOMP ``SUBSCRIBE``命令时触发，表明订阅发生
+* ``SessionUnsubscribeEvent``：收到STOMP ``UNSUBSCRIBE``命令时触发，表明取消订阅发生
+* ``SessionDisconnectEvent``：断开连接时触发
+
+例如，当有人连入聊天室时给所有人发送消息：
+
+[source,java]
+----
+@Component
+public class MySessionConnectedEventListener implements ApplicationListener<SessionConnectedEvent> {
+    @Autowired
+    private SimpMessagingTemplate simpMessagingTemplate;
+
+    @Override
+    public void onApplicationEvent(SessionConnectedEvent event) {
+        String user = event.getUser().getName();
+        String s = "用户" + user + "成功连入聊天室";
+        System.err.println(s);
+        simpMessagingTemplate.convertAndSend("/topic/chat", s);
+    }
+}
+----
+ 
+此外，可以通过``ChannelInterceptor``拦截各个Channel上流入流出的消息，它的定义如下：
+
+[source,java]
+----
+public interface ChannelInterceptor {
+
+    // 消息发送到Channel之前调用
+    Message<?> preSend(Message<?> message, MessageChannel channel);
+
+    // 消息发送时调用
+    void postSend(Message<?> message, MessageChannel channel, boolean sent);
+
+    // 消息发送完成后调用
+	void afterSendCompletion(Message<?> message, MessageChannel channel, boolean sent, Exception ex);
+
+    // 消息接收前调用
+    boolean preReceive(MessageChannel channel);
+
+    // 消息接收时调用
+    Message<?> postReceive(Message<?> message, MessageChannel channel);
+
+    // 消息接收完成后调用
+    void afterReceiveCompletion(Message<?> message, MessageChannel channel, Exception ex);
+}
+----
+ 
+我们不必实现``ChannelInterceptor``接口，继承适配器``ChannelInterceptorAdapter``然后重载自己想要的拦截方法即可：
+
+[source,java]
+----
+public class MyChannelInterceptor extends ChannelInterceptorAdapter {
+    @Override
+    public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        // 握手时客户端传递userName头信息来标识登录人
+        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+            String userName = accessor.getNativeHeader("userName").get(0);
+            System.err.println("登录用户：" + userName);
+            Principal principal = new PrincipalImpl(userName);
+            accessor.setUser(principal);
+        }
+        return message;
+    }
+}
+----
+ 
+然后使用``StompHeaderAccessor``或``SimpMessageHeaderAccessor``来获取消息头信息，这里用来获取消息头中的``userName``，并放入``Principal``对象，后续处理方法就可以使用了。
+
+
+=== STOMP Java客户端
+ 
+前边的聊天室中，浏览器的stomp使用``stomp.js``，Spring也提供了STOMP的java客户端，在不使用浏览器时用来编写客户端程序：
+
+[source,java]
+----
+public class MockWebsocketClient {
+    public static void main(String[] args) throws URISyntaxException, ExecutionException, InterruptedException {
+        String url = "ws://127.0.0.1:8081/websocket";
+        String destination = "/topic/chat";
+
+        List<Transport> transports = new ArrayList<>(2);
+        transports.add(new WebSocketTransport(new StandardWebSocketClient()));
+        transports.add(new RestTemplateXhrTransport());
+
+        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.afterPropertiesSet();
+
+        WebSocketClient client = new SockJsClient(transports);
+        WebSocketStompClient stompClient = new WebSocketStompClient(client);
+        stompClient.setMessageConverter(new StringMessageConverter());
+        // for heartbeats
+        stompClient.setTaskScheduler(taskScheduler);
+        // 不设置心跳
+        stompClient.setDefaultHeartbeat(new long[]{0, 0});
+        StompSessionHandler sessionHandler = new MyStompSessionHandler();
+
+        StompHeaders stompHeaders = new StompHeaders();
+        stompHeaders.add("userName", "路人甲");
+        StompSession stompSession = stompClient.connect(url, new WebSocketHttpHeaders(), stompHeaders, sessionHandler).get();
+        Thread.sleep(2000);
+        stompSession.send(destination, "大家好，我是路人甲！");
+        Thread.sleep(10000);
+        stompSession.send(destination, "没人理我，我撤了！");
+        stompClient.stop();
+    }
+}
+----
+ 
+上边的程序，使用``WebSocketClient``和``WebSocketStompClient``对象来构建一个客户端。
+
+
+== 总结
+ 
+这篇的内容有点多，总结一下：
+
+1、STOMP是WebSocket协议的子协议，提供了更完整的消息体系结构，而且也很简单，受大多消息中间件支持
+
+2、Spring配置类继承``AbstractWebSocketMessageBrokerConfigurer``来配置STOMP的消息代理和端点等信息，然后使用``@EnableWebSocketMessageBroker``来启用消息代理
+
+3、Spring中，某些STOMP消息直接发送到消息代理，某些则会发送给``@MessageMapping``注解标注的方法来处理，完全看业务上如何设计，除了使用``SimpMessagingTemplate``来自定义消息发送，也可以使用``@SendTo``和``@SendToUser``来将方法结果自动发送到消息代理
+
+4、被``@MessageMapping``标注的方法仅能支持部分参数类型
+
+5、Spring提供了更简单的事件监听机制和拦截器，以便开发者监听和拦截消息
+
+6、除了浏览器使用``stomp.js``，Spring也提供了STOMP Java客户端
+
+本文的源码： https://github.com/belonk/springboot-demo/tree/master/14-websocket-stomp[GITHUB]。

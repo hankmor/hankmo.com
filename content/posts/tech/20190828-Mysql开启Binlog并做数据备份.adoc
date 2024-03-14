@@ -1,0 +1,414 @@
+---
+title: Mysql开启Binlog并做数据备份
+slug: mysql-binlog-guide
+img: /images/thumbnail/attachment/20190828/f5ef3c828db94077ad47650eddab2297.png
+categories:
+  - 中间组件
+tags:
+  - mysql
+  - binlog
+description: >-
+  Binlog，即binary
+  log、二进制日志，记录了描述数据库更改的“事件”（EVENT），例如表创建操作或对表数据的更改(DELETE、UPDATE、INSERT)，通俗的说，binlog主要用来记录对mysql数据更新或潜在发生更新的SQL语句(例如DELETE语句没有删除任何行也会记录)，并以”事务”的形式保存在磁盘中Binlog；另外，它还包含有关每个语句获取更新数据的时间长度的信息。
+date: 2019-08-28 16:21:14
+updated: 2019-09-29 11:47:07
+---
+
+= Mysql开启Binlog并做数据备份
+:author: belonk.com
+:date: 2019-09-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: binlog,mysql,日志,数据恢复,主从,开启binlog,查看binlog日志,mysqlbinlog
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: mysql,binlog
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+某些时候，一不小心删除了数据库的数据甚至某些表、库，顿时慌得一P，是不是想死的心都有了？尤其是在小公司或者小项目中，没有遵循严格的规章制度，每个开发人员都有测试数据库甚至生产库的权限，一些没有经验的程序员一顿胡乱操作，导致数据库的数据丢失的情况时有发生。此时，我们就需要用到Mysql的binlog了。
+
+
+== Binlog简介
+ 
+Binlog，即binary log、二进制日志，记录了描述数据库更改的“事件”（``EVENT``），例如表创建操作或对表数据的更改(``DELETE``、``UPDATE``、``INSERT``)，通俗的说，binlog主要用来记录对mysql数据更新或潜在发生更新的SQL语句(例如DELETE语句没有删除任何行也会记录)，并以”事务”的形式保存在磁盘中Binlog；另外，它还包含有关每个语句获取更新数据的时间长度的信息。
+
+二进制日志有两个重要目的：
+
+* 数据同步：mysql master上的更改数据，通过binlog发送给slave节点，然后达到主从数据一致的目的
+* 数据恢复：binlog为数据恢复提供了有效的手段，因为binlog记录了数据操作的内容、时间等关键信息，可以根据binlog来恢复数据
+
+Binlog仅记录了DML和DDL，并不包括查询(SELECT和SHOW)语句。Binlog会稍微降低性能，但是对于其数据同步和数据恢复等优势而言，牺牲些许性能是值得的。
+
+
+== 开启binlog
+ 
+可以在启动mysql是添加``--log-bin[=base_name]`` 参数来启用binlog，base_name为日志文件的基础名称（base_name为空则默认使用pid-file选项的名称，该选项默认是主机名），通常建议自己设置base_name而不是使用默认的名称，或者通过修改mysql配置文件来开启。
+
+我们看看如何修改mysql配置文件来开启binlog，环境使用的是ubuntu：
+
+1、查看是否开启binlog
+
+登录mysql，进入mysql命令行，输入如下命令查看：
+
+
+----
+mysql> show variables like 'log_bin%'
+----
+
+结果如下：
+
+----
+mysql> show variables like 'log_bin%';
++---------------------------------+--------------------------------+
+| Variable_name                   | Value                          |
++---------------------------------+--------------------------------+
+| log_bin                         | ON                             |
+| log_bin_basename                | /var/log/mysql/mysql-bin       |
+| log_bin_index                   | /var/log/mysql/mysql-bin.index |
+| log_bin_trust_function_creators | OFF                            |
+| log_bin_use_v1_row_events       | OFF                            |
++---------------------------------+--------------------------------+
+5 rows in set (0.00 sec)
+----
+ 
+如果``log_bin``为``OFF``则未开启，``ON``则为已开启。另外有两个重要的信息：
+
+* ``log_bin_basename``：binlog存储的文件基础名称，完整的日志文件后缀会递增为形如0000x的格式，例如mysql-bin.00001
+* log_bin_index: binlog索引文件的名称，该文件存储了所有的binlog日志文件的位置
+
+binlog日志文件名会根据log_bin_basename的值添加上递增的序号，如mysql-bin.00001。另外，mysql会单独创建一个索引文件，如上边log_bin_index显示的值，它里边记录了所有的binlog文件位置。
+
+2、开启binlog
+
+Ubuntu下，mysql配置文件的路径为:``/etc/mysql/mysql.conf.d/mysqld.cnf``，编辑该文件添加binlog配置：
+
+----
+vi /etc/mysql/mysql.conf.d/mysqld.cnf
+----
+
+找到mysqld节点，配置文件关于binlog的配置默认是注释的，打开即可：
+
+image::/images/attachment/20190827/1e774f0ae3764695aa77e1f8e7fc2119.png[]
+
+配置项如下：
+
+* server-id: 定义一个当前mysql的服务id
+* log_bin: binlog存储的文件路径，这里定义的并非日志文件全名，而是文件基础名称，完整的日志文件后缀会替换.log为递增的形如0000x的格式，例如mysql-bin.00001
+* binlog_format: binlog的格式，有ROW、STATEMENT、MIXED三种格式，默认是ROW(5.7+版本)，下一篇将详细介绍binlog的三种格式
+* max_binlog_size: 单个日志文件最大大小
+
+开启binlog后，默认会在数据目录生产host-bin.n文件(具体的日志信息)及host-bin.index索引文件（记录binlog文件列表）。当binlog日志写满binlog大小（``max_binlog_size``配置），或者数据库重启才会生产新文件，但是也可通过手工进行切换让其重新生成新的文件（``flush logs``）；另外，如果正使用大的事务，由于一个事务不能横跨两个文件，因此也可能在binlog文件未满的情况下刷新文件，或者超过设置的最大大小。
+
+
+== 查看binlog
+
+=== 查看日志文件
+ 
+mysql的binlog文件是二进制格式的。前边已经说过，``Mysqld``添加一个数字后缀给每个binlog文件，并且后缀是依次递增的。我们可以通过mysql命令行来查看日志文件位置和大小：
+
+----
+mysql> show binary logs;
+----
+
+或
+
+----
+mysql> show master logs;
+----
+
+例如：
+
+----
+mysql> show master logs;
++------------------+-----------+
+| Log_name         | File_size |
++------------------+-----------+
+| mysql-bin.000001 |       578 |
+| mysql-bin.000002 |       471 |
+| mysql-bin.000003 |       783 |
+| mysql-bin.000004 |       447 |
++------------------+-----------+
+4 rows in set (0.00 sec)
+----
+ 
+log_name即为日志文件名称，File_size为文件大小(kb)，ubuntu下mysql的binlog日志文件存放在``/var/log/mysql``下:
+
+----
+root@ubuntu:~# ls -l /var/log/mysql/
+total 32
+-rw-r----- 1 mysql adm   11879 Aug 27 16:17 error.log
+-rw-r----- 1 mysql mysql   578 Aug 27 16:27 mysql-bin.000001
+-rw-r----- 1 mysql mysql   471 Aug 27 16:39 mysql-bin.000002
+-rw-r----- 1 mysql mysql   783 Aug 27 16:44 mysql-bin.000003
+-rw-r----- 1 mysql mysql   447 Aug 27 16:44 mysql-bin.000004
+-rw-r----- 1 mysql mysql   128 Aug 27 16:44 mysql-bin.index
+----
+ 
+mysql-bin.index索引文件记录了binlog日志文件的位置：
+
+----
+root@ubuntu:~# cat /var/log/mysql/mysql-bin.index 
+/var/log/mysql/mysql-bin.000001
+/var/log/mysql/mysql-bin.000002
+/var/log/mysql/mysql-bin.000003
+/var/log/mysql/mysql-bin.000004
+----
+ 
+通过如下命令可以查看当前正在写入的日志文件和当前的位置：
+
+
+----
+mysql> show master status
+----
+
+例如：
+
+----
+mysql> show master status;
++------------------+----------+--------------+------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------------+----------+--------------+------------------+-------------------+
+| mysql-bin.000004 |      447 |              |                  |                   |
++------------------+----------+--------------+------------------+-------------------+
+1 row in set (0.00 sec)
+----
+ 
+
+=== 查看日志内容
+ 
+Mysql日志文件是二进制文件，不能通过文本工具直接查看，有两种方式可以查看它。
+
+1、mysqlbinlog工具
+
+Mysql官方专门提供了一个查看binlog的工具，可有查看本地和远程服务器的binlog日志，具体语法如下：
+
+----
+mysqlbinlog [options] log-files
+----
+
+一些常用的选项：
+
+* -d， --database=name:&nbsp;仅列出ZH数据库的条目（仅限本地日志）
+* -p, --password[=name]: 连接远程服务器的密码&nbsp;
+* -r, --result-file=name: 将显示的日志内容输出到指定的文件中
+* -j, --start-position=#: 设置日志内容的开始位置N
+* --stop-position=#: 设置日志内容的结束位置N
+* --start-datetime=name: 设置日志内容开始时间
+* --stop-datetime=name: 设置日志内容结束时间
+* -v, --verbose: 显示更详细的日志内容，-vv则是显示比-v更详细的内容
+
+例如，查看日志文件内容：
+
+
+----
+mysqlbinlog -v /var/log/mysql/mysql-bin.000004
+----
+
+注意日志文件要使用绝对地址。
+
+日志文件太大，可以按照时间和起止位置来查询日志：
+
+----
+mysqlbinlog  --start-position=100 --stop-position=200 /var/log/mysql/mysql-bin.000004
+----
+
+查看某时间点之前的日志：
+
+----
+mysqlbinlog  --stop-datetime='2019-08-27 16:44:38' /var/log/mysql/mysql-bin.000004c
+----
+
+将日志结果输出到文本文件中：
+
+----
+mysqlbinlog /var/log/mysql/mysql-bin.000004c -r log.sql
+----
+
+更多关于mysqlbinlog工具的使用，可以使用``mysqlbinlog --help``来查看。
+
+2、命令行查看
+
+另一种查看binlog的方式是使用mysql命令行，这需要登录mysql客户端，语法如下：
+
+----
+SHOW BINLOG EVENTS [IN 'log_name'] [FROM pos] [LIMIT [offset,] row_count]
+----
+
+各个参数解释如下：
+
+* IN 'log_name'：指定要查询的binlog文件名(不指定就是第一个binlog文件)
+* FROM pos：指定从哪个pos起始点开始查起(不指定就是从整个文件首个pos点开始算)
+* LIMIT [offset,]：偏移量(不指定就是0)
+* row_count：查询总条数(不指定就是所有行)
+
+例如，查看日志内容：
+
+----
+mysql> show binlog events in 'mysql-bin.000004';
++------------------+-----+----------------+-----------+-------------+----------------------------------------------------------+
+| Log_name         | Pos | Event_type     | Server_id | End_log_pos | Info                                                     |
++------------------+-----+----------------+-----------+-------------+----------------------------------------------------------+
+| mysql-bin.000004 |   4 | Format_desc    |         1 |         123 | Server ver: 5.7.27-0ubuntu0.16.04.1-log, Binlog ver: 4   |
+| mysql-bin.000004 | 123 | Previous_gtids |         1 |         154 |                                                          |
+| mysql-bin.000004 | 154 | Anonymous_Gtid |         1 |         219 | SET @@SESSION.GTID_NEXT= 'ANONYMOUS'                     |
+| mysql-bin.000004 | 219 | Query          |         1 |         298 | BEGIN                                                    |
+| mysql-bin.000004 | 298 | Query          |         1 |         416 | use `test`; update user set name = 'wangwu' where id = 1 |
+| mysql-bin.000004 | 416 | Xid            |         1 |         447 | COMMIT /* xid=42 */                                      |
++------------------+-----+----------------+-----------+-------------+----------------------------------------------------------+
+6 rows in set (0.00 sec)
+----
+ 
+
+=== 删除日志
+ 
+重新开启一个日志文件来记录：
+
+
+----
+mysql> flush logs
+----
+
+如果要清空所有binlog文件，则使用：
+
+
+----
+mysql> reset master
+----
+
+更多关于binlog的信息，请查阅mysql官方文档。
+
+
+== Mysql数据备份
+ 
+如果使用类似阿里云RDS这样的云产品，备份非常容易，只需要在页面来设置备份策略即可；如果是自己安装mysql，那么需要编写备份脚本，并加入定时任务来实现定时备份。这里选择的是后者，我们看看如何实现。
+
+基本思路：编写脚本，使用``mysqldump``工具从mysql服务器上生产备份sql文件，然后使用linux的``crontab``来添加定时任务。
+
+1、创建备份目录
+
+先创建一个备份目录，用来存放备份好的sql脚本文件
+
+----
+mkdir -p /data/mysql_backup
+----
+
+2、编写备份脚本
+
+----
+vi mysql_data_backup.sh
+----
+
+然后写入如下内容
+
+----
+/usr/bin/mysqldump -uroot -ppassword zentao | gzip > /data/mysql_backup/`date '+%Y%m%d_%H%M%S'`.sql.gz
+----
+
+上边的命令使用了绝对路径的mysqldump导出sql脚本，并进行了gzip压缩，sql脚本的名称按照日期格式来命名。注意，-u和-p后边没有空格。
+
+保存后添加可执行权限：
+
+----
+chmod +x mysql_data_backup.sh
+----
+
+测试脚本能否正常运行：
+
+----
+./mysql_data_backup.sh
+----
+
+正常则产生压缩文件：
+
+----
+root@ubuntu:/data/mysql_backup# ls
+20190822_151848.sql.gz  mysql_data_backup.sh
+----
+ 
+改造一下脚本，使其删除旧文件，保留一定数量的新文件，则脚本如下：
+
+----
+#!/bin/bash
+# delete old file
+keep_number=2
+backup_dir=/data/mysql_backup
+file_number=$(ls -l *.gz | grep ^- | wc -l)
+while (($file_number > $keep_number))
+do
+    old_file=$(ls -rt *.gz | head -1)
+    echo "delete file: $backup_dir/$old_file"
+    rm -f $backup_dir/$old_file
+    let file_number--
+done
+/usr/bin/mysqldump -uroot -ppassword zentao | gzip > /data/mysql_backup/`date '+%Y%m%d_%H%M%S'`.sql.gz
+----
+ 
+再改造数据脚本，可以备份多个数据库：
+
+----
+#!/bin/bash
+# delete old file
+dbs=(yixuan service-event service-order service-shopping-cart service-group-shopping service-point)
+for db in ${dbs[@]}
+do
+db_name=$db
+keep_number=6
+backup_dir=/data/mysql_backup/
+file_number=$(ls -l "$db_name"_*.gz | grep ^- | wc -l)
+echo $file_number
+while (($file_number > $keep_number))
+do
+    old_file=$(ls -rt "$db_name"_*.gz | head -1)
+    echo "delete file: $backup_dir/$old_file"
+    rm -f $backup_dir/$old_file
+    let file_number--
+done
+/usr/bin/mysqldump -uroot -pyixuan2018 $db_name | gzip > /data/mysql_backup/"$db_name"_`date '+%Y%m%d_%H%M%S'`.sql.gz
+done
+----
+ 
+ok，到这里，脚本进行准备完成，接下来需要添加定时任务，定时的执行脚本完成备份。
+
+4、添加定时任务
+
+使用linux的``crontab``定时任务管理器，命令行执行：
+
+----
+crontab -e
+----
+
+首次使用crontab，会要求选择一个编辑器，选第三个(vim)就行了，如果选错了，可以通过``select-editor`` (针对crontab的一个命令）重新选择。
+
+输入定时备份执行脚本，先测试每分钟备份一次，看看是否成功：
+
+----
+*/1 * * * * /data/mysql_data_backup.sh
+----
+
+成功则可以看到备份的文件列表，完成后记得改为自己需要的备份频率，如每天晚上1点备份一次。
+
+crontab的格式为：
+
+
+----
+minute hour day month week command
+----
+
+* minute： 表示分钟，可以是从0到59之间的任何整数。
+* hour：表示小时，可以是从0到23之间的任何整数。
+* day：表示日期，可以是从1到31之间的任何整数。
+* month：表示月份，可以是从1到12之间的任何整数。
+* week：表示星期几，可以是从0到7之间的任何整数，这里的0或7代表星期日。
+* command：要执行的命令，可以是系统命令，也可以是自己编写的脚本文件。
+
+ok，到这里定时备份工作就完成了。

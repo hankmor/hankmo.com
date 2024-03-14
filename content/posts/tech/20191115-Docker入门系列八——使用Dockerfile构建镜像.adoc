@@ -1,0 +1,524 @@
+---
+title: Docker入门系列八——使用Dockerfile构建镜像
+slug: docker-dockerfile
+img: /images/thumbnail/attachment/20190807/e512b5d1ba6940dcab8e0454e693d6b4.png
+categories:
+  - 中间组件
+tags:
+  - docker
+  - 端口
+  - 映射
+description: Dockfile就是一个文本文件，里边包含了一行行的指令，用来描述如何创建自定义镜像。使用 `docker build` 命令来基于Dockerfile文件和上下文构建镜像，构建上下文指的是特定路径(PATH或URL)的文件集合，PATH用来指定本地文件系统目录，而URL用来指定Git仓库的地址，它们包含的所有文件(子目录或子模块)都会被递归处理。在大多数情况下，最好以空目录作为上下文，并将Dockerfile保存在该目录中。仅添加构建Dockerfile所需的文件。
+date: 2019-11-15 16:16:45
+updated: 2019-11-15 16:16:45
+---
+
+= Docker入门系列八——使用Dockerfile构建镜像
+:author: belonk.com
+:date: 2020-04-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器,镜像,容器基本操作,容器迁移,导出,导入
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: docker,容器,container,镜像
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+Dockfile就是一个文本文件，里边包含了一行行的指令，用来描述如何创建自定义镜像。
+
+## 使用
+
+使用 `docker build` 命令来基于Dockerfile文件和上下文构建镜像，构建上下文指的是特定路径(PATH或URL)的文件集合，PATH用来指定本地文件系统目录，而URL用来指定Git仓库的地址，它们包含的所有文件(子目录或子模块)都会被递归处理。在大多数情况下，最好以空目录作为上下文，并将Dockerfile保存在该目录中。仅添加构建Dockerfile所需的文件。
+
+docker build命令语法：
+
+----
+docker build [OPTIONS] PATH | URL | -
+----
+
+例如：
+
+----
+$ docker build .
+Sending build context to Docker daemon  6.51 MB
+...
+----
+
+上边的命令会被docker daemon程序来处理而不是docker CLI，构建进程将发送指定路径下的Dockerfile文件到docker daemon。
+
+Dockerfiie通过命令来关联构建上下文的文件，如 `COPY`、`ADD` 等命令。另外，可以通过 .dockerignore文件来排除文件或目录，以提高构建速度和性能。
+
+一般而言，Dockerfile文件应该位于构建上下文的根目录中，但是，也允许使用 -f 选项来指定它的位置：
+
+----
+$ docker build -f /path/to/a/Dockerfile .
+----
+
+也可以在镜像构建完成后指定tag：
+
+----
+$ docker build -t shykes/myapp .
+----
+
+多次使用 `-t` 选项可以指定多个tag。
+
+Docker daemon运行Dockfile之前会先进行校验，校验失败会输出错误信息：
+
+----
+$ docker build -t test/myapp .
+Sending build context to Docker daemon 2.048 kB
+Error response from daemon: Unknown instruction: RUNCMD
+----
+
+Dockerfile的指令是被一行一行的执行，如果需要则会提交执行结果给新镜像，最终输出新镜像ID之前，Docker daemon会自动清理构建上下文。因此，每条指令单独执行，互不影响。如果可能的话，Docker将重新使用中间镜像（缓存），以显着加速docker构建过程。这由控制台输出中的“使用缓存”消息指示。
+
+----
+$ docker build -t svendowideit/ambassador .
+Sending build context to Docker daemon 15.36 kB
+Step 1/4 : FROM alpine:3.2
+---> 31f630c65071
+Step 2/4 : MAINTAINER SvenDowideit@home.org.au
+---> Using cache
+---> 2a1c91448f5f
+Step 3/4 : RUN apk update &&      apk add socat &&        rm -r /var/cache/
+---> Using cache
+---> 21ed6e7fbb73
+Step 4/4 : CMD env | grep _TCP= | (sed 's/.*_PORT_\([0-9]*\)_TCP=tcp:\/\/\(.*\):\(.*\)/socat -t 100000000 TCP4-LISTEN:\1,fork,reuseaddr TCP4:\2:\3 \&/' && echo wait) | sh
+---> Using cache
+---> 7ea8aef582cc
+Successfully built 7ea8aef582cc
+----
+
+构建缓存仅用于具有本地父链的镜像，即：镜像被前一个构建创建或者整个链通过docker load命令加载。如果正对某个特定镜像需要指定使用构建缓存，可以使用 `--cache-form` 选项，它允许不需要镜像父链，并可以从镜像注册表中拉取。
+
+## 构建工具
+
+从版本18.09开始，Docker支持一个新的后端，用于执行 `moby / buildkit` 项目提供的构建。与旧的实现相比，BuildKit后端提供了许多好处。例如，BuildKit可以：
+
+* 检测并跳过执行未使用的构建阶段
+* 并行构建独立构建阶段
+* 在构建之间仅增加构建上下文中已更改的文件
+* 检测并跳过在构建上下文中传输未使用的文件
+* 使用具有许多新功能的外部Dockerfile实现
+* 使用API的其余部分避免副作用（中间图像和容器）
+* 确定构建缓存的优先级以进行自动修剪
+
+要使用BuildKit后端，需要在调用docker build之前在CLI上设置环境变量 `DOCKER_BUILDKIT = 1`。
+
+## 格式
+
+Dockerfile的格式如下：
+
+----
+# Comment
+INSTRUCTION arguments
+----
+
+指令行包括指令和指令所需参数，尽管指令不区分大小写，但是，指令大写、参数小写的格式会更容器区分。
+
+Docker会按顺序执行Dockerfile中的指令。通常，Dockerfile都必须以FROM指令开头，用来指定所依赖的基础镜像。
+
+Docker将以 `#` 开头的行解析为在注释，除非该行是一个有效的解析器指令。注意，dockerfile只有行级注释，没有块级注释，行中其他位置的#都会被视为参数。
+
+----
+# Comment
+RUN echo 'we are running some # of cool things'
+----
+
+第二个 `#` 和后边的内容会被原样输出。
+
+## 解析器指令
+
+解析器指令是可选的，并且影响处理Dockerfile中后续行的方式。解析器指令不会向构建添加图层，也不会显示为构建步骤。解析器指令在表单中被写为特殊类型的注释 `# directive=value`。单个指令只能使用一次。
+
+一旦处理了注释，空行或构建器指令，Docker就不再寻找解析器指令。相反，它将格式化为解析器指令的任何内容视为注释，并且不会尝试验证它是否可能是解析器指令。因此，所有解析器指令必须位于Dockerfile的顶部。
+
+解析器指令不区分大小写。但是，惯例是它们是小写的。约定还包括任何解析器指令后面的空行。解析器指令不支持行继续符。
+
+由于这些规则，以下示例均无效：
+
+因为换行无效：
+
+----
+# direc \
+tive=value
+----
+
+由于出现两次无效：
+
+----
+# directive=value1
+# directive=value2
+
+FROM ImageName
+----
+
+由于在构建器指令后出现而被视为注释：
+
+----
+FROM ImageName
+# directive=value
+----
+
+由于在不是解析器指令的注释之后出现而被视为注释：
+
+----
+# About my dockerfile
+# directive=value
+FROM ImageName
+----
+
+由于未被识别，未知指令被视为注释。此外，由于出现在不是解析器指令的注释之后，已知指令被视为注释。
+
+----
+# unknowndirective=value
+# knowndirective=value
+----
+
+解析器指令中允许使用非换行空格。因此，以下几行都是相同的处理：
+
+----
+#directive=value
+# directive =value
+#	directive= value
+# directive = value
+#	  dIrEcTiVe=value
+----
+
+支持以下解析器指令：
+
+* syntax
+* escape
+
+### 语法syntax
+
+格式：
+
+----
+# syntax=[remote image reference]
+----
+
+例如：
+
+----
+# syntax=docker/dockerfile
+# syntax=docker/dockerfile:1.0
+# syntax=docker.io/docker/dockerfile:1
+# syntax=docker/dockerfile:1.0.0-experimental
+# syntax=example.com/user/repo:tag@sha256:abcdef...
+----
+
+仅在使用BuildKit后端时才启用此功能。
+
+语法指令定义用于构建当前Dockerfile的Dockerfile构建器的位置。BuildKit后端允许无缝使用作为Docker镜像分发的构建器的外部实现，并在容器沙箱环境中执行。
+
+自定义Dockerfile实现允许您：
+
+* 在不更新守护程序的情况下自动获取错误修正
+* 确保所有用户都使用相同的实现来构建Dockerfile
+* 使用最新功能而不更新守护程序
+* 尝试新的实验或第三方功能
+
+### 官方发布
+
+Docker分发可用于docker/dockerfile在Docker Hub上的存储库下构建Dockerfiles的图像的官方版本。有两个通道可以发布新镜像：稳定和实验。
+
+稳定通道遵循语义版本控制。例如：
+
+* docker / dockerfile：1.0.0 - 仅允许不可变版本1.0.0
+* docker / dockerfile：1.0 - 允许版本1.0。*
+* docker / dockerfile：1 - 允许版本1 。
+* docker / dockerfile：最新 - 稳定频道上的最新版本
+
+实验渠道在发布时使用来自稳定通道的主要和次要组件的增量版本控制。例如：
+
+* docker / dockerfile：1.0.1- experimental - 只允许不可变版本1.0.1-实验
+* docker / dockerfile：1.0-experimental - 1.0之后的最新实验版本
+* docker / dockerfile：experimental - 实验频道的最新版本
+
+您应该选择最适合您需求的渠道。如果你只想要错误修正，你应该使用docker/dockerfile:1.0。如果您想从实验性功能中受益，您应该使用实验性通道。如果您使用的是实验性通道，则较新的版本可能无法向后兼容，因此建议使用不可变的完整版本。
+
+对于主构建和夜间功能版本，请参阅源存储库中的说明。
+
+### escape
+
+语法：
+
+----
+# escape=\ (backslash)
+----
+
+或
+
+----
+# escape=` (backtick)
+----
+
+escape指令设置用于转义字符的字符 Dockerfile。如果未指定，则默认转义字符为 `\`。
+
+转义字符既用于转义行中的字符，也用于转义换行符。这允许Dockerfile指令跨越多行。请注意，无论escape解析器指令是否包含在Dockerfile中，都不会在RUN命令中执行转义，除非在行的末尾。
+
+windows上将转义字符设置为 ---- 特别有用，这与windows powershell一致。
+
+举例：
+
+----
+FROM microsoft/nanoserver
+COPY testfile.txt c:\\
+RUN dir c:\
+----
+
+这个文件在windows上将会构建失败，因为第二行末尾的\\将会被视为行连接，第二行和第三行将被处理为一条指令。
+解决办法是通过escape指令来定义行连接符：
+
+----
+# escape=`
+FROM microsoft/nanoserver
+COPY testfile.txt c:\
+RUN dir c:\
+----
+
+## 环境替换
+
+环境变量（使用 `ENV` 语句声明）也可以在某些指令中用作Dockerfile要解释的变量。还会处理转义以将类似变量的语法包含在字面上。
+
+用 `$variable_name` 或 `${variable_name}` 来引用环境变量，括号语法通常用于解决具有没有空格的变量名称的问题，例如 `${foo}_bar`。
+
+`${variable_name}` 语法还支持一些标准的bash 修饰如下规定：
+
+* ${variable:-word}表示if variable设置后，结果将是设置的值，否则将使word的值。
+* ${variable:+word}表示如果variable设置则word结果为结果，否则结果为空字符串。
+
+word可以是任意字符串，包括其他环境变量。
+
+可以通过在变量之前添加 `\` 来进行转义，例如，`\ $ foo` 或 `\ $ {foo}` 将分别转换为$ foo和$ {foo}文本。
+
+举例：
+
+----
+FROM busybox
+ENV foo /bar
+WORKDIR ${foo}   # WORKDIR /bar
+ADD . $foo       # ADD . /bar
+COPY \$foo /quux # COPY $foo /quux
+----
+
+Dockerfile中的以下指令列表支持环境变量：
+
+* ADD
+* COPY
+* ENV
+* EXPOSE
+* FROM
+* LABEL
+* STOPSIGNAL
+* USER
+* VOLUME
+* WORKDIR
+* ONBUILD（当与上面支持的指令之一结合使用时,1.4之前不支持环境变量）
+
+环境变量替换将在整个指令中对每个变量使用相同的值。例如：
+
+----
+FROM ubuntu
+
+ENV abc=hello
+ENV abc=bye def=$abc
+ENV ghi=$abc
+
+RUN echo $def, $ghi
+----
+
+上边例子，def值为hello，而不是bye。但是，ghi值为bye，因为它不是将abc设置为bye的相同指令的一部分:
+
+----
+root@ubuntu:~/dockertest/dockerfile/lesson2# docker build .
+Sending build context to Docker daemon  2.048kB
+Step 1/5 : FROM ubuntu
+---> 3556258649b2
+Step 2/5 : ENV abc=hello
+---> Running in 96380ab015ea
+Removing intermediate container 96380ab015ea
+---> 1c816fda37d8
+Step 3/5 : ENV abc=bye def=$abc
+---> Running in 1fa4571471cb
+Removing intermediate container 1fa4571471cb
+---> 64754920d15b
+Step 4/5 : ENV ghi=$abc
+---> Running in 0d4eedd4cf7e
+Removing intermediate container 0d4eedd4cf7e
+---> 9f41597cf3ea
+Step 5/5 : RUN echo $def, $ghi
+---> Running in 9d2ff7c0d7ea
+hello, bye
+Removing intermediate container 9d2ff7c0d7ea
+---> d3c75182c1ca
+Successfully built d3c75182c1ca
+----
+
+## .dockerignore file
+
+Docker CLI在发送构建上下文到Docker daemon之前，它首先检查上下文根目录是否存在.dockerignore文件（类似.gitignore），如果存在，则根据该文件配置的规则先过滤掉上下文的文件或目录，从而避免添加过大或没必要的文件。
+
+## 指令
+
+### FROM
+
+语法格式：
+
+----
+FROM <image> [AS <name>]
+----
+
+或
+
+----
+FROM <image>[:<tag>] [AS <name>]
+----
+
+或
+
+----
+FROM <image>[:<tag>] [AS <name>]
+----
+
+FROM指令初始化新的构建阶段并为后续指令设置基本镜像。因此，有效的Dockerfile必须以FROM指令开头。镜像可以是任何有效镜像，一般通过从公共存储库中拉取镜像。
+
+### ARG
+
+ARG是Dockerfile中唯一可以在FROM之前的指令https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
+
+FROM可以在单个Dockerfile中多次出现以创建多个镜像，或者使用一个构建阶段作为另一个构建阶段的依赖项。只需在每个新的FROM指令之前记下提交输出的最后一个镜像ID。每个FROM指令清除先前指令创建的任何状态。
+
+通过添加AS name参数能够给FROM指令指定名称，该名称可以被FROM或COPY --from=<name|index>指令引用
+tag或digest的值是可选的，不指定则tag默认为latest
+
+#### 理解ARG和FROM相互作用关系
+
+FROM指令支持引用变量，变量由FROM指令之前的ARG指令定义，例如：
+
+----
+ARG  CODE_VERSION=latest
+FROM base:${CODE_VERSION}
+CMD  /code/run-app
+
+FROM extras:${CODE_VERSION}
+CMD  /code/run-extras
+----
+
+声明在FROM之前的ARG指令其实是在构建阶段之外的，除了FROM指令可用，其他FROM后边的指令都不能使用它。要使用在第一个FROM之前声明的ARG的默认值，请使用没有构建阶段内的值的ARG指令：
+
+----
+ARG VERSION=latest
+FROM busybox:$VERSION
+ARG VERSION
+RUN echo $VERSION > image_version
+----
+
+### RUN
+
+格式：
+1、shell模式，命令运行在shell中，linux默认使用 `/bin/sh -C`，windows则是 `cmd /S /C`
+
+----
+RUN <command>
+----
+
+2、exec 模式，直接执行命令，避免了shell中的字符串转换等，并且使用不包含指定的shell可执行文件来执行命令
+
+----
+RUN ["executable", "param1", "param2"]
+----
+
+RUN指令将在当前镜像之上的新层中执行任何命令并提交结果，生成的已提交映像可供Dockerfile中下一步指令使用。
+可以使用SHELL命令来更改默认shell。
+
+当命令太长时，可以在shell中使用\来分行处理：
+
+----
+RUN /bin/bash -c 'source $HOME/.bashrc; \
+echo $HOME'
+----
+
+上边的例子等价于：
+
+----
+RUN /bin/bash -c 'source $HOME/.bashrc; echo $HOME'
+----
+
+在下一次构建期间，RUN指令的缓存不会自动失效。像 `RUN apt-get dist-upgrade -y` 这样的指令的缓存将在下一次构建期间重用。可以使用--no-cache选项来使RUN指令的高速缓存无效，例如 `docker build --no-cache`。
+
+### CMD
+
+格式：
+
+1、exec格式，也是首选格式
+
+----
+CMD ["executable","param1","param2"]
+----
+
+2、ENTRYPOINT的默认参数
+
+----
+CMD ["param1","param2"]
+----
+
+3、shell格式
+
+----
+CMD command param1 param2
+----
+
+一个Dockerfile只能有一个CMD指令，如果写了多个，那么只有最后一个起作用。
+
+CMD的主要目的是为执行容器提供默认值。这些默认值可以包含可执行文件，也可以省略可执行文件，在这种情况下，您还必须指定ENTRYPOINT指令。
+
+如果CMD用于为ENTRYPOINT指令提供默认参数，则应使用JSON数组格式指定CMD和ENTRYPOINT指令。
+
+如果用户指定了docker run的参数，那么它们将覆盖CMD中指定的默认值。
+
+### LABEL
+
+语法
+
+----
+LABEL <key>=<value> <key>=<value> <key>=<value> ...
+----
+
+LABEL指令用于给镜像添加元数据信息，形式为key-value键值对，如果要使用空格则需要使用双引号，同时也支持反斜杠来进行行连接：
+
+----
+LABEL "com.example.vendor"="ACME Incorporated"
+LABEL com.example.label-with-value="foo"
+LABEL version="1.0"
+LABEL description="This text illustrates \
+that label-values can span multiple lines."
+----
+
+* MAINTAINER(废弃)
+* EXPOSE
+* ENV
+* ADD
+* COPY
+* ENTRYPOINT
+* VOLUME
+* USER
+* WORKDIR
+* ARG
+* ONBUILD
+* STOPSIGNAL
+* HEALTHCHECK
+* SHELL
+
+这些指令的详细用法参见 https://docs.docker.com/engine/reference/builder/[官网文档]。

@@ -1,0 +1,467 @@
+---
+title: Java反射之表示所有类型的Type接口
+slug: type-components
+img: /images/thumbnail/gs.png
+categories:
+  - Java
+tags:
+  - reflect
+  - 反射
+  - java
+  - Type
+description: Type接口是JDK1.5新增的表示Java所有类型的接口，它有5个组件，除了Java的类、接口的原始类型可以用Class来描述，其他的几个组件都是用来描述泛型类型的，分别是描述整个泛型的ParameterizedType、描述泛型类型变量的TypeVariable、描述泛型通配符的WildcardType，以及描述泛型数组的GenericArrayType。
+date: 2021-11-14 00:00:00
+updated: 2021-11-14 00:00:00
+---
+
+[[type-interface]]
+= Java反射之表示所有类型的Type接口
+:key_word: Java,反射,Type,AnnotatedElement,Class,Field,Method,Parameter,Constructor,Annotation,Array,泛型数组,ParameterizedType,TypeVariable,WildcardType,GenericArrayType
+:author: belonk.com
+:date: 2021-11-09
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: java,反射,reflect
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+前边说过，JDK1.5推出了反射功能，并介绍了反射的类设计结构，其中提到了 `Type` 接口，它是JDK1.5新增的接口，表示Java中的所有类型。本文介绍这个接口及其五大组件。
+
+.Type及其组件
+image::/images/reflect/reflect-type.png[]
+
+== Type的五大组件概览
+
+`Type` 接口表示Java中的类型，这些类型包括原始类型、参数化类型、数组类型、类型变量和基本类型，前边介绍的 `Class` 就是其组件之一。`Type` 及其组件用于通过反射来描述Java各种类型，比如描述泛型的定义，获取泛型参数个数、类型、泛型通配符的上下边界等等。一个典型的应用场景是获取真实的泛型类型，我们将在后续文章单独介绍。
+
+`Type` 用其五大组件来描述上边提到这些类型，类图如下：
+
+.Type类图
+image::/images/reflect/reflect-type-class.png[]
+
+* <<ParameterizedType, ParameterizedType>>: 表示参数化类型，即整个泛型的定义，如 `List<String>` 可以用 `ParameterizedType` 来描述；
+* <<TypeVariable, TypeVariable>>: 表示类型变量，即泛型申明中的具体类型，比如: `List<E>` 用参数化类型来描述，而其中的 `E` 就用 `TypeVariable` 来描述；
+* <<WildcardType, WildcardType>>: 表示泛型通配符类型，即泛型申明中带 `?` 通配符，比如：`List<? extends Number>` 中 `? extends Number` 就用 `WildcardType` 来描述；
+* <<GenericArrayType, GenericArrayType>>: 表示泛型数组，比如申明一个泛型数组的域 `T[] array`，它就用 `GenericArrayType` 来描述；
+* `Class`: 表示运行时的类或接口，在前边<</2021/11/09/reflect-class#class, Java反射的体系结构>>一文中已经介绍过了，不再赘述。
+
+一句话总结，`Type` 的 `Class` 组件用来描述Java类或接口等原始类型和基本类型，其他几个组件描述泛型类型，包括泛型的变量、通配符以及泛型数组。
+
+现在，来看看这几个组件的用法。
+
+[[ParameterizedType]]
+== 参数化类型ParameterizedType
+
+什么是参数化类型？其实就是指泛型，具体而言，JDK5推出泛型之后，原来的具体的类型可以申明为泛型，变得"可被参数化"了，比如：`List` 是一个具体类型，但是可以申明为 `List<String>`、`List<Integer>` ，就仿佛可以申明不同的参数，类似方法可以申明不同的参数一样（其实泛型是编译期特性，它两实际上是同一类型，都是 `List`，这在 <</2021/11/10/reflect-generic-array#generic-type-erased, Java反射之创建泛型数组>> 已经说过了）。
+
+所以，`ParameterizedType` 用来描述泛型类型，比如：`List<T>、List<String>`、`User<T extends Number>`、`List<? super User>` 都可以用它来描述。`ParameterizedType` 的定义如下：
+
+[source,java]
+----
+public interface ParameterizedType extends Type {
+    Type[] getActualTypeArguments(); // <1>
+    Type getRawType(); // <2>
+    Type getOwnerType(); // <3>
+}
+----
+<1> 获取参数化类型中的实际类型，就是其泛型类型，返回 `Type` 子组件的数组
+<2> 返还原始类型，即：申明参数化类型的类或接口
+<3> 返回申明该参数化类型的父类型，即：申明内部类、接口等成员的外层类或接口，主要用于内部类、接口是参数化类型时
+
+来看一个例子，申明一个测试类，代码如下：
+
+[source,java]
+----
+public class ParameterizedTypeDemo {
+	private List<String> list; // <1>
+
+	class TopParameterizedType<T> { // <2>
+	}
+
+	class InnerParameterizedType extends TopParameterizedType<String> { // <3>
+	}
+
+	private <T> void genericMethod(List<T> list) { // <4>
+	}
+}
+----
+<1> 申明泛型成员域
+<2> 申明泛型内部类
+<3> 申明泛型内部内子类
+<4> 申明泛型方法
+
+现在，编写一个测试方法：
+
+[source,java]
+----
+public void testGenericClass() {
+		Type genericSuperclass = InnerParameterizedType.class.getGenericSuperclass(); // <1>
+		assert genericSuperclass instanceof ParameterizedType; // <2>
+		ParameterizedType parameterizedType = (ParameterizedType) genericSuperclass;
+		System.out.println("泛型类型：" + Arrays.toString(parameterizedType.getActualTypeArguments()));
+		System.out.println("原始类型：" + parameterizedType.getRawType());
+		System.out.println("所有者类型：" + parameterizedType.getOwnerType()); // <3>
+	}
+----
+<1> `getGenericSuperclass` 方法可以拿到泛型父类，从而获取父类上定义的泛型类型
+<2> 泛型父类类型是 `ParameterizedType`
+<3> 由于 `InnerParameterizedType` 是 `ParameterizedTypeDemo` 的内部类，所以所有者是 `ParameterizedTypeDemo`
+
+[NOTE]
+====
+这里仅展示了测试泛型类的示例，关于泛型成员域、泛型方法的示例代码见文末的源码。
+====
+
+示例中，`TopParameterizedType` 类被申明为泛型类，用 `Class` 的 `getGenericSuperclass` 方法获取了子类的父泛型类，由于类申明的泛型类型不能直接创建实例（比如，不能直接 `new TopParameterizedType<T>()`），因此只能通过继承父类来明确子类的具体泛型类型，然后才能通过 `ParameterizedType` 的 `getActualTypeArguments()` 获取到子类具体的泛型类型（这里为 `String`），这就是如何获取类上的具体泛型类型的方法，后续文章会继续讨论。
+
+示例输出结果如下：
+
+----
+泛型类型：[class java.lang.String]
+原始类型：class com.belonk.lang.reflect.ParameterizedTypeDemo$TopParameterizedType
+所有者类型：class com.belonk.lang.reflect.ParameterizedTypeDemo
+----
+
+[IMPORTANT]
+====
+`ParameterizedType` 是 `Type` 组件中最基本的一个，因为它描述了整个泛型。通常，会先获取到 `ParameterizedType`，然后通过 `getActualTypeArguments()` 才能获取到其他泛型组件，比如获取类型变量、通配符等。
+
+====
+
+参数化类型描述了整个泛型，我们知道，泛型可以申明泛型参数，可以申明通配符或者定义上下边界，它们就用 `TypeVariable` 和 `WildcardType` 来描述。
+
+[[typevariable-note]]
+[IMPORTANT]
+====
+要理解 `TypeVariable` 和 `WildcardType`，首先必须明确Java中泛型的用法：
+
+. 类上申明泛型，可以支持上边界，但是不能定义下边界，即：定义 `class GenericClass1<T extends Clazz> {}` 可以，但是不能定义 `class GenericClass2<T super Interface> {}`，编译错误
+. 类的成员域不能申明泛型，只能使用通配符来定义泛型的上下边界，或者使用类上的泛型
+. 泛型方法(包括构造函数)的参数也只能使用通配符定义泛型的上下边界
+
+所以，具有通配符的泛型类型变量用 `WildcardType` 来描述，不具备通配符的用 `TypeVariable` 来描述，所以 `TypeVariable` 获取边界的方法 `getBounds()`、`getAnnotatedBounds()` 只能获取上边界，而没有下边界。
+
+====
+
+[[TypeVariable]]
+== 类型变量TypeVariable
+
+`TypeVariable` 用来描述类型变量，即泛型定义中的参数。其定义如下：
+
+[source,java]
+----
+public interface TypeVariable<D extends GenericDeclaration> extends Type, AnnotatedElement {
+    Type[] getBounds(); // <1>
+
+    D getGenericDeclaration(); // <2>
+
+    String getName(); // <3>
+
+    AnnotatedType[] getAnnotatedBounds(); // <4>
+}
+----
+<1> 获取类型变量的上边界，注意类型变量没有下边界，<<typevariable-note,这里>> 已经说过了
+<2> 获取类型变量的泛型申明类和接口，即泛型的申明者
+<3> 获取类型变量的名称
+<4> JDK1.8新增的方法，返回一个 `AnnotatedType` 对象数组，**如果类型变量上边界中申明了注解则可以用来获取注解**。可以看做是 `getBounds()` 方法的扩展，除了获取到上边界的具体类型，还可以获取其标注的注解。`AnnotatedType` 数组中对象的顺序对应于类型参数声明中边界的顺序。如果类型参数声明没有边界，则返回长度为 0 的数组。
+
+从 `TypeVariable` 的定义可以看到，它持有一个泛型对象 `D`，上边界为 `GenericDeclaration` 接口，在 <</2021/11/09/reflect-class#class, Java反射的体系结构>> 中说过，`GenericDeclaration` 是用来获取类型变量的接口，它继承自 `AnnotatedElement` 接口：
+
+[source,java]
+----
+public interface GenericDeclaration extends AnnotatedElement {
+    public TypeVariable<?>[] getTypeParameters(); // <1>
+}
+----
+<1> 获取类型变量，返回 `TypeVariable` 数组
+
+而 `Class` 实现了该接口，因此，**我们可以通过 `Class` 的 `getTypeParameters()` 来获取类上的类型变量信息**。
+
+[NOTE]
+====
+关于 `AnnotatedElement` 接口 和 `AnnotatedType` 接口，将在后续文章中介绍。这里只需要知道，`AnnotatedType` 接口用来描述Java中可以被标注注解的类型。
+
+====
+
+现在，来看一个示例：
+
+[source,java]
+----
+public class TypeVariableDemo {
+	class TypeVariableTestClass<T extends Number & Serializable> { // <1>
+		// ...省略部分代码
+	}
+
+	public void testGenericClass() {
+		TypeVariable<Class<TypeVariableTestClass>>[] typeVariables = TypeVariableTestClass.class.getTypeParameters(); // <2>
+		for (TypeVariable<Class<TypeVariableTestClass>> typeVariable : typeVariables) {
+			System.out.println(typeVariable);
+			System.out.println(Arrays.toString(typeVariable.getBounds()));
+			System.out.println(typeVariable.getGenericDeclaration());
+			System.out.println(typeVariable.getName());
+			System.out.println(Arrays.toString(typeVariable.getAnnotatedBounds()));
+		}
+	}
+}
+----
+<1> 申明泛型类，定义了上边界为 `Number` 和 `Serializable` 接口
+<2> 通过 `Class` 的 `getTypeParameters()` 方法获取类上的泛型变量
+
+上边的示例可以看到，`getBounds()` 方法返回了具体的上边界类，泛型申明类为 `TypeVariableDemo$TypeVariableTestClass`, 泛型参数名称为 `T`，而 `getAnnotatedBounds()` 返回的注解申明类型上边界是 `AnnotatedType` 的具体实现 `AnnotatedTypeFactory$AnnotatedTypeBaseImpl` 对象。
+
+`testGenericClass()` 方法输出结果如下：
+
+----
+T
+[class java.lang.Number, interface java.io.Serializable]
+class com.belonk.lang.reflect.TypeVariableDemo$TypeVariableTestClass
+T
+[sun.reflect.annotation.AnnotatedTypeFactory$AnnotatedTypeBaseImpl@548c4f57, sun.reflect.annotation.AnnotatedTypeFactory$AnnotatedTypeBaseImpl@1218025c]
+----
+
+[NOTE]
+====
+`AnnotatedTypeBaseImpl` 为 `AnnotatedType` 接口的一个实现，将在后续文章中介绍。
+====
+
+[[WildcardType]]
+== 通配符类型WildcardType
+
+如果泛型参数申明为通配符的形式，那么就用 `WildcardType` 来描述之。<<typevariable-note, 前边>>说过, 通配符可以定义泛型的上下边界，因此，`WildcardType` 一定是可以获取上下边界的具体类型。其定义如下：
+
+[source,java]
+----
+public interface WildcardType extends Type {
+	Type[] getUpperBounds(); // <1>
+	Type[] getLowerBounds(); // <2>
+}
+----
+<1> 获取泛型通配符定义的上边界类型
+<2> 获取泛型通配符定义的下边界类型
+
+可以看到，`WildcardType` 定义了两个分别获取上、下边界的方法，返回一个 `Type` 数组。
+
+那么，如果能够获取到 `WildcardType` 呢？<<typevariable-note, 前边>>说过，泛型通配符只能用在成员域、方法参数(包括构造函数参数)中，因此，获取这些泛型通配符类型肯定在它们对应的反射类中。在 `Field` 类中，定义了一个 `getGenericType()` 方法，用来获取成员域定义的泛型类型；而对于 `Constructor` 和 `Method`，在 <</2021/11/09/reflect-class#reflect-class, Java反射的体系结构>> 中说过，它们都继承自 `Executable` ，该对象定义了一个 `getGenericParameterTypes()` 方法来获取参数的泛型类型。
+
+看一个示例：
+
+[source,java]
+----
+public class WildcardTypeDemo {
+	class WildcardTypeClass {
+		private List<? extends Number> numberList; // <1>
+		private List<? super Integer> intList; // <1>
+
+		public WildcardTypeClass(List<? extends Number> numberList) { // <2>
+		}
+
+		public WildcardTypeClass(Set<? super Number> intSet) { // <2>
+		}
+
+		public void method(List<? extends Number> numberList) { // <3>
+		}
+
+		public void method(Set<? super Integer> intList) { // <3>
+		}
+	}
+}
+----
+<1> 定义泛型通配符带上下边界的成员域
+<2> 定义构造函数，参数申明了泛型通配符
+<3> 定义方法，参数申明了泛型通配符
+
+为了简单起见，这里仅展示了成员域的泛型通配符上下边界类型示例，构造器和方法的示例代码可以看文末的源码。示例代码如下：
+
+[source,java]
+----
+public void testGenericField() {
+	try {
+		Field numberList = WildcardTypeClass.class.getDeclaredField("numberList");
+		Type genericType = numberList.getGenericType(); // <1>
+		assert genericType instanceof ParameterizedType;
+
+		ParameterizedType parameterizedType = (ParameterizedType) genericType; // <2>
+
+		Type actualTypeArgument = parameterizedType.getActualTypeArguments()[0]; // <3>
+		assert actualTypeArgument instanceof WildcardType;
+		WildcardType wildcardType = (WildcardType) actualTypeArgument;
+		System.out.println(Arrays.toString(wildcardType.getUpperBounds()));  // <4>
+		System.out.println(Arrays.toString(wildcardType.getLowerBounds()));  // <4>
+
+		parameterizedType = (ParameterizedType) WildcardTypeClass.class.getDeclaredField("intList").getGenericType();
+		wildcardType = (WildcardType) parameterizedType.getActualTypeArguments()[0];
+		System.out.println(Arrays.toString(wildcardType.getUpperBounds()));
+		System.out.println(Arrays.toString(wildcardType.getLowerBounds()));
+	} catch (NoSuchFieldException e) {
+		e.printStackTrace();
+	}
+}
+----
+<1> 获取成员域的泛型类型
+<2> 获取到的类型首先是一个参数化类型，它代表了整个泛型定义，比如 `List<? extends Number>`
+<3> 通过参数化类型再获取实际的泛型类型，由于定义了通配符，所以这里的实际类型就是 `WildcardType`
+<4> 打印通配符类型定义的上下边界
+
+`testGenericField()` 方法输出如下的结果：
+
+----
+[class java.lang.Number]
+[]
+[class java.lang.Object]
+[class java.lang.Integer]
+----
+
+可以看到，`numberList` 域的上边界为 `Number`，而下边界未定义；`intList` 域下边界为 `Integer`，上边界为 `Object`。
+
+[[GenericArrayType]]
+== 泛型数组类型GenericArrayType
+
+`Type` 的 `GenericArrayType` 组件，用以描述泛型数组类型。在<</2021/11/10/reflect-generic-array#create-generic-array, Java反射之创建泛型数组>>一文中，介绍了如何创建泛型数组，那么如何知道泛型数组的真实类型呢？这就是 `GenericArrayType` 设计的目的，其定义如下：
+
+[source,java]
+----
+public interface GenericArrayType extends Type {
+    Type getGenericComponentType(); // <1>
+}
+----
+<1> 获取泛型数组真实的类型
+
+它只定义了一个方法，用来获取泛型数组真实的类型。看一个示例：
+
+[source,java]
+----
+public class GenericArrayTypeDemo {
+	class GenericArrayTypeClass<T> { // <1>
+		private String[] array0; // <2>
+		private T[] array; // <3>
+		private T[][] array1; // <4>
+		private List<T>[] listArray; // <5>
+		private List<? extends Number>[] numberArray; // <6>
+	}
+}
+----
+<1> 定义泛型类
+<2> 定义普通数组
+<3> 定义泛型数组
+<4> 定义泛型二维数组
+<5> 定义泛型数组，类型是 `List<T>`，它仍然是一个泛型
+<6> 定义上边界通配符泛型的泛型数组，类型为 `List<? extends Number>`
+
+分别测试这几种泛型数组申明：
+
+1、下边的代码，展示了普通非泛型数组 `array0` 的类型获取：
+
+[source,java]
+----
+Type array0 = GenericArrayTypeClass.class.getDeclaredField("array0").getGenericType();
+System.out.println(array0);
+System.out.println(array0.getClass());
+----
+
+非泛型数组，通过 `Field` 的 `getGenericType()` 方法获取到的 `Type` 其实是一个 `Class`，这个 `Class` 很明显是 `String` 数组：
+
+----
+class [Ljava.lang.String;
+class java.lang.Class
+----
+
+2、对应泛型数组 `array`，其类型如下：
+
+[source,java]
+----
+Type genericType = GenericArrayTypeClass.class.getDeclaredField("array").getGenericType();
+assert genericType instanceof GenericArrayType;
+GenericArrayType genericArrayType = (GenericArrayType) genericType;
+System.out.println(genericArrayType.getGenericComponentType());
+System.out.println(genericArrayType.getGenericComponentType().getClass());
+----
+
+输出：
+
+----
+T
+class sun.reflect.generics.reflectiveObjects.TypeVariableImpl
+----
+
+可以看到，获取到的实际类型是类型变量 `TypeVariable`。
+
+3、对应二维数组 `array1`：
+
+[source,java]
+----
+genericArrayType = (GenericArrayType) GenericArrayTypeClass.class.getDeclaredField("array1").getGenericType();
+System.out.println(genericArrayType.getGenericComponentType());
+System.out.println(genericArrayType.getGenericComponentType().getClass());
+----
+
+输出如下：
+
+----
+T[]
+class sun.reflect.generics.reflectiveObjects.GenericArrayTypeImpl
+----
+
+可以看到，其 `Type` 仍然是一个 `GenericArrayType`, 可以继续向下获取最终泛型数组的真实类型。
+
+4、对于 `listArray`，它是一个参数化类型，泛型参数为类上定义的泛型类型 `T`：
+
+[source,java]
+----
+genericArrayType = (GenericArrayType) GenericArrayTypeClass.class.getDeclaredField("listArray").getGenericType();
+System.out.println(genericArrayType.getGenericComponentType());
+System.out.println(genericArrayType.getGenericComponentType().getClass());
+----
+
+结果输出：
+
+----
+java.util.List<T>
+class sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl
+----
+
+结果同预想的一致，确实是参数化类型。
+
+5、对于 `numberArray`，同样也是参数化类型，只是它定义了通配符，因此可以继续获取到 `WildcardType`：
+
+[source,java]
+----
+genericArrayType = (GenericArrayType) GenericArrayTypeClass.class.getDeclaredField("numberArray").getGenericType();
+System.out.println(genericArrayType.getGenericComponentType());
+System.out.println(genericArrayType.getGenericComponentType().getClass());
+Type genericComponentType = genericArrayType.getGenericComponentType();
+assert genericComponentType instanceof ParameterizedType;
+Type actualTypeArguments = ((ParameterizedType) genericComponentType).getActualTypeArguments()[0]; // <1>
+System.out.println(actualTypeArguments);
+System.out.println(actualTypeArguments.getClass());
+----
+<1> 通过参数化类型，继续向下获取实际类型参数，这里是 `WildcardType`
+
+结果输出如下：
+
+----
+java.util.List<? extends java.lang.Number>
+class sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl
+? extends java.lang.Number
+class sun.reflect.generics.reflectiveObjects.WildcardTypeImpl
+----
+
+可以看到，结果同我们预想的一致，通过 `genericComponentType` 获取到的确实是 `WildcardType`。
+
+== 总结
+
+`Type` 接口是JDK1.5新增的表示Java所有类型的接口，它有5个组件，除了Java的类、接口的原始类型可以用 `Class` 来描述，其他的几个组件都是用来描述泛型类型的，分别是描述整个泛型的 `ParameterizedType`、描述泛型类型变量的 `TypeVariable`、描述泛型通配符的 `WildcardType`，以及描述泛型数组的 `GenericArrayType`。
+
+通常，根据泛型定义的形式，会先获取 `ParameterizedType`，然后通过其 `getActualTypeArguments()` 继续深挖到其他泛型类型。
+
+本文示例代码见： https://github.com/koobyte/java-learning/tree/master/src/main/java/com/belonk/lang/reflect[github].

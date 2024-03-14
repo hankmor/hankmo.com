@@ -1,0 +1,453 @@
+---
+title: Spring boot集成quartz并实现任务调度
+slug: spring-boot-quartz-guide
+img: /images/thumbnail/attachment/20190615/864ea666a61843e585966b4bfe079173.png
+categories:
+  - Spring
+tags:
+  - quartz
+  - springboot
+description: spring boot与quartz集成，自定义JobFactory实现自动依赖注入，进行数据持久化。
+date: 2019-01-22 16:13:13
+updated: 2019-06-15 08:38:01
+---
+
+= Spring boot集成quartz并实现任务调度
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: quartz,spring boot,redis
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: quartz,springboot
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+最近在实现任务调度服务，使用 http://www.quartz-scheduler.org/[quartz]调度框架，由于使用的spring&nbsp; boot版本为1.5.10，该版本并没有提供quartz的starter，在集成的时候还是遇到了很多问题。本文并不会详细介绍quartz框架，请自行查阅相关资料。如果对Spring boot不太熟悉，可以看前边几篇关于spring boot的文章。
+
+
+== quartz简介
+ 
+
+=== 核心概念
+ 
+* scheduler：任务调度器，相当于指挥中心，负责管理和调度job，由``SchedulerFactory``创建和关闭，创建后需要通过``starter()``方法来启动调度。
+* trigger：触发器，定义job的触发时机，通过``TriggerBuilder``来创建，有``SimpleTrigger``和``CronTrigger``，前者可以定义在某一个时刻触发或者周期性触发，后者使用cron表达式来定义触发时间。
+* Job：具体的调度业务逻辑实现，也就是任务，具体任务需要实现``org.quartz.Job``接口。
+* JobDetail：``org.quartz.JobDetail``用来描述Job实例的属性，并且可以通过__``JobDataMap``传递给Job实例数据__，通过``JobBuilder``来创建。
+
+
+=== quartz配置
+ 
+quartz框架默认会通过quartz.properties文件来加载配置信息，有几个重要的配置项：
+
+* org.quartz.scheduler.*：调度器相关配置
+* org.quartz.threadPool.*：线程池相关配置
+* org.quartz.jobStore.*：quartz数据存储相关配置，在quartz中，有三种存储类型： 
+** ``RAMJobStore``：基于内存存储job
+** ``JobStoreCMT``：基于数据库的数据存储，并且受运行的java容器的事务控制
+** ``JobStoreTX``：基于数据库的数据存储，不受事务控制
+* org.quartz.dataSource.*：配置数据库存储quartz数据时的数据源信息
+* org.quartz.plugin.*：quartz插件相关配置
+
+quartz简单介绍这么多，更多信息请看 http://www.quartz-scheduler.org/documentation/quartz-2.2.x/tutorials/[这里]。
+
+
+== Spring boot与quartz集成
+ 
+前边说过，我使用的spring boot版本为1.5.10，没有quartz的starter，所以需要自己编码实现。同时，我还需要对quartz做持久化处理，需要在mysql库中导入quartz的建表脚本。集成步骤如下：
+
+1、引入依赖
+
+引入quartz的依赖包，``quartz-jobs``根据实际需要决定是否引入。
+
+[source,xml]
+----
+<dependency>
+<groupId>org.quartz-scheduler</groupId>
+<artifactId>quartz</artifactId>
+<version>2.2.3</version>
+</dependency>
+<dependency>
+<groupId>org.quartz-scheduler</groupId>
+<artifactId>quartz-jobs</artifactId>
+<version>2.2.3</version>
+</dependency>
+----
+ 
+2、创建表
+
+在下载的quartz包中有建表脚本，我的为quartz-2.2.3，建表脚本在/docs/dbTables下边，导入tables_mysql_innodb.sql即可。
+
+3、配置文件
+
+在resources目下新建一个``quartz.properties``配置文件，我的配置如下：
+
+[source,block]
+----
+#============================================================================
+# Configure Main Scheduler Properties
+#============================================================================
+org.quartz.scheduler.instanceName:event-scheduler
+org.quartz.scheduler.instanceId:AUTO
+org.quartz.scheduler.skipUpdateCheck:true
+#============================================================================
+# Configure ThreadPool
+#============================================================================
+org.quartz.threadPool.class:org.quartz.simpl.SimpleThreadPool
+org.quartz.threadPool.threadCount:5
+org.quartz.threadPool.threadPriority:5
+#============================================================================
+# Configure JobStore
+#============================================================================
+org.quartz.jobStore.misfireThreshold:60000
+org.quartz.jobStore.class:org.quartz.impl.jdbcjobstore.JobStoreTX
+org.quartz.jobStore.driverDelegateClass:org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+org.quartz.jobStore.useProperties:false
+org.quartz.jobStore.tablePrefix:QRTZ_
+org.quartz.jobStore.isClustered:false
+#============================================================================
+# Configure Datasources
+#============================================================================
+org.quartz.dataSource.ds.maxConnections:7
+#============================================================================
+# Configure Plugins
+#============================================================================
+org.quartz.plugin.triggHistory.class: org.quartz.plugins.history.LoggingTriggerHistoryPlugin
+----
+ 
+这里并没有数据源``ds``相关的信息，仅配置了最大连接，稍后会解释为什么。注意jobStore配置，这里我配置为``JobStoreTX``，表示使用数据库持久化。
+
+4、创建quartz配置类
+
+新建一个QuartzAutoConfiguration类，用来配置quartz，代码如下：
+
+[source,java]
+----
+@Configuration
+@ConditionalOnClass({Scheduler.class, SchedulerFactoryBean.class,
+        PlatformTransactionManager.class})
+@AutoConfigureAfter({DataSourceAutoConfiguration.class,
+        HibernateJpaAutoConfiguration.class})
+public class QuartzAutoConfiguration {
+    private static final String DATASOURCE_NAME = "ds";
+
+    @Value("${spring.datasource.driver-class-name}")
+    private String datasourceDriverClass;
+    @Value("${spring.datasource.url}")
+    private String datasourceUrl;
+    @Value("${spring.datasource.username}")
+    private String datasourceUsername;
+    @Value("${spring.datasource.password}")
+    private String datasourcePassword;
+
+    /**
+     * 声明自定义的{@link JobFactory}。
+     *
+     * @param applicationContext spring上下文
+     * @return jobFactory实例
+     */
+    @Bean
+    public JobFactory jobFactory(ApplicationContext applicationContext) {
+        AutowiringSpringBeanJobFactory jobFactory = new AutowiringSpringBeanJobFactory();
+        jobFactory.setApplicationContext(applicationContext);
+        return jobFactory;
+    }
+
+    /**
+     * 声明{@link SchedulerFactoryBean}，使用自定义{@link AutowiringSpringBeanJobFactory}。
+     *
+     * @param jobFactory jobFactory
+     * @return SchedulerFactoryBean实例
+     * @throws Exception exception
+     */
+    @Bean
+    public SchedulerFactoryBean quartzScheduler(JobFactory jobFactory) throws Exception {
+        SchedulerFactoryBean schedulerFactoryBean = new SchedulerFactoryBean();
+
+        Properties properties = new Properties();
+        InputStream is = QuartzAutoConfiguration.class.getResourceAsStream("/quartz.properties");
+        properties.load(is);
+
+        // 替换数据源配置，使用自带的数据源
+
+        properties.setProperty("org.quartz.jobStore.dataSource", DATASOURCE_NAME);
+        properties.setProperty("org.quartz.dataSource." + DATASOURCE_NAME + ".driver", datasourceDriverClass);
+        properties.setProperty("org.quartz.dataSource." + DATASOURCE_NAME + ".URL", datasourceUrl);
+        properties.setProperty("org.quartz.dataSource." + DATASOURCE_NAME + ".user", datasourceUsername);
+        properties.setProperty("org.quartz.dataSource." + DATASOURCE_NAME + ".password", datasourcePassword);
+
+        schedulerFactoryBean.setJobFactory(jobFactory);
+        schedulerFactoryBean.setQuartzProperties(properties);
+        schedulerFactoryBean.afterPropertiesSet();
+        return schedulerFactoryBean;
+    }
+」
+----
+ 
+这里用到了``AutowiringSpringBeanJobFactory``自定义类，稍后再Job自动注入Bean章节会讲到，简单而言这个就是自定义的``SpringBeanJobFactory``，能够使Job实例自动注入其他Bean。
+
+这里需要注意，前边说了quartz配置文件并没有配置数据源信息，其实是在这里编码配置的。在配置``SchedulerFactoryBean``时，会首先加载前边创建``quartz.properties``的配置信息，并且将quartz的数据源信息配置为本工程的Spring管理的默认数据源，使其使用同一个数据源。
+
+``SchedulerFactoryBean``就是Spring管理quartz的核心，通过它来创建和配置``Scheduler``，管理器生命周期和依赖。
+
+5、编写调度Service
+
+这里编写一个SchedulerServiceImpl，来实现调度、取消调度等方法：
+
+[source,java]
+----
+@Service
+@EnableScheduling
+public class SchedulerServiceImpl implements SchedulerService {
+    private static Logger log = LoggerFactory.getLogger(SchedulerServiceImpl.class);
+
+    @Autowired
+    private Scheduler scheduler;
+
+    @Override
+    public void schedule(JobDetail jobDetail, Trigger trigger) {
+        try {
+            scheduler.scheduleJob(jobDetail, trigger);
+        } catch (SchedulerException e) {
+            log.error(String.format("Can not schedule %s on %s", jobDetail, trigger), e);
+        }
+    }
+
+    @Override
+    public void reschedule(TriggerKey triggerKey, Trigger newTrigger) {
+        try {
+            scheduler.rescheduleJob(triggerKey, newTrigger);
+        } catch (SchedulerException e) {
+            log.error(String.format("Can not reschedule %s with new trigger %s", triggerKey, newTrigger), e);
+        }
+    }
+
+    @Override
+    public void unscheduleJob(TriggerKey triggerKey) {
+        try {
+            scheduler.unscheduleJob(triggerKey);
+        } catch (SchedulerException e) {
+            log.error(String.format("Can not destroy schedule on %s", triggerKey), e);
+        }
+    }
+
+    @Override
+    public JobDetail getJobDetail(JobKey jobKey) {
+        try {
+            return scheduler.getJobDetail(jobKey);
+        } catch (SchedulerException e) {
+            log.error(String.format("Can not find job detail of %s", jobKey), e);
+            return null;
+        }
+    }
+}
+----
+ 
+注意这里使用了``@EnableScheduling``注解来启用quartz调度。
+
+5、编写一个测试Service：
+
+我们编写一个``QuartzService``，来测试调度情况：
+
+[source,java]
+----
+@Service
+public class QuartzService {
+    private static Logger log = LoggerFactory.getLogger(QuartzService.class);
+
+    @Autowired
+    private SchedulerService schedulerService;
+
+    @Scheduled(cron = "0/20 * * * * ?")
+    public void cron() {
+        log.info("cron scheduling ...");
+    }
+
+    @Scheduled(fixedDelay = 1000 * 10)
+    public void fixedDelay() {
+        log.info("fixedDelay scheduling ...");
+    }
+
+    @PostConstruct
+    public void demo() {
+        String group = "test-group";
+        JobDetail jobDetail = JobBuilder.newJob(TestJob.class)
+                .withIdentity("test-job", group)
+                .build();
+        Trigger trigger = newTrigger()
+                .withIdentity("test-trigger", group)
+                .startAt(new Date(System.currentTimeMillis() + 10000))
+                .usingJobData("businessId", "test-id")
+                .build();
+        schedulerService.schedule(jobDetail, trigger);
+    }
+
+    public static class TestJob implements Job {
+        private String businessId;
+
+        @Autowired
+        private DemoService demoService;
+
+        @Override
+        public void execute(JobExecutionContext context) throws JobExecutionException {
+            System.out.println("businessId : " + businessId);
+            System.out.println("job : " + context.getJobDetail());
+            System.out.println("trigger : " + context.getTrigger());
+            String s = demoService.say("test service invoke");
+            System.out.println(s);
+        }
+
+        public void setBusinessId(String businessId) {
+            this.businessId = businessId;
+        }
+    }
+}
+----
+ 
+依赖的DemoService用来测试Job实例的依赖注入，这里的Job实例使用内部静态来来实现，businessId属性是通过Trigger上的``usingJobData()``方法来传递的，其底层其实就是``JobDataMap``，需要提供setter。
+
+6、测试
+
+启动应用和查看数据库，可以看到调度任务成功持久化和执行。
+
+
+== Job自动注入Bean
+ 
+
+=== 如何创建Job实例
+ 
+前边提到了``AutowiringSpringBeanJobFactory``自定义类，为什么需要这个类？有何作用？这跟Quartz的job实例创建有关，Job实例都是 通过反射来创建的，因为我们只给JobDetai提供了Job实例的class。
+
+Quartz默认使用的``SimpleJobFactory``来创建Job实例：
+
+[source,java]
+----
+public Job newJob(TriggerFiredBundle bundle, Scheduler Scheduler) throws SchedulerException
+    JobDetail jobDetail = bundle.getJobDetail();
+    Class<? extends Job> jobClass = jobDetail.getJobClass();
+    try {
+        ……
+        return jobClass.newInstance();
+    } catch (Exception e) {
+        ……
+    }
+}
+----
+ 
+Spring是通过``SpringBeanFactory``的``createJobInstance()``方法来创建Job实例，同样也是通过反射创建的：
+
+[source,java]
+----
+protected Object createJobInstance(TriggerFiredBundle bundle) throws Exception {
+	return bundle.getJobDetail().getJobClass().newInstance();
+}
+----
+ 
+可以看到，通过JobDetail获取到JobClass，然后通过反射创建了Job实例。
+
+因此，该实例并没有受Spring管理，所以在Job实例中不能使用依赖注入，我们需要使创建的Job实例被Spring管理。
+
+
+=== 改造SpringBeanFactory
+ 
+要让Job实例受Spring控制，我们需要对``SpringBeanFactory``进行扩展，同时需要用到``ApplicationContextAware``接口，以获取ApplicationContext类，并从它身上获取能够让Bean能够自动注入的``AutowireCapableBeanFactory``类。
+
+编写``AutowiringSpringBeanJobFactory``：
+
+[source,java]
+----
+public class AutowiringSpringBeanJobFactory extends SpringBeanJobFactory implements
+        ApplicationContextAware {
+    private AutowireCapableBeanFactory autowireCapablebeanFactory;
+
+    @Override
+    public void setApplicationContext(final ApplicationContext context) {
+        autowireCapablebeanFactory = context.getAutowireCapableBeanFactory();
+    }
+
+    @Override
+    protected Object createJobInstance(final TriggerFiredBundle bundle) throws Exception {
+        Object job = super.createJobInstance(bundle);
+        // 让job实例可以自动注入
+        autowireCapablebeanFactory.autowireBean(job);
+        return job;
+    }
+}
+----
+ 
+然后，在Quartz配置类中，使用该自定义的``JobFactory``即可，前边的创建Quartz配置类章节已经提到，不在赘述。
+
+
+== Spring boot 2.0的quartz集成
+ 
+其实，在Spring boot2.0已经提供了``spring-boot-starter-quartz``，集成就更加方便了，也不用担心依赖注入的问题。
+
+1、引入依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-quartz</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+
+<dependency>
+<groupId>mysql</groupId>
+<artifactId>mysql-connector-java</artifactId>
+<version>5.1.38</version>
+</dependency>
+----
+ 
+2、配置
+
+不需要quartz.properties了，只需要在``application.properties``加入如下配置：
+
+[source,java]
+----
+spring.application.name=quartz
+# 基于数据库持久化数据
+spring.quartz.job-store-type=jdbc
+# 应用初始化后自动启动调度器
+spring.quartz.auto-startup=true
+# 是否每次都删除并重新创建表
+spring.quartz.jdbc.initialize-schema=never
+spring.datasource.driver-class-name=com.mysql.jdbc.Driver
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/spring-boot-quartz?useUnicode=true&characterEncoding=utf-8&rewriteBatchedStatements=TRUE
+spring.datasource.username=root
+spring.datasource.password=123
+server.port=8080
+----
+ 
+``spring.quartz.job-store-type``有两种类型：jdbc和memory，分别是基于数据库和内存存储数据。
+
+3、编写SchedulerServiceImpl
+
+代码同前。
+
+4、编写测试QuartzService
+
+代码同前。
+
+5、测试
+
+启动应用和查看数据库，可以看到调度任务成功持久化和执行。
+
+
+== 总结
+ 
+在低版本的spring boot中，集成quartz还是比较麻烦，除了要手动配置quartz外，还需要处理依赖注入的问题，而2.0已经提供了相应的启动器，有条件还是使用高版本吧！

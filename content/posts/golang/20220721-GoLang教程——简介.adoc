@@ -1,0 +1,194 @@
+---
+title: GoLang教程——初识Go语言
+slug: go-intro
+categories:
+  - GoLang
+tags:
+  - go
+description: Go语言是最近几年发展最快、最火热的编程语言之一，由 google 公司出品，其学习成本低、天生支持高并发、语法简洁高效、强大的标准库以及日益丰富的生态特细等特性使得其非常适合开发后端服务程序，并逐渐挑战着 Java 在服务端编程语言中的领导地位。Go 语言的前身被认为是一种名为 Limbo 的编程语言，它是由 Unix 之父、C语言之父肯·汤普逊和丹尼斯·里奇这两位计算机灵魂人物领衔并在一个名为 Plan 9 的的操作系统研究项目中发明的。
+date: 2022/07/21
+updated: 2022/07/21
+---
+
+= GoLang教程——简介
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+https://golang.google.cn/[Go] 语言是最近几年发展最快、最火热的编程语言之一，由 google 公司出品，其学习成本低、天生支持高并发、语法简洁高效、强大的标准库以及日益丰富的生态特细等特性使得其非常适合开发后端服务程序，并逐渐挑战着 Java 在服务端编程语言中的领导地位。
+
+== Go语言的诞生
+
+Go 语言的前身被认为是一种名为 Limbo 的编程语言，它是由 Unix 之父、C语言之父 肯·汤普逊(Ken Thompson) 和 丹尼斯·里奇(https://en.wikipedia.org/wiki/Dennis_Ritchie[Dennis Ritchie]) 这两位计算机灵魂人物领衔并在一个名为 Plan 9 的的操作系统研究项目中发明的。
+
+Go语言起源于2007年，当时还是身在 Google 的 Plan 9 项目原班人马在业余时间编写完成的，后来 Google 意识到了 Go 的巨大潜力并全力支持这个项目。Go 在2009年11月正式对外开放，并在2012年3月28日发布了第一个正式版本。
+
+Go 语言的主要开发者有 肯·汤普逊(http://en.wikipedia.org/wiki/Ken_Thompson[Ken Thompson])、罗布·派克(http://en.wikipedia.org/wiki/Rob_Pike[Rob Pike])、罗伯特·格里泽默(https://en.wikipedia.org/wiki/Robert_Griesemer[Robert Griesemer])等，每一位都是赫赫有名的大师级人物：
+
+* 肯·汤普逊：与丹尼斯·里奇在贝尔实验室发明了Unix操作系统，以及用于该系统的 C编程语言
+
+.Ken Thompson (left) and Dennis Ritchie (right)
+image::/images/go/ken-and-dennis.png[]
+
+* 罗布·派克：Unix小组成员，参与了Unix后续的Plan 9和Inferno操作系统，同时也是Limbo语言和Go语言共同的发明者
+* 罗伯特·格里泽默：协助制作Java的HotSpot编译器和Chrome浏览器的JavaScript引擎V8，Go语言的共同创造者
+
+== Go的特点
+
+[quota,Rob Pike]
+____
+Go 始于 2007 年 9 月，当时 Robert Griesemer、Ken Thompson 和我开始讨论一种新语言，以解决我们和 Google 的同事在日常工作中面临的工程挑战。
+
+当我们在 2009 年 11 月首次向公众发布 Go 时，我们不知道该语言是否会被广泛采用，或者它是否会影响未来的语言。回顾 2020 年，Go 在两个方面都取得了成功：它在 Google 内外广泛使用，其网络并发和软件工程方法对其他语言及其工具产生了显着影响。
+
+事实证明，Go 的影响范围比我们预期的要广泛得多。它在行业中的增长是惊人的，它为谷歌的许多项目提供了动力。
+____
+
+以上是 Go 语言的创造者之一的 Rob Pike 谈及 Go 发展情况的原话。如其所言，Go 正在以惊人的速度发展着，你可以在 https://golang.google.cn/solutions/#case-studies[这里] 详细了解正在使用 Go 的一些公司和使用案例。
+
+Go 解决了使用 C 语言所面临的种种难题，大大提高了开发效率，而性能却与 C 语言差不多。Go 语言的特性还包括：
+
+* Go 是一门编译执行的静态类型语言，具有强大的内置类型
+* Go 天生具备自动垃圾回收机制，无须担心内存泄漏导致的程序崩溃
+* Go 天生具备高并发，使用 goroutine 可以更简单的进行并发编程
+* Go 支持匿名函数和闭包，函数也是一种类型，这使得其具有脚本语言一样更强大的特性
+* Go 支持函数返回多个值
+* Go 提供灵活的面向对象的特性，使用复合代替继承，使用松散耦合的接口实现方式，更加灵活和强大
+* Go 支持泛型(1.18新特性)、反射、指针、错误处理等等语言级特性
+* Go 天生支持模块化编程
+
+== 配置Go开发环境
+
+要开始学习 Go，我们需要先安装 Go 开发环境。Go 目前的最新版本为 1.18，提供了泛型的支持。你可以在 https://golang.google.cn/dl/[官网] 下载安装包，然后一步步安装即可，安装过程不再详述。更多关于Go1.18版本发行说明可以看 https://golang.google.cn/doc/go1.18[这里]。
+
+安装完成后，在控制台查看 go 的版本信息：
+
+[source,shell]
+----
+$ go version
+go version go1.18.2 darwin/amd64
+----
+
+输出版本信息表示安装成功。
+
+在开发 Go 项目时，经常会使用到别人开发好的包，这就需要用到 Go 的包管理。由于国内访问受限，我们需要配置一个 `GO_PROXY` 环境变量来启用代理，这里我用的 `https://goproxy.io`：
+
+[source,shell]
+----
+export GOPROXY=https://goproxy.io,direct
+----
+
+如果需要指定 Go 的工作目录，如下载的包的存储位置、编译后的可执行文件的位置等，则还需要配置 `GOPATH` 环境变量，默认指向的是用户目录下的go文件夹，如我的在 `/Users/sam/go/`。
+
+现在，环境已经配置完成，我们可以来编写代码了。
+
+== Go命令行工具
+
+命令行输入 `go -h` 可以看到go的帮助文档：
+
+[source,shell]
+----
+~ go -h
+Go is a tool for managing Go source code.
+
+Usage:
+
+	go <command> [arguments]
+
+The commands are:
+
+	bug         start a bug report
+	build       compile packages and dependencies
+	clean       remove object files and cached files
+	doc         show documentation for package or symbol
+	env         print Go environment information
+	fix         update packages to use new APIs
+	fmt         gofmt (reformat) package sources
+	generate    generate Go files by processing source
+	get         add dependencies to current module and install them
+	install     compile and install packages and dependencies
+	list        list packages or modules
+	mod         module maintenance
+	work        workspace maintenance
+	run         compile and run Go program
+	test        test packages
+	tool        run specified go tool
+	version     print Go version
+	vet         report likely mistakes in packages
+
+……
+----
+
+对于每一个命令，可以输入 `go help 命令` 查看更详细的说明。几个比较常用的命令：
+
+* `go version`: 查看当前go版本信息
+* `go build`: 编译项目，后边可以指定要编译的文件，会在当前命令下输出编译后的可执行文件
+* `go clean`: 清除当前目录或工程生成的可执行文件和缓存文件
+* `go env`: 输出当前Go的环境信息
+* `go test`: 执行go的测试文件，测试文件名以 `_test` 结尾，如 "user_test.go"
+* `go get`: 从网络下载go的依赖库文件（第三方包）并安装到当前模块
+* `go run`: 直接运行go源文件，而不会生成可执行文件
+
+== 开发工具
+
+初学 Go 其实对开发工具并没有太高的要求，诸如 Vs Code、Sublime Text这样的文本工具再配上 Go 命令行工具就足够了。
+
+开发项目时，我们就需要专业的IDE了，当然还是首选 Jetbrains 公司出品的 https://www.jetbrains.com/go/[GoLand]，目前需要梯子才能访问。
+
+.GoLand IDE
+image::/images/go/goland.png[]
+
+== 第一个Go程序
+
+接下来，我们使用 Goland IDE来编写第一个 Go 程序。新建一个 go-guide 的工程，新建一个 01-hello 的文件夹，然后新建一个 `hello_world.go` 的文件，内容如下：
+
+[source,go]
+----
+package main // <1>
+
+import "fmt" // <2>
+
+func main() { // <3>
+	fmt.Println("Hello, world!") // <4>
+}
+----
+<1> 定义一个名为 `main` 的包
+<2> 导入标准库中的 `fmt` 包
+<3> 定义 `main` 方法
+<4> 使用 `fmt` 包的 `Println` 函数在控制台打印一句话
+
+与其他编程语言开篇一样，这里我们定义了一个函数来输出 `hello, world!`。通过程序可以看出：
+
+* Go中不需要像java一样每行以 `;` 结束，除非一行编写多个语句才需要用到它
+* Go中使用 `package` 关键字定义包，使用 `import` 关键字导入包，这点与java相同
+* Go中使用 `func` 关键字定义函数，`main` 方法为整个程序执行入口
+
+现在，我们可以直接使用 GoLand 运行这个程序，可以看到程序正确输出了结果。另外，我们可以在控制台进入源码所在目录，然后执行 `go guild hello_world.go` 来编译程序，然后在当前目录输出了一个 `hello_world` 执行文件，执行直接它可以看到正确输出了结果。当然，也可以使用 `go run hello_world.go` 直接运行而不用产生可执行文件：
+
+[source, shell]
+----
+$ go build hello_world.go
+$ ./hello_world
+Hello, world!
+$ go clean
+$ go build hello_world.go
+Hello, world!
+----
+
+== 总结
+
+Go是一门发展迅猛的编程语言，不仅是因为它出自大厂、计算机泰斗级大师之手，其诸多特性使得其正在被越来越多的开发者使用。本文简单介绍了 Go 的发展和一些特性，并从一个入门示例认识了 Go 程序的结构，接下来，我们再来一一深入学习。
+
+文本示例代码见 https://github.com/huzhouv/go-guide/tree/main/01-hello[github]。

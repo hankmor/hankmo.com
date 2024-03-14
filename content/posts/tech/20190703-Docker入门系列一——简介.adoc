@@ -1,0 +1,236 @@
+---
+title: Docker入门系列一——简介
+slug: docker-intro
+img: /images/thumbnail/attachment/20190704/398588b9d536475b9fa243fdcb7a7127.png
+categories:
+  - 中间组件
+tags:
+  - docker
+description: >-
+  容器化技术，是对Linux容器的一种封装，将程序打包为镜像文件，运行该文件创建容器，最终达到使用容器进行快速、简单、高效的开发、部署、运行软件程序的目的。相对于虚拟化技术，容器化技术有着更高的资源利用率、更高的性能、更低的开发和维护成本。
+date: 2019-07-03 16:05:24
+updated: 2019-07-10 15:13:36
+---
+
+= Docker入门系列一——简介
+:author: belonk.com
+:date: 2019-07-10
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器化,虚拟化,compose,swarm,集群,service,stack,image,container,machine,toolbox,版本
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: docker
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+== 简介
+ 
+容器化技术，是对Linux容器的一种封装，将程序打包为镜像文件，运行该文件创建容器，最终达到使用容器进行快速、简单、高效的开发、部署、运行软件程序的目的。相对于虚拟化技术 footnote:virtualization[虚拟化技术，通常是指计算元件在虚拟的基础上而不是真实的基础上运行。可以同时运行多个操作系统，而且每一个操作系统中都有多个程序运行，每一个操作系统都运行在一个虚拟的CPU或者是虚拟主机上；可以在相互独立的空间内运行而互不影响，从而显著提高计算机的工作效率。]，容器化技术有着更高的资源利用率、更高的性能、更低的开发和维护成本。
+
+容器化技术有以下特点：
+
+* 灵活性：绝大部分应用程序都可以使用容器化技术进行开发和运维，并且可及时部署和更新应用
+* 轻量级：共享宿主机内核资源，仅将程序和其依赖打包到镜像文件，运行于容器，占用资源少、性能高
+* 可移植：一次构建，到处运行；本地一次构建，然后可部署到各个平台或云端docker环境中，强移植性
+* 可扩展：可以自定义镜像文件，扩展功能满足不同需要
+* 可堆叠：您可以垂直和即时堆叠服务
+
+Docker就是一种容器化技术。
+
+Docker是一个开发、运输和运行应用程序的开放平台，**基于Linux内核的** cgroup footnote:cgroup[cgroups（又名控制组）是一个Linux内核功能，用于限制、监控和计算一组进程的资源使用情况，与“nice”命令和/etc/security/limits.conf等其他方式相比，cgroups更灵活，因为它们可以对（子）进程集（可能具有不同的系统用户）进行操作。] 技术实现，根据开源Apache 2.0许可证授权。使用Docker，您可以将应用程序与基础架构分离，以便快速交付软件，并且像管理应用程序一样管理基础架构。通过Docker快速发布、测试和部署代码，可以显着减少编码和部署程序的工作量，大大提高工作效率。
+
+.Docker场景示意图
+image::/images/attachment/20190704/259d3afbcad1486687a4c3aaee9fdafa.png[]
+
+=== 容器和虚拟机
+
+容器运行在宿主机并且和其他容器**共享宿主机内核资源**，**运行于独立的进程**，不消耗更多内存及CPU资源，这使得容器很轻量级。
+
+虚拟机也是运行在宿主机上，但是**虚拟机有自己完全独立的操作系统**，通过虚拟管理程序与宿主机交换资源，各个虚拟机共用宿主机的资源很少，导致虚拟机**占用资源高、资源利用率低**。
+ 
+.docker容器化技术结构
+image::/images/attachment/20190704/f339adac1761408eb3c5815cc7a51733.png[]
+
+.虚拟化技术结构
+image::/images/attachment/20190704/84b0bcc3924347c2818ac152a8ee6aed.png[]
+
+如图2所示，Docker下层是其基础服务层，上层是docker容器，多个容器之间相互隔离，docker共享宿主机(Host OS)的系统资源。
+
+而虚拟化技术结构如图3所示，底层是hypervisor footnote:[Hypervisor，是一种运行在物理服务器和操作系统之间的中间软件层,可允许多个操作系统和应用共享一套基础物理硬件，因此也可以看作是虚拟环境中的“元”操作系统，它可以协调访问服务器上的所有物理设备和虚拟机，也叫虚拟机监视器（Virtual Machine Monitor）。Hypervisor是所有虚拟化技术的核心。非中断地支持多工作负载迁移的能力是Hypervisor的基本功能。当服务器启动并执行Hypervisor时，它会给每一台虚拟机分配适量的内存、CPU、网络和磁盘，并加载所有虚拟机的客户操作系统。] 层，用来协调多个虚拟机(VM)和宿主机(物理机)的资源共享，上层的多个虚拟机都有单独的操作系统，他们之间不进行资源共享。
+
+不难看出，虚拟机提供给运行其上的程序过量的资源，资源利用不充分，性能低；而容器技术，很好的解决了这一问题。
+ 
+
+=== Docker可以做什么
+ 
+
+1、快速，一致地交付您的应用程序
+
+Docker允许开发人员使用提供应用程序和服务的本地容器在标准化环境中工作，从而简化了开发生命周期。容器非常适合持续集成和持续交付（CI / CD）工作流程。
+
+2、响应式部署和扩展
+
+Docker基于容器的平台允许高度可移植的工作负载。Docker容器可以在开发人员的本地笔记本电脑，数据中心的物理或虚拟机，云提供商或混合环境中运行。
+
+Docker的可移植性和轻量级特性还使得可以轻松地动态管理工作负载，按照业务需求即时扩展或拆除应用程序和服务。
+
+3、在同一硬件上运行更多工作负载
+
+Docker轻巧而快速。它为基于管理程序的虚拟机提供了一种可行且经济高效的替代方案，因此您可以使用更多的计算容量来实现业务目标。Docker非常适合高密度环境以及需要用更少资源完成更多工作的中小型应用部署，譬如现非常流行的微服务架构。
+ 
+
+== Docker核心概念
+ 
+
+Docker有三大核心概念，分别是镜像、容器和仓库。
+ 
+
+* **Docker镜像**
+ 
+
+Docker镜像(Image)，一个镜像是一个只读的用于创建docker容器(container)的指令模板。通常，镜像基于另一个镜像，并进行自定义。一般而言，通过定义``Dockerfile``文件来创建镜像。
+
+
+* **Docker容器**
+ 
+
+Docker容器(Container)，容器是镜像的运行实例，Docker的容器间是相互隔离的，可以将容器看做是简化版的Linux系统和运行在其中的应用打包而成的沙箱。您可以使用Docker API或CLI创建、启动、停止、移动或删除容器，也可以将容器连接到一个或多个网络，附加数据卷，甚至可以根据其当前状态创建新镜像。
+
+
+* **Docker仓库**
+ 
+
+Docker仓库指的是镜像文件存储的地方。Docker还有一个镜像注册表(Registry)的概念，它是存放镜像仓库的地方，有许多的仓库存放于其中。仓库有公共仓库和私有仓库之分，最大的公共仓库是Docker hub，用户也可以搭建自有的私有镜像仓库。用户创建了镜像过后，通过push命令将其推送到镜像仓库中，使用时再从镜像仓库pull到本地运行，这设计类似于Git的代码仓库。
+
+
+== Docker结构
+ 
+.docker的整体结构
+image::/images/attachment/20190704/93f504a25cf64349be825cda2531bf7c.png[]
+
+Docker整体结构如图4所示。一般而言，我们所说的docker，均指docker引擎(Docker Engine)。
+
+=== Docker引擎
+
+Docker Engine是一个客户端 - 服务器架构的应用程序，我们常说的docker指的就是docker engine，它包含以下主要组件：
+
+* **服务器**，是一种长时间运行的程序，称为守护进程（ ``dockerd``命令）
+* **REST API**，程序与守护进程通信的接口
+* **CLI**，命令行界面，即docker客户端（``docker``命令），负责接收用户指令并通过REST API请求守护程序，完成与守护进程交互
+
+=== Docker架构
+
+.docker架构
+image::/images/attachment/20190704/cbd50828e58e481ea7b4ef7feeaf1c44.png[]
+
+Docker架构如图5所示，它采用的是**客户端 - 服务端**架构。整体上看，Docker分为客户端(Client)、Docker守护程序(Docker daemon)和注册表(Registry)三大部分。
+
+Docker客户端(Client)与Docker守护进程(Docker daemon)通信，后者负责构建、运行和分发Docker容器。Docker客户端和守护程序可以在同一系统上运行，也可以将Docker客户端连接到远程Docker守护程序。Docker客户端和守护程序使用REST API，通过UNIX套接字或网络接口进行通信。另外，Docker还提供了注册表，它用来管理整个docker平台的镜像文件。
+ 
+
+* Docker守护进程
+ 
+
+Docker守护程序（dockerd）侦听Docker API请求并管理Docker对象，如镜像，容器，网络和卷，守护程序还可以与其他守护程序通信以管理Docker服务。
+ 
+
+* Docker客户端
+
+Docker client（docker）是用户与Docker交互的主要方式。当您使用docker命令(如``docker run``)时，客户端会将这些命令发送给Docker守护程序（dockerd），然后由其执行这些命令。Docker客户端与dockerd使用Docker API交互，Docker客户端可以与多个守护进程通信。
+ 
+
+* Docker注册表
+ 
+Docker注册表(Registry)存储和管理Docker镜像，也可以称作镜像仓库。Docker Hub是一个公共注册中心，地址为：  https://hub.docker.com/[https://hub.docker.com/] ，用户可以注册并在上边发布和管理自己的镜像，Docker默认在Docker Hub上查找镜像，用户也可以搭建自己的私有注册表来管理镜像，有点类似于maven公共仓库和私有仓库。
+
+例如，使用``docker pull``或``docker run``命令时，将从配置的注册表中``pull``所需的镜像。使用``docker push``命令时，创建的本地镜像将被推送到配置的注册表中。
+ 
+
+== Docker版本
+ 
+
+Docker分为社区版(Docker CE)和企业版(Docker EE)：
+
+* 社区版：免费，Docker Community Edition（CE）非常适合希望开始使用Docker并尝试使用基于容器的应用程序的开发人员和小型团队。 Docker CE有三种类型的更新渠道：stable，test和nightly： Stable提供稳定版本；test处于测试中的预发布版本；Nightly最新开发版，基于master分支拉取，每天更新。
+* 企业版：收费，Docker Enterprise Edition(EE) 提供docker的整套解决方案，提供企业级的容器化服务，使用成本更低。
+
+Docker发布的版本号按照``YY.mm``的格式定义，目前最新稳定版版本号为``18.09``，后续文章都是基于该版本。不同的版本存在这特殊差异，如nightly的版本``0.0.0-YYYYmmddHHMMSS-abcdefabcdef``，test版本的``test-YY.mm``，stable版本的``stable-YY.mm``等。
+ 
+
+== Docker的基础技术
+ 
+
+Docker是用``Go``语言编写的，它利用Linux内核的几个功能来实现其功能。
+ 
+
+=== 命名空间
+ 
+
+Docker使用一种被称为``namespaces``技术来提供隔离的工作空间，称之为容器（container）。运行容器时，Docker会为该容器创建一组名称空间，这些命名空间提供了隔离层，容器各方面的功能都在一个单独的命名空间中运行，其访问权限仅限于该命名空间。
+
+Docker Engine在Linux上使用以下命名空间：
+
+* pid命名空间：进程隔离（PID：进程ID）。
+* net命名空间：管理网络接口（NET：网络）。
+* ipc命名空间：管理访问IPC资源（IPC：进程间通信）。
+* mnt命名空间：管理文件系统挂载点（MNT：挂载点）。
+* uts命名空间：隔离内核和版本标识符。（UTS：Unix分时系统）。
+
+ 
+
+=== 控制组
+ 
+
+Linux上的Docker Engine还依赖于另一种称为控制组 （cgroups）的技术，``cgroup``将应用程序限制为特定的资源集，并允许Docker Engine将可用的硬件资源共享给容器，并可选择强制执行限制和约束。例如，您可以限制特定容器的可用内存。
+ 
+
+=== Union文件系统
+ 
+
+Union File System(UnionFS)，是通过创建层来操作的文件系统，这使得这些层非常轻量和快速。Docker Engine使用UnionFS为容器提供构建块，Docker Engine可以使用多种UnionFS变体，包括AUFS，btrfs，vfs和DeviceMapper。
+ 
+
+=== 容器格式
+ 
+
+Docker Engine将命名空间、控制组和UnionFS组合成一个包装器，称之为容器格式(container format)。默认容器格式是``libcontainer``。将来，Docker可以通过与BSD Jails或Solaris Zones等技术集成来支持其他容器格式。
+ 
+
+== Docker其他概念
+ 
+
+有必要了解一下Docker包含的一些其他概念。
+
+**Docker Services**
+
+服务，作为docker集群的重要元素，服务允许您跨多个Docker守护程序扩展容器，这些守护程序一起组成有多个manager和worker的swarm集群，称为swarm的“Dockerized”集群（swarm mode），集群的每一个成员都是一个docker守护程序，多个守护程序同样通过Docker API来进行交互。此外，集群的参数可以进行配置，例如在任何给定时间必须可用的服务的副本数。默认情况下，服务在所有工作节点之间进行负载均衡。
+
+**Docker Swarm**
+
+嵌入Docker Engine的管理docker集群的工具，由SwarmKit工具来进行构建。service能够组件起swarm集群，这离不开名为SwarmKit的工具， https://github.com/docker/swarmkit/[SwarmKit]是一个用于编排任何规模的分布式系统的工具包，它包括用于节点发现、 raft算法支持 footnote:[Raft算法，https://raft.github.io/Raft是一种更为简单方便易于理解的分布式算法，主要解决了分布式中的一致性问题。相比传统的Paxos算法，Raft将大量的计算问题分解成为了一些简单的相对独立的子问题。]、任务调度等能力。
+
+**Docker Machine**
+
+由于Docker是基于Linux的``cgroup``技术实现，在其他平台要安装和使用Docker则需要使用虚拟机。Docker Machine是一个工具，可让您在虚拟主机上安装Docker Engine，并使用docker-machine命令管理主机。您可以使用Docker Machine在本地Mac或Windows机器上、公司网络上、数据中心或Azure、AWS或Digital Ocean等云提供商上创建Docker主机。
+
+**Docker Compose**
+
+Compose是一个用于定义和运行多容器Docker应用程序的工具，解决本地docker容器编排问题。使用Compose，您可以使用YAML文件来配置应用程序的服务(docker-compose.yml)。然后，使用单个命令，您可以从配置中创建并启动所有服务。
+
+**Docker Toolbox**
+
+Docker Toolbox是一个安装程序，用于在较旧的Mac和Windows系统上快速设置和启动Docker环境，这些系统不符合新的Docker Desktop for Mac和Docker Desktop for Windows应用程序的要求。
+
+**Stack**
+
+堆栈，堆栈是一组相互关联的服务，它们共享依赖关系，并且可以组合在一起。单个堆栈能够定义和协调整个应用程序的功能（尽管非常复杂的应用程序可能希望使用多个堆栈）。

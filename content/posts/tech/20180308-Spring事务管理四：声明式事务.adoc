@@ -1,0 +1,310 @@
+---
+title: Spring事务管理四：声明式事务
+slug: spring-declarative-transaction
+img: /images/thumbnail/attachment/20180307/cfa6a59be00d4132826914abdf609b75.jpg
+categories:
+  - Spring
+tags:
+  - spring
+  - 事务
+description: >-
+  可以从传播机制、隔离级别、是否只读、事务超时、回滚规则等方面来描述事务。Spring提供了xml和注解两者事务声明方式：采用xml：需要使用tx命名空间，好处是在xml中完成事务定义，代码中不需要做任何事务相关的编码；但是，事务控制的方法名称需要遵循一定的规则，一遍Spring能够匹配到并为其加入事务通知。采用注解：xml仅需一行配置，其他的事务控制都可以通过编码加上注解实现，而且对方法名称没有要求；如果整个应用不需要事务控制，取消xml配置即可。
+date: 2018-03-08 17:34:51
+updated: 2018-05-29 12:25:31
+---
+
+= Spring事务管理四：声明式事务
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring,transaction,事务,transactional,注解
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: spring,事务
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+编程式事务虽然可以精确控制事务，但是事务控制代码必须侵入业务逻辑代码中，耦合度高，后期难以维护。一般而言，不需要精确控制事务，所以采用的更多的是Spring的声明式事务。
+
+Spring声明式事务基于AOP实现，有两种事务定义方式：**xml配置**和**注解定义**，前者使用**tx命名空间**，后者使用**@Transactional**注解。
+
+
+== 事务属性
+ 
+在定义事务之前，需要了解一些事务的参数，正如前边TransactionDefinition类定义的，包括**传播机制、隔离级别、是否只读、事务超时**等，还包括**回滚规则**定义等参数。
+
+
+=== 传播机制
+ 
+传播机制（propagation）定义了**客户端与被调用方法之间的事务界限**。简单而言，就是一个方法调用其他一个或多个方法来实现业务逻辑时，这些方法间的事务如何进行传播，这就由传播机制来决定。
+
+Spring提供了7中传播机制，如下表所示：
+
+.事务的7种传播机制
+[cols="1,3"]
+|====
+|**传播行为**|**说明**
+
+|REQUIRED|业务方法**需要在一个事务中运行**。如果方法运行时，已经处在一个事务中，那么加入到该事务，否则为自己创建一个新的事务
+
+|NOT_SUPPORTED|声明方法**不需要事务**。如果方法没有关联到一个事务，容器不会为它开启事务。如果方法在一个事务中被调用，该事务会被挂起，在方法调用结束后，原先的事务便会恢复执行
+
+|REQUIRES_NEW|属性表明不管是否存在事务，业务方法**总会为自己发起一个新的事务**。如果方法已经运行在一个事务中，则原有事务会被挂起，新的事务会被创建，直到方法执行结束，新事务才算结束，原先的事务才会恢复执行
+
+|MANDATORY|该属性指定业务方法**只能在一个已经存在的事务中执行**，业务方法不能发起自己的事务。如果业务方法在没有事务的环境下调用，容器就会抛出异常。
+
+|SUPPORTS|这一事务属性表明，**方法可以受事务控制，也可以不**。如果业务方法在某个事务范围内被调用，则方法成为该事务的一部分。如果业务方法在事务范围外被调用，则方法在没有事务的环境下执行
+
+|NEVER|指定业务方法**绝对不能在事务范围内执行**。如果业务方法在某个事务中执行，容器会抛出异常，只有业务方法没有关联到任何事务，才能正常执行
+
+|NESTED|如果一个活动的事务存在，则运行在一个嵌套的事务中. 如果没有活动事务, 则按REQUIRED属性执行.它使用了一个单独的事务， 这个事务拥有多个可以回滚的保存点。内部事务的回滚不会对外部事务造成影响。它只对DataSourceTransactionManager事务管理器起效
+
+|====
+ 
+注意REQUIRES_NEW和NESTED两者的区别；
+
+* PROPAGATION_REQUIRES_NEW启动一个新的, 不依赖于环境的 "内部" 事务. 这个事务将被完全 commited 或 rolled back 而不依赖于外部事务, 它拥有自己的隔离范围, 自己的锁, 等等. 当内部事务开始执行时, 外部事务将被挂起, 内务事务结束时, 外部事务将继续执行.
+* PROPAGATION_NESTED 开始一个 "嵌套的" 事务, 它是已经存在事务的一个真正的子事务. 潜套事务开始执行时, 它将取得一个 savepoint. 如果这个嵌套事务失败, 我们将回滚到此 savepoint. 潜套事务是外部事务的一部分, 只有外部事务结束后它才会被提交.
+
+由此可见, **PROPAGATION_REQUIRES_NEW和PROPAGATION_NESTED的最大区别在于, PROPAGATION_REQUIRES_NEW完全是一个新的事务, 而PROPAGATION_NESTED则是外部事务的子事务, 如果外部事务commit, 潜套事务也会被commit, 这个规则同样适用于rollback.**
+
+Spring的这7中传播机制在枚举类Propagation中进行了定义，其中最终也是调用的TransactionDefinition接口中的常量定义。
+
+
+=== 隔离级别
+ 
+隔离级别(isolation level)：定义了**其他并发事务对当前事务的影响程度，**或者说是当前事务对事务数据的自私程度。
+
+在了解隔离级别定义之前，首先需要了解事务并发带来的问题，包括如下几个方面：
+
+* 第一类丢失更新：两个事务更新相同数据，如果第一个事务提交，另一个事务回滚，第一个事务的更新会被回滚。
+* **脏读(dirty reads)**：第二个事务查询到第一个事务未提交的更新数据，第二个事务根据该数据执行，但第一个事务回滚，第二个事务操作脏数据。
+* **幻读(phantom read)**：一个事务查询到了另一个事务已经提交的新数据，导致多次查询数据不一致。
+* **不可重复读(nonrepeatable read)**：一个事务查询到另一个事务已经修改的数据，导致多次查询数据不一致。
+* 第二类丢失更新：多个事务同时读取相同数据，并完成各自的事务提交，导致最后一个事务提交会覆盖前面所有事务对数据的改变。
+
+理想情况下，事务是完全隔离的，从而防止上述问题产生，但是这样通常会涉及数据库锁定(锁表、行)数据，造成性能问题。通常，并不是所有应用都需要完全的隔离事务。事务隔离级别提供了事务隔离上的灵活性，从而让开发人员进行灵活的取舍。Spring提供了5中事务隔离级别：
+
+.事务的隔离级别
+[cols="1,3"]
+|====
+| **隔离级别**| **含义**
+
+|DEFAULT|使用后端数据库默认的隔离级别(spring中的的选择项)
+
+|READ_UNCOMMITED|允许你读取还未提交的改变了的数据。可能导致脏、幻、不可重复读
+
+|READ_COMMITTED|允许在并发事务已经提交后读取。可防止脏读，但幻读和不可重复读仍可发生
+
+|REPEATABLE_READ|对相同字段的多次读取是一致的，除非数据被事务本身改变。可防止脏、不可重复读，但幻读仍可能发生。
+
+|SERIALIZABLE|完全服从ACID的隔离级别，确保不发生脏、幻、不可重复读。这在所有的隔离级别中是最慢的，它是典型的通过完全锁定在事务中涉及的数据表来完成的。
+
+|====
+ 
+这5中隔离级别中，READ_UNCOMMITED是最高效的但也是隔离程度最低的；而SERIALIZABLE则是效率最低但是隔离程度最高的。
+Spring的这5中隔离级别在枚举类Isolation中进行了定义，其中最终也是调用的TransactionDefinition接口中的常量定义。
+
+
+=== 是否只读
+ 
+如果事务只对后端数据进行读操作，那么如果将事务设置为只读事务，可以利用后端数据库优化措施进行适当优化。
+
+只读事务”并不是一个强制选项，它只是一个“暗示”，提示数据库驱动程序和数据库系统，这个事务并不包含更改数据的操作，那么JDBC驱动程序和数据库就有可能根据这种情况对该事务进行一些特定的优化，比方说不安排相应的数据库锁，以减轻事务对数据库的压力，毕竟事务也是要消耗数据库的资源的。但是你非要在“只读事务”里面修改数据，也并非不可以，只不过对于数据一致性的保护不像“读写事务”那样保险而已。
+
+因此，“只读事务”仅仅是一个性能优化的推荐配置而已，并非强制你要这样做不可。
+
+只读事务实在开启事务时有数据库实施的，所以只对具备启动新事务的传播机制有效，如REQUIRED、REQUIRES_NEW、NESTED。
+
+
+=== 超时时间
+ 
+超时时间定义了**当事务执行时间超过一定时间后自动回滚**。
+
+超时机制会在事务开启时启动，所以只对具备启动新事务的传播机制有效，如REQUIRED、REQUIRES_NEW、NESTED。
+
+=== 回滚规则
+ 
+回滚规则定义了事务在遇到什么异常进行回滚、什么异常不进行回滚。**默认情况下，事务在遇到运行时异常(RuntimeException)才会回滚**，但是我们可以在Spring中进行定义来改变其默认行为。Spring在xml文件配置事务时提供了rollback-for和no-rollback-for参数，来指定回滚和不会滚的异常名称，该名称对应的类为Throwable的子类。
+
+我们总体了解了事务的各个属性以及对事务的影响，接下来，我们看看在Spring中如何进行声明式事务配置。
+
+
+== XML配置事务
+
+要在XML中使用AOP元素来配置事务，则需要使用Spring提供的tx命名空间，可以极大的简化事务配置。tx命名空间配置如下：
+
+[source,xml]
+----
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+     http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+     http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.2.xsd
+     http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+----
+
+除了tx命名空间，还需要定义aop命名空间，用来配置aop相关的元素，具体配置如下：
+
+[source,xml]
+----
+<!--JDBC事务管理器-->
+<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    <property name="dataSource" ref="dataSource"/>
+</bean>
+<!-- 声明式事务配置 -->
+<aop:config proxy-target-class="true">
+    <aop:advisor advice-ref="txAdvice"
+                 pointcut="within(cn.bookingsmart..impl.*Impl) &amp;&amp; execution(* *(..))"/>
+</aop:config>
+<!-- 通用事务通知 -->
+<tx:advice id="txAdvice" transaction-manager="transactionManager">
+    <tx:attributes>
+        <tx:method name="get*" read-only="true"/>
+        <tx:method name="find*" read-only="true"/>
+        <tx:method name="query*" read-only="true"/>
+        <tx:method name="list*" read-only="true"/>
+        <tx:method name="do*" propagation="REQUIRED" rollback-for="Exception"/>
+        <tx:method name="save*" propagation="REQUIRED" rollback-for="Exception"/>
+        <tx:method name="insert*" propagation="REQUIRED" rollback-for="Exception"/>
+        <tx:method name="update*" propagation="REQUIRED" rollback-for="Exception"/>
+        <tx:method name="delete*" propagation="REQUIRED" rollback-for="Exception"/>
+    </tx:attributes>
+</tx:advice>
+----
+ 
+如上所示，在定义通知(tx:advice)时需要依赖事务管理器。
+
+tx:method的name属性定义了受事务控制的方法名称，可以使用通配符“*”来进行模糊匹配；read-only标识了该方法的事务是否是只读事务；propagation定义事务的传播机制；rollback-for定义那些异常进行回滚；另外还有timeout、no-rollback-for、isolation等属性配置，分别对应事务的超时时间、不会滚异常、隔离级别等。
+
+aop:config标签进行了aop相关的配置，aop:advisor引用了通知，并定义了事务作用的切点，其采用AspectJ的切入点表达式。关于AOP的配置这里不再赘述。
+
+
+== 使用注解配置事务
+ 
+除了XML进行声明式事务配置外，还可以采用@Transactional注解来进行事务配置，该注解定义如下：
+
+
+[source,java]
+----
+public @interface Transactional {
+	String value() default "";
+    // 事务传播机制
+	Propagation propagation() default Propagation.REQUIRED;
+    // 事务的隔离级别
+	Isolation isolation() default Isolation.DEFAULT;
+    // 事务超时时间
+	int timeout() default TransactionDefinition.TIMEOUT_DEFAULT;
+    // 事务是否只读
+	boolean readOnly() default false;
+    // 定义使事务回滚的异常类
+	Class<? extends Throwable>[] rollbackFor() default {};
+    // 定义使事务回滚的异常类名称
+	String[] rollbackForClassName() default {};
+    // 定义不使异常回滚的异常类
+	Class<? extends Throwable>[] noRollbackFor() default {};
+    // 定义不使异常回滚的异常类名称
+	String[] noRollbackForClassName() default {};
+}
+----
+ 
+要开启注解配置事务，只需要在spring配置文件中增加一行配置即可：
+
+[source,xml]
+----
+<!--开启注解事务支持-->
+<tx:annotation-driven/>
+----
+ 
+该配置支持参数配置事务管理器：
+
+[source,xml]
+----
+<tx:annotation-driven transaction-manager="transactionManager"/>
+----
+
+这个配置告诉Spring，检查所管理的配置了@Transactional注解的bean，并为它们添加事务通知。
+
+@Transactional注解可以用于类和方法上，用于类上表示事务定义应用于该类的所有方法，用于方法则表示单独定义该方法的事务控制属性。
+
+使用示例：
+
+[source,java]
+----
+// 方法受事务控制，而且抛出RuntimeException，事务回滚，无法插入数据
+@Transactional(propagation = Propagation.REQUIRED)
+@Override
+public void tryInsert(User user) throws Exception {
+    userMapper.insert(user);
+    // 模拟抛出异常，事务回滚
+    throw new NullPointerException("hahaha");
+}
+----
+
+[source,java]
+----
+// 方法不受事务控制，可以正常插入数据
+@Override
+public void tryInsert(User user) throws Exception {
+    userMapper.insert(user);
+    // 模拟抛出异常，事务回滚
+    throw new Exception("hahaha");
+}
+----
+
+[source,java]
+----
+// 方法受事务控制，但是抛出的是Exception，默认不会滚，可以正常插入数据
+@Transactional(propagation = Propagation.REQUIRED)
+@Override
+public void tryInsert(User user) throws Exception {
+    userMapper.insert(user);
+    // 模拟抛出异常，事务回滚
+    throw new Exception("hahaha");
+}
+----
+
+用于类上：
+
+[source,java]
+----
+@Transactional(propagation = Propagation.SUPPORTS, readOnly = true) // <1>
+@Service
+public class UserServiceImpl implements UserService {
+
+}
+----
+<1> 告诉Spring，UserServiceImpl这个bean下的所有方法都可以支持事务，传播机制为SUPPORTS，默认都是只读事务。当然，如果方法上定义了事务，会采用方法的事务设置，遵循就近原则。
+
+在查找事务相关问题时，将Spring日志级别设定为DEBUG，就可以清楚的看到事务相关的日志信息，便于调试问题：
+
+----
+2018-03-08 17:22:13.081 DEBUG - [org.springframework.jdbc.datasource.DataSourceTransactionManager] Creating new transaction with name [cn.bookingsmart.service.impl.UserServiceImpl.tryInsert]: PROPAGATION_REQUIRED,ISOLATION_DEFAULT; ''
+…… 
+[org.springframework.jdbc.datasource.DataSourceTransactionManager] Initiating transaction rollback
+ 2018-03-08 17:22:16.649 DEBUG - [org.springframework.jdbc.datasource.DataSourceTransactionManager] Rolling back JDBC transaction on Connection [com.alibaba.druid.proxy.jdbc.ConnectionProxyImpl@33bb65bd]
+ 2018-03-08 17:22:16.652 DEBUG - [org.mybatis.spring.SqlSessionUtils] Transaction synchronization rolling back SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@44d29b15]
+ 2018-03-08 17:22:16.652 DEBUG - [org.mybatis.spring.SqlSessionUtils] Transaction synchronization closing SqlSession
+----
+
+
+== 总结
+ 
+可以从传播机制、隔离级别、是否只读、事务超时、回滚规则等方面来描述事务。Spring提供了xml和注解两者事务声明方式：
+
+采用xml：需要使用tx命名空间，好处是在xml中完成事务定义，代码中不需要做任何事务相关的编码；但是，事务控制的方法名称需要遵循一定的规则，一遍Spring能够匹配到并为其加入事务通知。
+
+采用注解：xml仅需一行配置，其他的事务控制都可以通过编码加上注解实现，而且对方法名称没有要求；如果整个应用不需要事务控制，取消xml配置即可。

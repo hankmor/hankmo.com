@@ -1,0 +1,97 @@
+---
+title: IntelliJ IDEA 2020.3.x激活教程
+slug: intellij-idea-2020.2-crack
+date: 2021/3/27
+img: /images/thumbnail/image-2021-03-28-00-03-30-260.png
+categories:
+  - 工具软件
+tags:
+  - idea
+  - 激活
+description: IntelliJ IDEA作为Java界IDE神一般的存在，深受广大java开发者的喜欢。目前官方最新版本为2020.3，本文介绍如何对其进行激活。
+updated:
+---
+
+= IntelliJ IDEA 2020.3.x激活
+:key_word: idea
+:author: belonk.com
+:email: belonk@126.com
+:date: 2021/3/27
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+IntelliJ IDEA作为Java界IDE神一般的存在，深受广大java开发者的喜欢。目前官方最新版本为2020.3，本文介绍如何对其进行激活。
+
+实际上，IDEA 2020.3版本的激活方式跟之前的2019版本相比并没有太大区别，基本思路都是一样的，2019版本的IDEA激活方法可以看这几篇文章：
+
+* <</2020/02/14/intellij-idea-2019.3-crack#, IntelliJ IDEA 2019.3.3激活>>
+* <</2019/10/12/intellij-idea-2019.2-crack#, IntelliJ IDEA 2019.2.x激活>>
+
+== 详细激活步骤
+
+具体的激活步骤如下：
+
+1、首先，从官方网站下载IDEA的2020.3版本安装包，下载地址为： https://www.jetbrains.com/idea/download[]
+
+2、然后，安装IDEA，没什么好说的，一步一步安装就对了
+
+====
+PS: 什么？你居然不会安装？我觉得你还是趁早换个职业吧😅
+====
+
+3、安装完成过后，启动IDEA，先选择试用软件，如下图所示：
+
+image::/images/attachment/tools/image-2021-03-27-23-25-12-802.png[]
+
+选择“Evaluate for free”过后，确定即可。
+
+4、下载IDEA**激活包**，下载地址在文章最后。下载过后解压，得到``lib``目录下的``BetterIntelliJ-1.16.jar``文件，就是激活包，将其拷贝到任意位置（建议英文路径中）。比如我的路径为：
+
+----
+D:\install\idea\BetterIntelliJ-1.16.jar
+----
+
+还有一个重要的文件：``激活补丁key.txt``，里边存储了激活码，后边激活会用到。
+
+5、然后打开软件，点击菜单栏的“help”菜单，点击"**Edit Custom VM Options ...**"菜单，来自定义VM参数，如下图所示：
+
+image::/images/attachment/tools/image-2021-03-27-23-30-35-084.png[]
+
+在打开的窗口中，增加如下参数：
+
+----
+-javaagent:D:\install\idea\BetterIntelliJ-1.16.jar
+----
+
+如下图所示：
+
+image::/images/attachment/tools/image-2021-03-27-23-32-12-508.png[]
+
+6、重启IDEA，然后点击``help``菜单的``Register...``项，填入第4布中``激活补丁key.txt``文件中的激活码，激活即可，如图所示：
+
+image::/images/attachment/tools/image-2021-03-27-23-47-57-074.png[]
+
+== 激活成功
+
+ok，您的IDEA已经成功激活到2100年，赶紧操练起来吧！
+
+image::/images/attachment/tools/1616857618(1).jpg[]
+
+== 说明
+
+为了使激活长期有效，注意不要更改激活的jar包文件所在的目录路径和文件名，另外请关闭IDEA的自动更新！
+
+IDEA激活包下载地址：
+
+链接： https://pan.baidu.com/s/1LVsi5Dvj2o9L8IuTfekEAQ[] 提取码：8k1y
+
+**此项目仅供交流学习用，请勿用于商业用途，若资金允许，请购买正版！**

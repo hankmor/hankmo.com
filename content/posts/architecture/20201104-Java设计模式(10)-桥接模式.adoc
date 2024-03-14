@@ -1,0 +1,272 @@
+---
+title: Java设计模式(10)-桥接模式
+slug: java-bridge-pattern
+date: 2020/11/04
+img: /images/thumbnail/jinmen.jpg
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 桥接模式
+description: >-
+  桥接模式（Bridge
+  Pattern）的定义如下：将抽象部分与它的实现部分分离，使他们都可以独立变化。抽象化角色、实现化角色将桥接模式结构分为两个部分：抽象部分由抽象化角色作为父类，实现部分由实现化角色为父类。然后抽象化角色依赖了实现化角色，中间的依赖线类似一座桥梁，很形象的说明了桥接模式的命名由来。
+updated:
+---
+
+[[designpattern-bridge]]
+= Java设计模式(10)-桥接模式
+:key_word:
+:author: belonk.com
+:email: belonk@126.com
+:date: 2020/11/04
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+有这样一个需求：手机都有发短信、打电话等功能，而且手机有各种各样的样式，比如翻盖手机、直板手机、滑盖手机、折叠手机等等，同时，手机还有各种各样的品牌，苹果、洛基亚、华为、小米、VIVO等等，我们应该如何来设计类之间的关系，并保持良好的可扩展性呢？
+
+== 糟糕的继承设计方式
+
+通常，我们会使用简单的继承的方式来设计类，因为继承的方式我们最容易想到，继承设计的类图如下：
+
+.继承的方式设计类图
+image::/images/attachment/designpattern/bridge-pattern1.png[]
+
+上边的类设计，从手机样式的维度出发，将手机划分为翻盖手机、直板手机，他们继承自"手机"父类，下边的各个品牌在分别按照手机样式分类，继承自样式父类。这样的设计，表面上能够解决问题，但是带来的非常大的缺点：
+
+. 类非常多，每一种手机样式下，所有的品牌都需要建立这种样式的类，我们将这种现象称为类爆炸；
+. 难以扩展和维护，增加一种手机样式，所有的品牌都需要在这种样式下添加新的类，如果增加一种品牌，那么原有的所有样式下都需要增加新品牌的类，这违反了单一职责原则 footnote:principles[<</2020/05/27/seven-principles-for-software-design#, 面向对象设计模式遵循的原则>>] 和开闭原则 footnote:principles[]
+
+前边 <</2020/05/27/seven-principles-for-software-design#, 面向对象设计模式遵循的原则>> 一文时我们说过，继承最主要的缺点在于其破坏了类的封装性，父类的修改也会导致子类的变化，子类和父类的依赖关系非常紧密。因此，在考虑使用继承关系时，首先要明确类之间是否是明确的``is a``的关系，而不是``like a``，并遵循里式替换原则，另外，合成复用原则也指出：设计类时优先考虑使用合聚合和组用而不是继承。
+
+桥接模式能够很好的解决像这样存在多个维度变化对象（比如这里的手机样式和品牌）的设计问题。
+
+== 桥接模式介绍
+
+=== 桥接模式简介
+
+桥接模式（Bridge Pattern）的定义如下：将抽象部分与它的实现部分分离，使他们都可以独立变化。
+
+桥接模式包括如下的几种角色：
+
+* 抽象化（Abstraction）角色：抽象类，并包含一个对实现化对象的引用
+* 扩展抽象化（Refined Abstraction）角色：抽象化角色的子类，实现父类中的业务方法，并通过组合关系调用实现化角色中的业务方法
+* 实现化（Implementor）角色：定义实现化角色的接口，供扩展抽象化角色调用
+* 具体实现化（Concrete Implementor）角色：实现化角色接口的具体实现
+
+几种觉色之间的关系如下图所示：
+
+.桥接模式的结构类图
+image::/images/attachment/designpattern/bridge-pattern2.png[]
+
+抽象化角色、实现化角色将桥接模式结构分为两个部分：抽象部分由抽象化角色作为父类，实现部分由实现化角色为父类。然后抽象化角色依赖了实现化角色，中间的依赖线类似一座桥梁，很形象的说明了桥接模式的命名由来。从上边的类图可以看出，桥接模式是合成复用原则的体现，通过抽象化角色聚合实现化角色，将双方联系起来，这样既便于扩展，又能减少类的数量。
+
+桥接模式的优点：
+
+* 多个变化维度拆分为抽象和实现两个部分，都可以独立变化，程序易扩展
+* 遵循开闭原则，添加新类时，仅需要修改客户端调用代码，而其他代码不需要变化，对扩展开放对修改关闭
+* 遵循合成复用原则
+
+注意，桥接模式定义中说的抽象与实现分离，并不是说将抽象类和其派生子类分离，这样做并无意义。这只是告诉我们在设计类时，首先需要明确可能变化的维度，将多个变化的维度都单独抽取出来，使得他们都可以独立的扩展。
+
+比如前边的设计样式和手机品牌，这两个维度都会变化，可以将其抽象出来，手机的基本功能如打电话、发短信可以放到品牌中来实现，它就是作为实现部分，而手机样式作为抽象部分实现手机样式的不同功能。具体类图如下；
+
+.桥接模式解决手机设计问题
+image::/images/attachment/designpattern/bridge-pattern3.png[]
+
+现在，我们编码来实现上述手机问题。
+
+=== 桥接模式示例代码
+
+1、首先，抽象手机品牌接口``PhoneBrand``，它作为实现化角色(Implementor):
+
+.实现化角色
+[source,java]
+----
+// 手机品牌接口
+interface PhoneBrand {
+	// 获取品牌名称
+	String getName();
+
+	// 打电话
+	default String call() {
+		return "用" + this.getName() + "手机打电话";
+	}
+}
+----
+
+这里只写了两个功能：获取手机品牌命令和打电话。
+
+2、其次，定义手机抽象类，具有手机的基本功能：
+
+.抽象化角色
+[source,java]
+----
+// 基础抽象类
+abstract class Phone {
+	// 手机类型名称
+	abstract String typeName();
+
+	// 手机的打电话功能
+	abstract String call();
+
+	// 获取手机品牌
+	abstract PhoneBrand getBrand();
+}
+----
+
+它作为手机的抽象化(Abstraction)角色，依赖了手机品牌类``PhoneBrand``。
+
+3、然后，手机品牌具体实现：
+
+.具体实现化角色
+[source,java]
+----
+// 华为手机
+class HuaweiPhone implements PhoneBrand {
+	@Override
+	public String getName() {
+		return "华为";
+	}
+}
+
+// 小米
+class XiaomiPhone implements PhoneBrand {
+	@Override
+	public String getName() {
+		return "小米";
+	}
+}
+----
+
+手机样式具体实现：
+
+.具体抽象化角色
+[source,java]
+----
+// 折叠手机
+class FoldedPhone extends Phone {
+	private PhoneBrand phoneBrand;
+
+	// 聚合PhoneBrand，并且通过它实现打电话
+	public FoldedPhone(PhoneBrand phoneBrand) {
+		this.phoneBrand = phoneBrand;
+	}
+
+	@Override
+	String typeName() {
+		return "折叠";
+	}
+
+	@Override
+	String call() {
+		// 转交给PhoneBrand来打电话
+		return this.getBrand().call();
+	}
+
+	@Override
+	PhoneBrand getBrand() {
+		return this.phoneBrand;
+	}
+}
+----
+
+.直板手机代码
+[source,java]
+----
+// 直板手机
+class BarPhone extends Phone {
+	private PhoneBrand phoneBrand;
+
+	// 聚合PhoneBrand，并且通过它实现打电话
+	public BarPhone(PhoneBrand phoneBrand) {
+		this.phoneBrand = phoneBrand;
+	}
+
+	@Override
+	String typeName() {
+		return "直板";
+	}
+
+	@Override
+	String call() {
+		// 转交给PhoneBrand来打电话
+		return this.getBrand().call();
+	}
+
+	@Override
+	PhoneBrand getBrand() {
+		return this.phoneBrand;
+	}
+}
+----
+
+4、客户端调用代码
+
+[source,java]
+----
+Phone phone = new FoldedPhone(new HuaweiPhone());
+System.out.println("样式：" + phone.typeName() + ", 打电话：" + phone.call());
+phone = new BarPhone(new XiaomiPhone());
+System.out.println("样式：" + phone.typeName() + ", 打电话：" + phone.call());
+----
+
+输出：
+
+----
+样式：折叠, 打电话：用华为手机打电话
+样式：直板, 打电话：用小米手机打电话
+----
+
+5、现在，添加一个Vivo的手机品牌，只需要新加一个类即可：
+
+[source,java]
+----
+// Vivo
+class VivoPhone implements PhoneBrand {
+	@Override
+	public String getName() {
+		return "Vivo";
+	}
+}
+----
+
+然后客户端调用：
+
+[source,java]
+----
+phone = new BarPhone(new VivoPhone());
+System.out.println("样式：" + phone.typeName() + ", 打电话：" + phone.call());
+----
+
+其他类不需要做任何改动，是不是很爽呢？
+
+=== 理解调用关系
+
+通过上边的实例代码，我们再来梳理一下调用关系，看看"桥接"到底是什么接起来的。
+
+以华为直板手机打电话为例，其调用过程如下：
+
+image::/images/attachment/designpattern/bridge-pattern4.png[]
+
+图中红色虚线部分就是桥接的过程，客户端调用``BarPhone``的``call()``方法，其实会从父类``Phone``获取``PhoneBrand``的实现``HuaweiPhone``类，然后调用其``call``方法，其实这里可以看做是一种委托机制，层层委托然后最终交给具体实现角色的方法来真正的处理业务逻辑。由于这里的例子很简单，应该不难理解。
+
+== 桥接模式的使用场景
+
+桥接模式适用场景如下：
+
+. 类存在多种变化维度，每种维度都会独立变化的场景
+. 不能很好的使用继承，如会产生类爆炸等缺陷时，替换继承为组合，桥接模式更适用
+
+例如，开发消息系统，消息存在消息业务类型（如普通、加急消息）、消息方式（微信、短信、邮件）等多维度变化时，可以考虑桥接模式；又如，开发电商系统，商品存在多个维度的属性变化，如SPU footnote:[SPU，Standard Product Unit, 即标准化产品单元，SPU是商品信息聚合的最小单位，是一组可复用、易检索的标准化信息的集合，该集合描述了一个产品的特性。通俗点讲，属性值、特性相同的商品就可以称为一个SPU。SPU属性不影响商铺库存和价格，参考： http://www.woshipm.com/pd/1973766.html[http://www.woshipm.com/pd/1973766.html] ]、SKU footnote:[SKU, Stock Keeping Unit, 库存量单位) SKU即库存进出计量的单位，是物理上不可分割的最小存货单元。一款商品，可以根据SKU来确定具体的货物存量。SKU属性会影响到库存和价格的属性, 又叫销售属性。参考： http://www.woshipm.com/pd/1973766.html[http://www.woshipm.com/pd/1973766.html] ] 等属性，可以考虑使用桥接模式。
+
+本文示例代码见: https://github.com/belonk/java-designpattern[Github]

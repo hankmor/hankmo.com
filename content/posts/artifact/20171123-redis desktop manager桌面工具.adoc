@@ -1,0 +1,58 @@
+---
+title: redis desktop manager桌面工具
+slug: redis-desktop-manager-crack
+img: /images/thumbnail/attachment/20180228/9ac683758eb944f5a04e859b98165fc9.png
+categories:
+  - 工具软件
+tags:
+  - redis
+description: redis desktop manager可视化数据库管理工具，再也不用敲命令了！
+date: 2017-11-23 09:43:16
+updated: 2018-08-16 14:35:04
+---
+
+= redis desktop manager桌面工具
+:author: belonk.com
+:date: 2018-08-16
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:description: redis desktop manager可视化数据库管理工具
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: redis,可视化
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: redis
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+[horizontal]
+链接:: http://pan.baidu.com/s/1i53VLmX[http://pan.baidu.com/s/1i53VLmX]
+密码:: vmm6
+
+比较好用的Redis可视化界面工具，支持Windows 10, Mac OS X 10.12, Ubuntu 16, LinuxMint | Fedora | CentOS | OpenSUSE等平台。
+
+github地址： https://github.com/uglide/RedisDesktopManager/[https://github.com/uglide/RedisDesktopManager/]
+
+官网： http://redisdesktop.com[http://redisdesktop.com]
+
+界面截图：
+
+image::/images/attachment/20171123/f2fe808aebf84d39ab2480a9fdfcb81e.png[]
+
+image::/images/attachment/20171123/e132c08c2b624c76b5eb30ae15fe9e95.png[]
+
+可支持控制台：
+
+image::/images/attachment/20171123/9638bc61804148a6a01ee98eb8a4e27f.png[]
+
+支持按key过滤查找功能：
+
+image::/images/attachment/20171123/da81a2f5a62846e0aea5dee9867b6d87.png[]

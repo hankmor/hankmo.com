@@ -1,0 +1,223 @@
+---
+title: Spring事务管理二：Spring事务管理器
+slug: spring-transaction-manage
+img: /images/thumbnail/attachment/20180307/cfa6a59be00d4132826914abdf609b75.jpg
+categories:
+  - Spring
+tags:
+  - spring
+  - transaction
+  - 事务
+description: >-
+  Spring并不支持管理事务，而是委托给第三方事务管理机制来完成事务控制，Spring顶层提供事务管理核心接口PlatformTransactionManager，事务管理器均是该接口的实现。如果没有合适的事务管理器或者需要支持分布式事务控制，则可以使用全局事务管理器：JTA事务管理器。
+date: 2018-03-07 21:33:52
+updated: 2018-05-29 12:29:39
+---
+
+= Spring事务管理二：Spring事务管理器
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring,事务,transaction,事务管理器,PlatformTransactionManager,hibernate,MyBatis
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: spring,transaction,事务
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+前边简单介绍了事务的概念和其ACID特性，现在让我们看看Spring是如何实现对事务的支持的。
+
+
+== Spring事务管理器结构
+ 
+Spring并不直接管理事务，而是提供多种事务管理器，将管理事务的责任委托给JTA或相应的持久性机制所提供的某个特定平台的事务实现。
+
+Spring对事务管理器的抽象：
+
+image::/images/attachment/20180307/981574f8ff3643dd8976fc193baf173f.png[]
+
+Spring提供了顶层接口PlatformTransactionManager，并提供了扩展接口ResourceTransactionManager和抽象实现类AbstractPlatformTransactionManager。PlatformTransactionManager下的所有接口和实现类如图所示：
+
+image::/images/attachment/20180307/fe7acf8b657e4c1cbea8858ecc241465.png[]
+
+一般而言，每一种事务实现的类图如下：
+
+image::/images/attachment/20180307/0b3fcf2fc7314b5b80f00c34b9914d66.png[]
+
+PlatformTransactionManager是Spring事务管理器的核心，接口定义如下：
+
+[source,java]
+----
+public interface PlatformTransactionManager {
+    // 返回一个已经激活的事务或创建一个新的事务（根据给定的TransactionDefinition类型参数定义的事务属性），
+    // 返回的是TransactionStatus对象代表了当前事务的状态，其中该方法抛出TransactionException（未检查异常）
+    // 表示事务由于某种原因失败。
+    TransactionStatus getTransaction(TransactionDefinition definition) throws TransactionException;
+
+    // 提交给定的事务，检查其状态。如果事务被标记为rollback-only，则执行回滚。
+    // 如果事务不是新的事务，则忽略提交周围适当的事务。如果先前的事务被挂起，则在提交新事务后恢复先前的事务。
+    void commit(TransactionStatus status) throws TransactionException;
+
+    // 执行给定事务的回滚。如果事务不是一个新的事务，将其周边适当的事务标记为rollback-only。
+    // 如果先前的事务被挂起，则在回滚新事务后恢复先前的事务。
+    void rollback(TransactionStatus status) throws TransactionException;
+}
+----
+ 
+TransactionDefinition接口定义如下：
+
+[source,java]
+----
+public interface TransactionDefinition {
+    // 返回事务传播行为
+    int getPropagationBehavior();
+
+    // 返回事务隔离级别
+    int getIsolationLevel();
+
+    // 返回事务超时时间
+    int getTimeout();
+
+    // 返回事务是否只读
+    boolean isReadOnly();
+
+    // 返回事务的名称
+    String getName();
+}
+----
+
+TransactionStatus接口定义如下：
+
+[source,java]
+----
+public interface TransactionStatus extends SavepointManager {
+    // 返回当前事务是否是新事物
+    boolean isNewTransaction();
+
+    // 返回当前事务是否有保存点,即基于保存点创建的嵌套事务
+    boolean hasSavepoint();
+
+    // 标记事务为rollback-only。这将指示事务管理器，事务的唯一可能结果是回滚，
+    // 作为抛出异常的替代方法，该异常将反过来触发回滚。
+    void setRollbackOnly();
+
+    // 返回事务是否是被标记为rollback-only
+    boolean isRollbackOnly();
+
+    // 如果适用，将底层会话刷新到数据存储区:例如，所有受影响的Hibernate/JPA会话。
+    void flush();
+
+    // 返回事务是否完成（提交或回滚）
+    boolean isCompleted();
+}
+----
+
+== 常见事务管理器
+ 
+Spring常见事务管理器如下：
+
+* CciLocalTransactionManager：位于org.springframework.jca.cci.connection包，使用Spring对JavaEE连接器架构(JCA)和通用客户端接口(CCI)提供支持；
+* DataSourceTransactionManager：位于org.springframework.jdbc.datasource包中，数据源事务管理器，提供对单个javax.sql.DataSource事务管理，用于Spring JDBC抽象框架、iBATIS或MyBatis框架的事务管理；
+* JdoTransactionManager：位于org.springframework.orm.jdo包中，提供对单个javax.jdo.PersistenceManagerFactory事务管理，用于集成JDO框架时的事务管理；
+* JpaTransactionManager：位于org.springframework.orm.jpa包中，提供对单个javax.persistence.EntityManagerFactory事务支持，用于集成JPA实现框架时的事务管理；
+* HibernateTransactionManager：位于org.springframework.orm.hibernate3或hibern4包中，提供对单个org.hibernate.SessionFactory事务支持，用于集成Hibernate框架时的事务管理；
+* JtaTransactionManager：位于org.springframework.transaction.jta包中，提供对分布式事务管理的支持，并将事务管理委托给Java EE应用服务器事务管理器；
+* WebSphereUowTransactionManager：位于org.springframework.transaction.jta包中，Spring提供的对WebSphere 6.0+应用服务器事务管理器的适配器，此适配器用于对应用服务器提供的高级事务的支持；
+* WebLogicJtaTransactionManager：位于org.springframework.transaction.jta包中，Spring提供的对WebLogic 8.1+应用服务器事务管理器的适配器，此适配器用于对应用服务器提供的高级事务的支持。
+
+常见事务管理器配置：
+
+=== JDBC事务
+
+使用Spring的DataSourceTransactionManager来管理事务。
+ 
+[source,xml]
+----
+<bean id="txManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">  
+	<property name="dataSource" ref="dataSource"/>
+</bean>
+----
+
+使用ibatis、mybatis持久框架同样采用此配置。
+
+dataSource属性定义了数据源，通过数据源获取javax.sql.Connection数据库连接，从而调用该链接的commit()和rollback(0方法来提交或回滚事务。
+
+=== Hibernate事务
+ 
+使用Spring的HibernateTransactionManager来管理事务。
+ 
+[source,xml]
+----
+<bean id="txManager" class="org.springframework.orm.hibernate3.HibernateTransactionManager">  
+	<property name="sessionFactory" ref="sessionFactory"/>
+</bean>
+----
+ 
+Hibernate事务需要通过org.hibernate.Transcation对象来管理，其同样提供了commit(0和rollback()方法来提交和回滚事务。
+
+=== JPA事务
+
+JAVA持久化标准(Java Persistent API, JPA)，使用Spring提供的JpaTransactionManager来管理事务。
+
+[source,xml]
+----
+<bean id="txManager" class="org.springframework.orm.jpa.JpaTransactionManager">  
+<property name="entityManagerFactory" ref="entityManagerFactory"/>  
+</bean>
+----
+
+需要装配JPA实体管理工厂（javax.persistence.EntityManagerFactory的任意实现），JpaTransactionManager还支持将事务应用于JDBC中，但是要求JDBC的DataSource必须与EntityManagerFactory的相同。因此，JpaTransactionManager必须装配一个JpaDialect实现。
+ 
+[source,xml]
+----
+<bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">  
+        ……  
+<property name="jpaDialect" ref="jpaDialect"/>  
+</bean>  
+<bean id="jpaDialect" class="org.springframework.orm.jpa.vendor.EclipseLinkJpaDialect"/>
+----
+ 
+JpaDialect实现必须同时支持JPA和JDBC。
+
+=== JTA事务
+
+JTA，即Java Transaction API，JTA允许应用程序执行分布式事务处理----在两个或多个网络计算机资源上访问并且更新数据。JDBC驱动程序的JTA支持极大地增强了数据访问能力。
+
+如果没有合适的事务管理器或者需要支持分布式事务控制，则可以使用JTA事务管理器，它是Spring提供的全局事务管理器。Spring对JTA的事务管理器配置如下：
+
+[source,xml]
+----
+<beans xmlns="http://www.springframework.org/schema/beans"  
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
+    xmlns:jee="http://www.springframework.org/schema/jee"  
+    xsi:schemaLocation="  
+       http://www.springframework.org/schema/beans  
+       http://www.springframework.org/schema/beans/spring-beans-3.0.xsd  
+       http://www.springframework.org/schema/jee  
+       http://www.springframework.org/schema/jee/spring-jee-3.0.xsd">  
+<jee:jndi-lookup id="dataSource" jndi-name="jdbc/test"/>  
+<bean id="txManager" class="org.springframework.transaction.jta.JtaTransactionManager">  
+<property name="transactionManagerName" value=" java:comp/TransactionManager"/>  
+</bean>  
+</beans>
+----
+
+“dataSource”Bean表示从JNDI中获取的数据源，而txManager是JTA事务管理器，其中属性transactionManagerName指定了JTA事务管理器的JNDI名字，从而将事务管理委托给该事务管理器。
+
+JtaTransactionManager将事务管理职责委托给javax.transaction.UserTransaction和javax.transaction.TransactionManager对象，通过UserTransaction的commit()和rollback方法提交和回滚事务。
+
+== 总结
+
+Spring并不支持管理事务，而是委托给第三方事务管理机制来完成事务控制，Spring顶层提供事务管理核心接口PlatformTransactionManager，事务管理器均是该接口的实现。
+
+如果没有合适的事务管理器或者需要支持分布式事务控制，则可以使用全局事务管理器：JTA事务管理器。

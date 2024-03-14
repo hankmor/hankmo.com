@@ -1,0 +1,121 @@
+---
+title: IntelliJ IDEA 2019.3.3激活
+slug: intellij-idea-2019.3-crack
+img: /images/thumbnail/attachment/20200214/efec0b7dd8b04072a5d498981706d8e6.png
+categories:
+  - 工具软件
+tags:
+  - idea
+  - 激活
+description: IntelliJ IDEA 2019.3版本已经可以成功激活了，更新了非常多的性特性并极大的提升了性能。文本介绍了激活的方法和步骤，以及常见问题解答。
+date: 2020-02-14 13:19:47
+updated: 2020-02-14 13:34:50
+---
+
+= IntelliJ IDEA 2019.3.3激活
+:author: belonk.com
+:date: 2020-02-14
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: idea,激活,2019,3.3,版本,2019.3版本激活
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: idea,激活
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+IntelliJ IDEA 2019.3.3版本已经可以成功激活了，更新了非常多的性特性并极大的提升了性能。理论上此种激活方式适合2019.3的所有版本，不过笔者仅测试了3.3版本。
+
+== 激活步骤
+ 
+具体激活步骤如下：
+
+1、下载最新版本的idea, 目前版本为2019.3.3
+
+2、下载用于激活的代理压缩包，下载地址如下：
+
+下载地址::
+由于版权限制，请关注公众号并在后台回复##6002##获取下载地址！如果链接失效，请在公众号后台留言，我会第一时间补上。
+
+3、解压缩下载的代理包，得到jetbrains-agent.jar，把它放到你认为合适的文件夹内
+
+4、启动IDE，如果需要注册，选择：试用（Evaluate for free）进入IDE
+
+5、点击你要注册的IDE菜单："Configure" 或 "Help" -> "**Edit Custom VM Options ...**"
+如果提示是否要创建文件，请点"Yes"，在打开的vmoptions编辑窗口末行添加：
+
+
+----
+-javaagent:/absolute/path/to/jetbrains-agent.jar
+----
+
+一定要自己确认好路径(不要使用中文路径)，要使用绝对路径，填错会导致IDE打不开！
+
+另外，一个vmoptions内只能有一个-javaagent参数。
+
+示例:
+
+----
+mac: -javaagent:/Users/neo/jetbrains-agent.jar
+linux: -javaagent:/home/neo/jetbrains-agent.jar
+windows: -javaagent:C:\Users\neo\jetbrains-agent.jar
+----
+ 
+6、重启你的IDE
+
+7、点击IDE菜单 "Help" -> "Register..." 或 "Configure" -> "Manage License..."
+
+支持两种注册方式：License server 和 Activation code:
+
+1). 选择License server方式，地址填入：**http://fls.jetbrains-agent.com**&nbsp;（注意与之前2.x的地址不同，通常会自动填上）
+
+或者点击按钮："Discover Server"来自动填充地址。
+
+2). 选择Activation code方式离线激活，请使用压缩包内的ACTIVATION_CODE.txt中的注册码激活
+
+推荐使用第一种方式。
+
+OK，激活成功！
+
+image::/images/attachment/20200214/d2f31ff4b47e49a49d204e26db6b941f.png[]
+
+== 常见问题
+ 
+1、如果vmoptions中地址填错了，怎么办？
+
+默认情况下，idea的VMoptions配置文件在用户目录中，我的mac电脑在：
+
+----
+Contents> vi /Users/sun/Library/Preferences/IntelliJIdea2019.3/idea.vmoptions
+----
+
+如果还是填错了，可以找到用户目录下的这个文件，直接修改为正确的地址即可！
+
+如果还是不行，参考这篇文章补救： https://intellij-support.jetbrains.com/hc/en-us/articles/206544519[https://intellij-support.jetbrains.com/hc/en-us/articles/206544519]
+
+[IMPORTANT]
+.注意！
+不要直接在IDEA目录下修改配置文件，建议在IDEA启动后通过菜单来修改，否则可能不能成功激活
+
+2、代理失效，无法下载激活jar包，怎么办？
+
+'''
+
+扫码关注公众号，回复##工具##关键字，查看更多推荐资源！
+
+image::/images/weixinqr.jpg[]
+
+====
+.下载声明
+. 本站所有下载资源均来自互联网，由站长搜集整理，版本归原作者所有，如有侵权请联系站长删除。
+. 本站所有下载资源仅供个人学习和研究使用，请勿用于商业用途，请在下载后24小时内删除。
+====

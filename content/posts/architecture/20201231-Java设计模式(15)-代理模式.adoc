@@ -1,0 +1,413 @@
+---
+title: Java设计模式(15)-代理模式
+slug: java-proxy-pattern
+date: 2020/12/31
+img: /images/thumbnail/mt.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 代理模式
+  - 动态代理
+  - 反向代理
+description: >-
+  什么是代理？代理就是中介，它提供与服务提供方相同或者相似的功能，客户不再直接面对服务提供方，而是先找代理，再由代理去与服务提供方交互完成功能。现实生活中，有很多代理的例子，比如前边提到的外卖订餐，外卖小哥就是一个代理角色；又如，购买火车票，火车票代售点就是一个代理角色，用户直接可以去代售点购买车票；再如，各种中介所，如婚姻中介所、房产中介等等，都是代理。
+updated:
+---
+
+= Java设计模式(15)-代理模式
+:key_word: 设计模式,代理模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2020/12/29
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+虽然马上就是2021年了，但是大家回想起去年（2020年初）的时候，是不是高兴不起来呢？人类还没有彻底战胜新冠病毒之前，我们还是要遵从国家号召：多居家、少聚集、勤洗手、戴口罩！疫情期间，我们足不出户免不了要点外卖。如果没有外卖配送服务，那么你可能得自己去餐厅取餐了。还好，我们可以享受外卖配送服务，只需要点好餐，然后外卖小哥回到餐厅取餐然后直接送到我们手上，这样我们就不需要跟餐厅直接接触了，也减少了感染的风险。其实，外卖小哥就是一个代理，他作为一个中间角色（其实就是中介），帮助用户去餐厅取餐然后送餐给用户，这样用户就不需要直接面对餐厅。
+
+image::/images/thumbnail/waimai.png[]
+
+== 什么是代理
+
+什么是代理？代理就是中介，它提供与服务提供方相同或者相似的功能，客户不再直接面对服务提供方，而是先找代理，再由代理去与服务提供方交互完成功能。现实生活中，有很多代理的例子，比如前边提到的外卖订餐，外卖小哥就是一个代理角色；又如，购买火车票，火车票代售点就是一个代理角色，用户直接可以去代售点购买车票；再如，各种中介所，如婚姻中介所、房产中介等等，都是代理。
+
+在软件中，代理主要指的就是本文要探讨的代理模式，或者模式中的代理类，我们 <<proxy-pattern,稍后>> 再细说。
+
+在网络中，代理服务器（Proxy Server），专门用来代理网络用户去取得网络信息。代理服务器又有**正向代理**和**反向代理**的区分。
+
+=== 正向代理和反向代理
+
+正向代理和反向代理，其实是按照代理服务所在位置、客户端对代理服务器是否有感知来考虑的。
+
+**1、正向代理**
+
+正向代理，其服务器位于客户端，客户端需要访问目标服务器，但是不会直接访问，而是先访问代理服务器，然后再由代理服务器转发请求到目标服务器。也就是说，正向代理其代理的是客户端的请求，客户端明确知道代理服务器的地址，然后在连接到代理服务器使其转发请求到目标服务器。其原理如下：
+
+.正向代理示意图
+image::/images/attachment/designpattern/proxy-zxdl.png[]
+
+如图所示，客户端链接到代理服务器(Proxy)，客户端和代理服务器位于同一个网络中。
+
+正向代理的主要用途是，客户端由于某些原因不能直接访问目标服务器，但是代理服务器可以，因此通过代理服务器作为跳板从而达到访问目标服务器的目的。例如，我们需要访问Google网站，但是国内无法访问，我们需要使用一些代理服务或软件(它们可以访问Google），这些服务和软件就是正向代理服务器。各大操作系统都有代理服务设置，例如macOS的：
+
+.MacOS中网络代理设置
+image::/images/attachment/designpattern/proxy-mac.png[]
+
+**2、反向代理**
+
+反向代理，其实是相当于正向代理而言的。在反向代理中，代理服务器与目标服务器位于同一网络中，代理服务器代理并隐藏目标服务器，客户端无需知道代理服务器的存在。原理如下：
+
+.反向代理示意图
+image::/images/attachment/designpattern/proxy-fxdl.png[]
+
+代理服务器就像服务端的一道防火墙，既可以过滤掉非法的请求，又可以隐藏目标服务其的真实地址等信息，对外提供统一的访问入口，提到服务端的安全性。另外，代理服务器能够实现网络负载均衡，将请求分发到不同的目标服务器上，以缓解请求压力，提高访问速度和性能。
+
+反向代理在网络应用中使用非常普遍，常见的软件如Nginx、Apache等都可以作为反向代理服务器。
+
+=== 为什么要使用代理
+
+前边说过了正向代理和反向代理的作用，总结一下，代理有如下的作用：
+
+. 访问客户端不能直接访问的服务器，比如Google、Facebook等
+. 提高网络访问速度，例如访问某些网站速度很慢，但是代理服务器访问之很快，这样客户端通过访问代理服务器可以提高网络速度，比如常见的网络加速器
+. 实现安全保护，比如反向代理服务器可以设置规则过滤非法请求，也可以隐藏服务器IP地址和端口以保护后端服务器，还可以做权限认证等
+. 实施负载均衡，反向代理服务器可以按照既定策略将不同的请求分发到不同的后端服务器上，缓解其访问压力，如常见的轮询、按IP Hash、按请求URL hash、随机选择、最小访问、按地域选择等负载均衡策略
+. 实现动静分离，反向代理服务器支持直接访问静态资源，不需要后端服务器支持，这样可以加速静态页面的访问，如Nginx对静态资源的访问支持非常好，性能强大
+
+了解了什么是代理，接下来我们看看在计算机软件中，代理模式的概念。
+
+[[proxy-pattern]]
+== 代理模式简介
+
+技术来源于生活，代理模式是一种生活中代理运用的总结。DP对代理模式（Proxy Pattern）的定义如下：**给对象提供一个代理以控制对该对象的访问**。
+
+当客户端不能直接依赖目标对象，又或是想要增强目标对象的功能，可以为其创建一个代理对象（中介），然后客户端访问代理对象而不直接依赖目标对象，再由中介对象来访问目标对象。这种设计模式就是代理模式，其结构如下图所示：
+
+image::/images/attachment/designpattern/proxy-class.png[]
+
+可以看到，代理模式有几种角色：
+
+* 抽象主题角色(Subject: 抽象类或接口，用来定义业务功能的公共方法
+* 真实主题角色(RealSubject): 实现了抽象主题(Subject)接口，完成具体业务功能实现。它就是目标对象，客户端需要依赖它提供的功能
+* 代理对象(Proxy): RealSubject的代理实现，保证与其具有相同的功能，因此也会实现Subject接口。代理对象内部会聚合RealSubject，具体功能会调用RealSubject来完成，同时内部也可以增强RealSubject的功能
+
+[TIP]
+从结构上看，代理模式与 <</2020/08/24/java-adapter-pattern#, 适配器模式>> 类似，两者都存在一个中间对象，其都会聚合具体对象并实现一个抽象接口，但是它们的目的并不相同：代理模式更强调**对象的访问控制和功能增强**，而适配器模式更强调**功能的转换**。
+
+代理模式的主要优点:
+
+. 代理模式在客户端与目标对象之间增加了中间对象，可以控制目标对象访问
+. 代理对象可以扩展目标对象的功能
+
+其主要缺点：
+
+. 代理模式会造成系统设计中类的数量增加
+. 在客户端和目标对象之间增加一个代理对象，中转过程会影响请求速度
+. 增加了系统的复杂度
+
+== Java中代理实现的三种方式
+
+代理可以分为静态代理和动态代理，动态代理技术有效的减少了上边的缺点。
+
+=== 静态代理
+
+静态代理，其实就是为每一个目标对象创建一个代理类，客户端调用代理类来完成业务功能。
+
+.静态代理示意图
+image::/images/attachment/designpattern/proxy-static.png[]
+
+这也是最常规、最简单的代理方式，但是其缺点也很明显：会产生大量的代理类，而且如果``Subject``接口更改，那么所有的代理类都需要修改。代码示例如下：
+
+[source,java]
+----
+// 抽象主题
+interface Subject {
+	void request();
+}
+
+// 真实主题
+class RealSubject implements Subject {
+	@Override
+	public void request() {
+		System.out.println("request...");
+	}
+}
+
+class Proxy implements Subject {
+	private final Subject subject;
+
+	public Proxy(Subject subject) {
+		this.subject = subject;
+	}
+
+	@Override
+	public void request() {
+		// 扩展功能
+		System.out.println("before request..."); // <1>
+		this.subject.request();  // <2>
+		System.out.println("after request..."); // <1>
+	}
+}
+----
+<1> 在调用目标对象方法前后，进行功能增强
+<2> 调用目标对象的方法，实现具体功能
+
+客户端调用如下：
+
+[source,java]
+----
+// 直接请求
+Subject subject = new RealSubject();
+subject.request();
+// 通过代理请求
+Proxy proxy = new Proxy(subject);
+proxy.request();
+----
+
+静态代理存在很大缺陷，那么是否有改进的方法？答案是：使用动态代理。在Java中，动态代理有两种方式实现：JDK自带的动态代理和CGLIB代理。
+
+动态代理：即动态的为目标对象创建代理实现类，而不需要如静态代理一样手动的为其创建代理类。这样就大大减少了类的数量，而且``Subject``接口更改，创建代理对象的代码不需要更改，易于维护和扩展。
+
+=== JDK动态代理
+
+JDK中已经为我们提供了动态创建代理对象的类``Proxy``：该类提供了用于创建动态代理类和实例的静态方法，它还是由这些方法创建的所有动态代理类的超类。其定义如下：
+
+.Proxy类
+[source,java]
+----
+public class Proxy implements java.io.Serializable {
+    protected InvocationHandler h; // <1>
+
+    private Proxy() {
+    }
+
+    protected Proxy(InvocationHandler h) {
+        Objects.requireNonNull(h);
+        this.h = h;
+    }
+
+    // ……
+
+	public static Object newProxyInstance(ClassLoader loader, Class<?>[] interfaces, InvocationHandler h) throws IllegalArgumentException { // <2>
+    // ……
+    }
+}
+----
+<1> 调用回调处理器
+<2> 静态方法，用于动态创建代理对象实例
+
+**InvocationHandler**
+
+``InvocationHandler``, 调用回调处理器，当动态代理对象拦截到目标对象方法执行时会转交给``InvocationHandler``来处理执行逻辑，每个动态代理实例都会关联到一个``InvocationHandler``上。
+
+.InvocationHandler接口
+[source,java]
+----
+public interface InvocationHandler {
+	// 参数含义：
+	// proxy：生成的代理对象
+	// method：当前调用的方法
+	// args1：当前调用的方法的参数
+	Object invoke(Object proxy, Method method, Object[] args) throws Throwable;
+}
+----
+
+**newProxyInstance方法**
+
+该方法用来创建动态代理实例对象，这是一个静态方法，其参数含义如下：
+
+* ClassLoader loader：指定创建动态代理实例对象的类加载器
+* Class<?>[] interfaces：目标对象实现的接口
+* InvocationHandler h：调用处理器
+
+第二个参数``interfaces``表示目标对象实现的接口，这也是JDK动态代理的一个缺点：**只能代理接口的实例**，即：如果类没有实现任何接口，那么JDK不能为其生成代理对象。
+
+JDK动态代理实例代码如下：
+
+[source,java]
+----
+// 抽象主题
+interface JdkSubject {
+	void request1(String name);
+
+	void request2(String name);
+}
+
+// 真实主题
+class RealSubjectImpl implements JdkSubject {
+	@Override
+	public void request1(String name) {
+		System.out.println("request : " + name);
+	}
+
+	@Override
+	public void request2(String name) {
+		System.out.println("request : " + name);
+	}
+}
+
+// 代理工厂
+class JdkDynamicProxyFactory {
+	// 目标对象，被代理
+	private final JdkSubject target;
+
+	public JdkDynamicProxyFactory(JdkSubject target) {
+		this.target = target;
+	}
+
+	public JdkSubject getProxyInstance() {
+		return (JdkSubject) Proxy.newProxyInstance(target.getClass().getClassLoader(), target.getClass().getInterfaces(), (proxy, method, args1) -> {
+			System.out.println("代理对象：" + proxy.getClass());
+			System.out.println("方法参数：" + Arrays.toString(args1));
+			System.out.println("before request...");
+			Object result = method.invoke(target, args1);
+			System.out.println("after request...");
+			return result;
+		});
+	}
+}
+----
+
+``JdkDynamicProxyFactory``代理工厂用来生成代理对象，这里只是示意，更好的办法是传递``JdkSubject``和``InvocationHanlder``以实现不同的功能。
+
+客户端调用：
+
+[source,java]
+----
+JdkSubject subject = new RealSubjectImpl();
+System.out.println("原始对象：" + subject.getClass());
+JdkDynamicProxyFactory proxyFactory = new JdkDynamicProxyFactory(subject);
+JdkSubject proxyedSubject = proxyFactory.getProxyInstance();
+System.out.println("代理后的对象：" + proxyedSubject.getClass());
+proxyedSubject.request1("张三");
+proxyedSubject.request2("李四");
+/*:~
+原始对象：class com.belonk.designpattern.proxy.RealSubjectImpl
+代理后的对象：class com.belonk.designpattern.proxy.$Proxy0
+代理对象：class com.belonk.designpattern.proxy.$Proxy0
+方法参数：[张三]
+before request...
+request : 张三
+after request...
+代理对象：class com.belonk.designpattern.proxy.$Proxy0
+方法参数：[李四]
+before request...
+request : 李四
+after request...
+ */
+----
+
+可以看到，代理对象的class命名为``$ProxyX``。
+
+既然JDK只能创建基于接口的代理实例，那么如果类没有实现接口怎么办？解决办法是使用CGLIB来生成代理对象，因为它不需要类实现任何接口。
+
+=== CGLIB动态代理
+
+CGLIB footnote:cglib[见Github: https://github.com/cglib/cglib]动态代理，可以直接代理目标对象，它可以不实现接口，底层使用``asm``字节码处理框架来转换字节码生成新代理类。
+
+Cglib使用与JDK动态代理类似，更多高级功能见官方文档 footnote:cglib[]，这里贴出一段示例代码：
+
+[source,java]
+----
+// 抽象主题
+interface CglibSubject {
+	void request1(String s);
+
+	void request2(String s);
+}
+
+// 真实主题
+class TargetObject implements CglibSubject {
+	@Override
+	public void request1(String s) {
+		System.out.println("request1 : " + s);
+	}
+
+	@Override
+	public void request2(String s) {
+		System.out.println("request2 : " + s);
+	}
+}
+
+// 代理工厂
+class CglibDynamicProxyFactory {
+	// 目标对象，代理之前的原始对象
+	private final CglibSubject target;
+
+	public CglibDynamicProxyFactory(CglibSubject subject) {
+		this.target = subject;
+	}
+
+	public CglibSubject getProxyInstance() {
+		Enhancer enhancer = new Enhancer();
+		enhancer.setSuperclass(target.getClass()); // <1>
+		enhancer.setCallback(new MethodInterceptor() { // <2>
+			/**
+			 * 处理拦截回调，在目标对象执行前后拦截(around advice)。
+			 *
+			 * @param proxy 目标对象，代理之前的原始对象
+			 * @param method 被拦截的方法
+			 * @param args 方法执行参数
+			 * @param methodProxy 方法代理，可以用来调用原始对象和代理对象的方法
+			 * @return 方法调用返回值
+			 */
+			@Override
+			public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+				System.out.println("before request...");
+				Object result = method.invoke(target, args);
+				System.out.println("after request...");
+				return result;
+			}
+		});
+		return (CglibSubject) enhancer.create();
+	}
+
+}
+----
+<1> 设置被代理对象，即原始对象，为其创建代理实例
+<2> 设置原始对象方法执行时拦截器，类似JDK的``InvocationHandler``。
+
+客户端调用代码：
+
+[source,java]
+----
+CglibSubject targetObject = new TargetObject();
+System.out.println("目标对象：" + targetObject.getClass());
+CglibDynamicProxyFactory proxyFactory = new CglibDynamicProxyFactory(targetObject);
+CglibSubject proxyInstance = proxyFactory.getProxyInstance();
+System.out.println("代理后对象: " + proxyInstance.getClass());
+proxyInstance.request1("请求1");
+proxyInstance.request2("请求2");
+/*~;输出
+目标对象：class com.belonk.designpattern.proxy.TargetObject
+代理后对象: class com.belonk.designpattern.proxy.TargetObject$$EnhancerByCGLIB$$6f621012
+before request...
+request1 : 请求1
+after request...
+before request...
+request2 : 请求2
+after request...
+ */
+----
+
+可以看到，代理对象的class命名带有``$$EnhancerByCGLIB``字样。
+
+== 代理模式的常见运用
+
+Java各大框架中，使用代理模式的非常多，尤其是Spring，动态代理更是其AOP(面向切面)实现的核心技术。
+
+常见的代理模式运用，比如在Spring中，使用动态代理实现声明式事务控制，统一为事务控制的方法生成事务控制代码；又比如，MyBatis使用动态代理为``Mapper``生成实现类，等等。
+
+我们也可以通过动态代理来实现方法统一日志打印、权限认证等等功能。
+
+问题：如何使用动态代理来编写文章开始所述的外卖配送案例呢？
+本文示例代码: https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/proxy[Github]

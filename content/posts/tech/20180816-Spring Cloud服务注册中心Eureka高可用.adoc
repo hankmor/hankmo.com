@@ -1,0 +1,290 @@
+---
+title: Spring Cloud服务注册中心Eureka高可用
+slug: springcloud-eureka-cluster
+img: /images/thumbnail/attachment/20190615/313638baa4224acfac781ebfad5be217.png
+categories:
+  - Spring
+tags:
+  - springcloud
+  - ribbon
+  - eureka
+description: >-
+  对于Eureka而言，其本身是支持多节点集群的。其原理大致如下：服务注册中心的多个实例彼此互相注册，形成注册中心的集群，同时对外提供服务，即使其中一个挂掉，其他实例仍然可以对外提供服务，从而保证了高可用。
+date: 2018-08-16 17:03:18
+updated: 2019-06-15 08:36:48
+---
+
+= Spring Cloud服务注册中心Eureka高可用
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: Spring Cloud,微服务,Eureka,服务注册中心,服务提供者,服务消费者,集群,多节点,ribbon
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: springcloud,ribbon,eureka
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在 上一篇，我们通过编码，分别编写了服务注册中心、服务提供者、服务消费者，但是服务注册中心仍然是单节点，如果服务注册中心不可用，则会导致整个体系的所有服务都不可用。所以，有必要保证服务注册中心的高可用，本章将来讨论整个问题。
+
+== Eureka集群
+ 
+对于Eureka而言，其本身是支持多节点集群的。其原理大致如下：**服务注册中心的多个实例彼此互相注册，形成注册中心的集群，同时对外提供服务**，即使其中一个挂掉，其他实例仍然可以对外提供服务，从而保证了高可用。
+
+.Eureka双节点结构示意图
+image::/images/attachment/20180816/455e5ddfac7749ed8a6b59b670fab585.png[]
+
+以双节点为例，如上图所示，两个服务注册中心(Eureka Server)彼此相互注册形成集群，服务提供者（Service Provider）会自动向两者都进行服务注册，即是说，两个服务注册中心有用相同的服务实例列表，服务消费者（Service Consumer）会采用负载均衡算法从服务注册中心集群中选择出一个可用的服务注册中心，来获取服务注册实例，并完成请求。
+
+上一篇已经说过，默认情况下，每一个Eureka服务端同样也是一个Eureka客户端，因此至少需要配置一个其他的Eureka服务端URL来让自己完成注册。如果不提供这个服务端URL，服务端本身可以正常运行和提供服务，但是控制台会打印许多无法成功注册的日志信息。在上一篇在编码单节点服务注册中心时，我们做了如下配置，让其不作为客户端让其他服务注册中心注册：
+
+[source,block]
+----
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+----
+ 
+这两项配置默认均为``true``，即是说eureka默认是开启集群功能的。
+
+== 编码实战
+ 
+接下来，我们参照上一篇的服务注册中心、服务提供者、服务消费者代码，来组建一个双节点的服务注册中心，并通过服务消费者获取服务实例，完成远程请求。
+
+=== 服务注册中心
+ 
+1、新建一个名为``02-eureka-server-nodes``的Spring Boot工程，作为服务注册中心
+
+2、引入如下依赖和插件：
+
+[source,xml]
+----
+<dependencies>
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-eureka-server</artifactId>
+</dependency>
+</dependencies>
+<build>
+<plugins>
+<plugin>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-maven-plugin</artifactId>
+</plugin>
+</plugins>
+</build>
+----
+ 
+引入``spring-boot-maven-plugin``的目的是为了打可执行jar包，由于要组建双节点集群，需要启动两次，所以不能直接在idea里边运行工程了，需要打包成可执行jar，通过命令行来启动。
+
+3、启动类添加``@EnableEurekaServer``注解，表明该工程为Eureka服务端
+
+4、配置多环境，新建三个配置文件：``application.properties``、``application-node1.properties``、``application-node2.properties``，分别进行如下配置：
+
+application.properties：
+
+----
+spring.application.name=eureka-server
+# 开发用，关闭服务端自我保护，防止关闭的实例不能被剔除
+eureka.server.enable-self-preservation=false
+----
+ 
+application-node1.properties：
+
+----
+server.port=8080
+eureka.instance.hostname=eureka-node1
+# 服务注册中心访问地址
+eureka.client.service-url.defaultZone=http://eureka-node2:8081/eureka
+----
+ 
+application-node2.properties：
+
+----
+server.port=8081
+eureka.instance.hostname=eureka-node2
+# 服务注册中心访问地址
+eureka.client.service-url.defaultZone=http://eureka-node1:8080/eureka
+----
+ 
+需要注意的是，``eureka-node1``需要向``eureka-node2``来注册服务，而``eureka-node2``需要向``eureka-node1``来注册服务，彼此交叉注册，注意配置地址的不同。
+
+5、由于在本机测试，并且这里通过``hostname``来访问服务，所以需要让``hostname``可以访问，修改``hosts``文件进行本机映射：
+
+----
+127.0.0.1 eureka-node1
+127.0.0.1 eureka-node2
+----
+ 
+各操作系统修改``hosts``文件的方式不同，请自行查阅相关资料。
+
+6、到这里编码工作就已完成，现在，使用maven命令进行打包：
+
+
+----
+``mvn clean package``
+----
+
+7、通过命令行来运行两个不同``profile``的注册中心实例：
+
+启动命令行，进入可执行jar包所在的目录，运行如下命令启动node1：
+
+
+----
+`` java -jar eureka-server-nodes-0.0.1-SNAPSHOT.jar --spring.profiles.active=node1``
+----
+
+由于``node1``需要向``node2``注册，而``node2``此时并未启动，所以控制台打出一些异常信息，不用理会，等待``node2``成功启动后，``node1``会自动重试注册。
+
+重新开启一个新的命令行，进入可执行jar包所在的目录，运行如下命令启动node2：
+
+
+----
+``java -jar eureka-server-nodes-0.0.1-SNAPSHOT.jar --spring.profiles.active=node2``
+----
+
+8、启用完成后，访问``http://localhost:8080/``、``http://localhost:8081/``，都可以看到两个``EUREKA-SERVER``成功进行了注册，说明集群组建完成，每个服务注册中心都显示了自己的复制节点和可用的复制节点信息：
+
+
+image::/images/attachment/20180816/3a6d10136d7a4960be62306a56a14002.png[]
+
+
+=== 服务提供者
+ 
+接下来，我们继续编写一个服务提供者。
+
+1、新建一个名为``02-service-provider``的``Spring Boot``工程，作为服务提供者
+
+2、引入如下依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-eureka</artifactId>
+</dependency>
+----
+ 
+3、启动类增加``@EnableDiscoveryClient``注解，启用客户端发现
+
+4、添加如下配置项：
+
+----
+server.port=8082
+spring.application.name=service-provider
+eureka.client.service-url.defaultZone=http://eureka-node1:8080/eureka,http://eureka-node2:8081/eureka
+----
+ 
+因为现在有两个服务注册中心，所以``defaultZone``配置了多个地址，以逗号分隔。
+
+5、编写一个打印``hello``的``controller``：
+
+[source,java]
+----
+@RestController
+public class HelloController {
+    @RequestMapping("/hello")
+    public String hello(String name) {
+        return "hello, " + name;
+    }
+}
+----
+ 
+6、编码完成，最后启动工程，访问``http://localhost:8080/``、``http://localhost:8081/``，可以看到两者都显示成功注册了``SERVICE-PROVIDER``服务，说明服务提供者确实向两个服务注册中心都进行了注册。
+
+
+=== 服务消费者
+ 
+最后，我们来编写一个服务消费者，让其请求``SERVICE-PROVIDER``服务的``/hello``接口，并打印信息。
+
+1、新建一个名为``02-ribbon-consumer``的``Spring Boot``工程，作为服务消费者
+
+2、引入如下依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-eureka</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-ribbon</artifactId>
+</dependency>
+----
+ 
+3、添加如下配置：
+
+----
+server.port=8083
+spring.application.name=ribbon-consumer
+# 服务注册中心访问地址
+eureka.client.service-url.defaultZone=http://eureka-node1:8080/eureka,http://eureka-node2:8081/eureka
+----
+ 
+4、启动类增加``@EnableDiscoveryClient``注解，启用客户端发现，并注入``RestTemplate``对象：
+
+[source,java]
+----
+@Bean
+@LoadBalanced
+RestTemplate restTemplate() {
+    return new RestTemplate();
+}
+----
+ 
+5、编一个controller，来请求服务提供者的接口：
+
+[source,java]
+----
+@RestController
+public class ConsumerController {
+    /**
+     * 服务调用地址，根据服务名称
+     */
+    public static final String SERVICE_URL = "http://service-provider";
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @GetMapping("/hello")
+    public String helloConsumer(String name) {
+        // 请求服务的api
+        return restTemplate.getForEntity(SERVICE_URL + "/hello?name={1}", String.class, name).getBody();
+    }
+}
+----
+ 
+6、编码完成，启动应用，访问``http://localhost:8080/``、``http://localhost:8081/``，可以看到两者都显示成功注册了``RIBBON-CONSUMER``服务
+
+7、请求``http://localhost:8083/hello?name=belonk``，结果成功打印``hello, belonk``，表明服务调用成功
+
+8、高可用测试：现在我们停掉``node1``节点，访问``http://localhost:8081/``可以看到node1节点已经不在实例列表中了，再次请求``http://localhost:8083/hello?name=belonk``，结果仍然成功打印``hello, belonk``，表明服务调用成功，证明双节点服务注册中心，挂掉一个后，整个服务仍是可用的，高可用目的达成。
+
+
+== 总结
+ 
+``Eureka``本身默认就开启了高可用的支持，默认情况下，单节点的Eureka服务注册中心仍然能够正常工作，但是会打出无法注册到其他节点的异常日志信息。并且，单节点的注册中心不能满足实际需要，一但出现单点故障，会影响整个系统的可用性，因此，组建双节点乃至多节点的服务注册中心集群是高可用的重要保障。
+
+本文从实际编码出发，编写了一个服务注册中心、服务提供者和服务消费者，并通过命令行启用两个服务注册中心来组建集群，并进行了高可用的验证。
+
+
+ 
+**示例代码：
+https://github.com/belonk/springcloud-demo/tree/master/02-eureka[github]**
+
+
+ 
+**参考文章：**
+
+* http://cloud.spring.io/spring-cloud-static/Edgware.SR4/single/spring-cloud.html#spring-cloud-eureka-server[Spring Cloud官方文档]
+* https://docs.spring.io/spring-cloud-netflix/docs/2.2.9.RELEASE/reference/html/l[Spring Cloud服务注册中心Eureka]

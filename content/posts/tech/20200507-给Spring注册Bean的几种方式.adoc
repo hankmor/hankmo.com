@@ -1,0 +1,528 @@
+---
+title: 给Spring中注册Bean的几种方式
+slug: methods-to-add-beans-to-spring
+img: /images/thumbnail/64DEC79B-1939-40B0-AE10-EDB8D701B1A2.png
+categories:
+  - Spring
+tags:
+  - Spring
+  - ComponentScan
+  - Import
+  - FactoryBean
+description: 给Spring中添加Bean的这些方式，你都弄明白了吗？
+date: 2020-05-07 00:00:00
+---
+
+[[methods-register-bean-to-spring]]
+= 给Spring中注册Bean的几种方式
+:key_word: Spring,容器,注册bean,Bean,ComponentScan,Import,扫描,导入
+:Author: belonk.com belonk@126.com
+:Date: 2020-05-07
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir: images
+:tabsize: 4
+
+[[use-bean]]
+== 使用@Bean定义单个Bean
+
+基于 `@Bean` 注解导入单个Bean。这种方式跟xml中 `<bean>` 标签等价，可以添加外部自定义Bean，但是需要自己创建Bean实例，而且只能导入单个Bean。注解定义如下：
+
+.@Bean注解定义
+[source,java]
+----
+@Target({ElementType.METHOD, ElementType.ANNOTATION_TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface Bean {
+	// 自定义bean的名称
+	@AliasFor("name")
+	String[] value() default {};
+
+	// 同value属性，自定义bean的名称
+	@AliasFor("value")
+	String[] name() default {};
+
+	// 设置当前注入的bean是否可用于自动注入，默认是true。
+	// 如果设置为false，那么即使该bean注入到Spring了，在自动注入时也会找不到bean而抛出NoSuchBeanDefinitionException异常。
+	// 5.1版本新增
+	boolean autowireCandidate() default true; // <1>
+
+	// 自定义Bean的初始化方法名称，Spring 在Bean初始化时会调用该方法
+	String initMethod() default "";
+
+	// 自定义Bean的销毁方法名称，Spring在容器关闭时会调用该方法进行自定义Bean销毁工作
+	String destroyMethod() default AbstractBeanDefinition.INFER_METHOD;
+}
+----
+<1> 功能与 `@Primary` 注解相关，都用于自动注入时Bean的选择，而 `@Primary` 用于指定注入时存在多个Bean实例时优先用哪个，而 `autowireCandidate` 属性则是设置Bean是否参与自动注入，`true` 则参与，`false` 则不参与（即使有Bean实例也可能在自动注入时抛出 `NoSuchBeanDefinitionException` 异常）
+
+`@Bean` 一般标注在方法上，Bean的名称默认就是方法名，也可以通过 `name` 属性来指定名称。每次只能注册一个Bean，默认注册的Bean都是单例的，可以通过 `@Scope` 注解来定义Bean的范围。另外，尽管 `@Bean` 定义了生命周期的初始化和销毁方法，但是这种方式是硬编码的方式配置，不推荐使用。
+
+示例代码如下：
+
+.@Bean示例
+[source,java]
+----
+// 设置当前bean不是首选被自动注入的
+@Bean(autowireCandidate = false)
+public PrimaryBean primaryBean1() {
+    return new PrimaryBean("primaryBean1");
+}
+
+@Bean
+@Primary // 设置当前bean是首选自动注入bean
+public PrimaryBean primaryBean2() {
+    return new PrimaryBean("primaryBean2");
+}
+
+// LifeCycleBean包含了init()和destroy()两个方法
+@Bean(initMethod = "init", destroyMethod = "destroy")
+public LifeCycleBean lifeCycleBean() {
+    return new LifeCycleBean();
+}
+----
+
+[[use-componentscan]]
+== @ComponentScan扫描bean
+
+`@Bean` 注解每次仅能注册一个Bean，如果Bean太多怎么办？Spring为我们提供了Bean扫描机制，使用 `@ComponentScan` 注解。
+
+`@ComponentScan` 注解的作用是，从定义的包下扫描Bean，这些Bean需要能够被Spring识别，即标注 `@Component`、`@Service`、`@Controller`、`@Repository` 注解。
+
+.@ComponentScan注解
+image::/images/componentscan.png[]
+
+`@ComponentScan` 注解定义如下:
+
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Documented
+@Repeatable(ComponentScans.class)
+public @interface ComponentScan {
+	// 同basePackages
+	@AliasFor("basePackages")
+	String[] value() default {};
+
+	// 开始扫描Bean的包位置，Spring会从该定义包位置扫描Bean，包括子包
+	@AliasFor("value")
+	String[] basePackages() default {};
+
+	// 从指定类的包开始扫描
+	Class<?>[] basePackageClasses() default {};
+
+	// 指定扫描出的Bean的名称生成器，默认是AnnotationBeanNameGenerator
+	Class<? extends BeanNameGenerator> nameGenerator() default BeanNameGenerator.class;
+
+	// 定义Scope解析器
+	Class<? extends ScopeMetadataResolver> scopeResolver() default AnnotationScopeMetadataResolver.class;
+
+	// 定义是否为扫描的Bean创建代理，默认不代理，该值会覆盖scopeResolver属性设置
+	ScopedProxyMode scopedProxy() default ScopedProxyMode.DEFAULT; // <1>
+
+	// 定义合法资源的匹配规则，默认是"**/*.class"，即路径下的class文件
+	String resourcePattern() default ClassPathScanningCandidateComponentProvider.DEFAULT_RESOURCE_PATTERN;
+
+	// 使用默认的过滤规则，默认扫描被 `@Component`、`@Repository`、`@Service`、`@Controller` 注解标记的bean
+	boolean useDefaultFilters() default true;
+
+	// 过滤器，用来设置仅需要被扫描到的条件
+	Filter[] includeFilters() default {}; // <2>
+
+	// 过滤器，定义排除扫描的条件
+	Filter[] excludeFilters() default {}; // <3>
+
+	// 扫描出的bean是否是懒加载的
+	boolean lazyInit() default false;
+}
+----
+<1> `scopedProxy` 属性主要解决依赖Bean之间 [red]##scope## 不同的问题，详情看 https://docs.spring.io/spring/docs/5.2.6.RELEASE/spring-framework-reference/core.html#beans-factory-scopes-other-injection[Spring官方文档]的 *Scoped Beans as Dependencies* 一节
+<2> 定义Filter，用来指定需要被扫描到的Bean条件
+<3> 定义Filter，用来指定需要排除扫描的Bean条件
+
+[[filter]]
+=== 过滤器
+
+`includeFilters` 和 `excludeFilters` 属性配置一个过滤器，它是 `ComponentScan.Filter` 类型。过滤器的作用在于，可以设置一些过滤规则，Spring在扫描Bean的时候应用这些规则，然后灵活的对扫描的bean进行筛选。
+
+过滤器 `Filter` 是 `@ComponentScan` 注解的子注解，它的定义如下：
+
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target({})
+@interface Filter {
+
+	// 定义过滤类型，包括ANNOTATION、ASSIGNABLE_TYPE、ASPECTJ、REGEX和CUSTOM
+	FilterType type() default FilterType.ANNOTATION;
+
+	// 同classes
+	@AliasFor("classes")
+	Class<?>[] value() default {};
+
+	// 过滤的类型，只有type为ANNOTATION、ASSIGNABLE_TYPE、CUSTOM可以定义类型
+	@AliasFor("value")
+	Class<?>[] classes() default {};
+
+	// 过滤的表达式，type为ASPECTJ、REGEX可以定义表达式
+	String[] pattern() default {};
+}
+----
+
+Spring为我们提供了多种过滤类型（即 `Filter` 的 `type` 属性），每种的作用如下表所示：
+
+.Spring提供的过滤类型
+[cols="1,2,2"]
+|===
+|过滤类型 |作用 |说明
+
+|ANNOTATION
+|基于注解来定义过滤规则
+|需要定义classes属性，表示注解类型
+
+|ASSIGNABLE_TYPE
+|按照类继承关系来进行过滤，即类和它的所有子类
+|需要定义classes属性，表示祖先类
+
+|ASPECTJ
+|基于aspectj表达式过滤
+|需要定义pattern属性，表示AspectJ表达式
+
+|REGEX
+|按照正则表达式过滤
+|需要定义pattern属性，表示正则表达式
+
+|CUSTOM
+|自定义过滤规则
+|需要定义classes属性，表示自定义过滤器类
+|===
+
+一般而言，我们只需要使用 `@ComponentScan` 配置好需要扫描的基础包即可，就像下边这样：
+
+[source,java]
+----
+@Configuration
+@ComponentScan(basePackages = "com.belonk.componentscan")
+public class BasicComponentScanConfig {
+	// ……
+}
+----
+
+有时，我们需要按照条件设置过滤器，比如在配置Spring MVC时，需要指定父子容器，我们需要父容器配置不扫描Controller，而子容器仅扫描Controller，配置就像下边这样：
+
+.父容器配置
+[source,java]
+----
+@Configurable
+@ComponentScan(basePackages = "com.belonk", excludeFilters = {
+        @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = Controller.class)}) // <1>
+public class RootConfig {
+	// ……
+}
+----
+<1> 扫描Bean时排除 `@Controller` 注解标记的类
+
+.子容器配置
+[source,java]
+----
+@Configuration
+@ComponentScan(basePackages = "com.belonk", includeFilters = {@ComponentScan.Filter(type = FilterType.ANNOTATION,
+        value = Controller.class)}, useDefaultFilters = false) // <1>
+public class SubConfig {
+	// ……
+}
+----
+<1> 扫描Bean时仅扫描 `@Controller` 注解标记的类
+
+[IMPORTANT]
+.注意
+使用 `includeFilters` 自定义包含规则时，`useDefaultFilters` 必须设置为 `false`，以禁用默认过滤器。
+
+[[custom-filter]]
+=== 自定义过滤器
+
+如果默认提供的几种过滤类型不满足要求，我们还可以自定义过滤器，需要实现Spring提供的 `TypeFilter` 接口：
+
+.TypeFilter接口定义
+[source,java]
+----
+@FunctionalInterface
+public interface TypeFilter {
+	// 检查是否符合匹配规则，匹配返回true。
+	// 包含两个参数: metadataReader - 当前正在扫描的类元信息, metadataReaderFactory - 可以获取其他类信息的工厂类
+	boolean match(MetadataReader metadataReader, MetadataReaderFactory metadataReaderFactory)
+			throws IOException;
+}
+----
+
+我们编写一个自定义过滤器，用来设置仅扫描 `classname` 包含了 `user` 的类，示例代码如下：
+
+[source,java]
+----
+public class CustomTypeFilter implements TypeFilter {
+	/**
+	 * 判断正被扫描的类是否匹配并加入到spring容器。
+	 *
+	 * @param metadataReader        当前正在扫描的类信息
+	 * @param metadataReaderFactory 可以获取其他类信息的工厂类
+	 * @return true则匹配，加入Spring容器，false则排除
+	 */
+	public boolean match(MetadataReader metadataReader, MetadataReaderFactory metadataReaderFactory) throws IOException {
+		// 被扫描类上的注解信息
+		AnnotationMetadata annotationMetadata = metadataReader.getAnnotationMetadata();
+		// 被扫描的类的类元信息
+		ClassMetadata classMetadata = metadataReader.getClassMetadata();
+		// 被扫描的类的资源信息，如类文件路径
+		Resource resource = metadataReader.getResource();
+		// 通过上边三个信息来定义扫描规则
+
+		// 被扫描的class类名包含user，则会被扫描到
+		if (classMetadata.getClassName().contains("user") || classMetadata.getClassName().contains("User")) {
+			return true;
+		}
+		return false;
+	}
+}
+----
+
+然后，应用该自定义过滤器:
+
+[source,java]
+----
+@Configuration
+@ComponentScan(basePackages = "com.belonk.componentscan",
+		// 定义按照类型过滤规则, 只会扫描实现了MyFilter接口的bean
+		includeFilters = {@ComponentScan.Filter(type = FilterType.CUSTOM, classes = CustomTypeFilter.class)}, useDefaultFilters = false
+)
+public class CustomFilterConfig {
+	// ……
+}
+----
+
+此时，Spring只会根据配置的自定义过滤器进行扫描过滤。
+
+[[use-import]]
+== 使用@Import导入bean
+
+还可以通过导入Bean的方式来添加Bean到Spring，Spring提供了两个注解： `@Import` 和 `@ImportResource`。
+
+=== @Import导入Bean
+
+`@Import` 注解支持导入多个Bean，也支持自定义 `ImportSelector` 和 `ImportBeanDefinitionRegistrar`。
+
+导入多个Bean的写法一般是这样的：
+
+[source,java]
+----
+@Import(value = {Cat.class, Dog.class}
+----
+
+*ImportSelector*
+
+也可以自定义 `ImportSelector`，可以根据类的注解信息判断类是否应该被导入，接口定义如下：
+
+[source,java]
+----
+public interface ImportSelector {
+
+	// 设置需要导入的类名称，importingClassMetadata参数为被导入的类上的注解信息
+	String[] selectImports(AnnotationMetadata importingClassMetadata);
+}
+----
+
+[TIP]
+Springboot的自动配置功能实现类 `AutoConfigurationImportSelector` 就实现了 `ImportSelector` 来导入自动配置类。
+
+一个 `ImportSelector` 实例代码如下：
+
+[source,java]
+----
+public class AnimalImportSelector implements ImportSelector {
+    /**
+     * 导入多个类
+     *
+     * @param importingClassMetadata 被导入的类上的注解信息
+     * @return 导入的类全类名
+     */
+    public String[] selectImports(AnnotationMetadata importingClassMetadata) {
+    	// 根据importingClassMetadata做一些条件判断，实现具体的业务逻辑
+        return new String[]{"com.belonk.imports.bean.Fox", "com.belonk.imports.bean.Tiger"};
+    }
+}
+----
+
+然后在配置类上直接导入该selector：
+
+[source,java]
+----
+@Import(value = {AnimalImportSelector.class})
+----
+
+*ImportBeanDefinitionRegistrar*
+
+`ImportBeanDefinitionRegistrar` 接口提供了 `BeanDefinitionRegistry` 类，可以更灵活的导入Bean定义：
+
+[source,java]
+----
+public interface ImportBeanDefinitionRegistrar {
+
+	// 根据注解元数据注册bean定义, 支持自定义beanName生成器
+	default void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry,
+			BeanNameGenerator importBeanNameGenerator) {
+		registerBeanDefinitions(importingClassMetadata, registry);
+	}
+
+	/**
+     * 使用BeanDefinitionRegistry来向IOC容器注册或者移除bean。
+     *
+     * @param importingClassMetadata 当前类的注解信息
+     * @param registry               bean注册表
+     */
+	default void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+	}
+}
+----
+
+一个简单的示例如下:
+
+[source,java]
+----
+public class AnimalImportBeanDefinitionRegistrar implements ImportBeanDefinitionRegistrar {
+    public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+        // 主要容器中注册了Fox和Tiger，那就再注册一个Zoo类
+        if (registry.containsBeanDefinition("com.belonk.imports.bean.Fox")
+                && registry.containsBeanDefinition("com.belonk.imports.bean.Tiger")) {
+            RootBeanDefinition beanDefinition = new RootBeanDefinition(Zoo.class);
+            registry.registerBeanDefinition("zoo", beanDefinition);
+        }
+    }
+}
+----
+
+[TIP]
+====
+另外，一个典型的使用 `ImportBeanDefinitionRegistrar` 例子就是Spring的AOP实现，使用 `@EnableAspectJAutoProxy` 注解开启AOP代理过后，会导入 `AspectJAutoProxyRegistrar` 类，该类实现了 `ImportBeanDefinitionRegistrar`，向Spring容器注册 `AnnotationAwareAspectJAutoProxyCreator` 对象来实现Aop功能。
+
+.AspectJAutoProxyRegistrar定义
+[source,java]
+----
+class AspectJAutoProxyRegistrar implements ImportBeanDefinitionRegistrar {
+	// ……
+}
+----
+====
+
+=== @ImportResource 导入其他资源中的Bean
+
+Spring也支持将其他资源中的bean导入到容器，使用 `@ImportResource` 注解来实现，只需要传入资源的url地址即可。一个示例代码如下：
+
+在xml文件定义bean：
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="forXml" class="com.belonk.imports.bean.ForXml"> <!--1-->
+        <property name="tag" value="1.0"/>
+    </bean>
+</beans>
+----
+<1> 在xml中配置一个bean。
+
+然后，在配置类上导入：
+
+[source,java]
+----
+@ImportResource(locations = {"classpath:beans.xml"})
+----
+
+[[use-factorybean]]
+== 实现FactoryBean接口注册bean
+
+另一种注册Bean的方式是使用 `FactoryBean` 接口，它是一种特殊的Bean，专门用来生产Bean。一般情况下，Spring通过反射机制来实例化Bean。Spring也通过 `FactoryBean` 接口提供了另一种创建Bean的方式，这需要用户通过编程的方式来定制实例化Bean的逻辑。`FactoryBean` 定义如下：
+
+.FactoryBean接口定义
+[source,java]
+----
+public interface FactoryBean<T> {
+	// 生产对象的实例
+	@Nullable
+	T getObject() throws Exception;
+
+	// 生产对象的类型
+	@Nullable
+	Class<?> getObjectType();
+
+	// 生产的对象是否是单例的
+	default boolean isSingleton() {
+		return true;
+	}
+}
+----
+
+[NOTE]
+如果类实现了 `FactoryBean` 接口，那么类就作为一个特殊的工厂Bean，获取其实例时得到的是 ##实际生产的Bean对象## 而不是 `FactoryBean` 本身。如果需要获取 `FactoryBean` 本身的示例，需要在其bean名称前添加一个 `&` 符号。
+
+来看一个示例。
+
+先定义一个Bean：
+
+[source,java]
+----
+public class Car {
+}
+----
+
+然后编写 `CarFactoryBean` 专门用于生产 `Car` 类：
+
+[source,java]
+----
+public class CarFactoryBean implements FactoryBean<Car> {
+    public Car getObject() {
+        return new Car();
+    }
+
+    public Class<?> getObjectType() {
+        return Car.class;
+    }
+
+    public boolean isSingleton() {
+        return true;
+    }
+}
+----
+
+然后，就可以从容器获取 `Car` 对象实例了：
+
+[source,java]
+----
+Object car = context.getBean("carFactoryBean"); // <1>
+----
+<1> 此时拿到的是 `Car` 实例，不是 `CarFactoryBean`。
+
+如果要获取 `CarFactoryBean` 实例，则需要添加 `&` 前缀：
+
+[source,java]
+----
+Object carFactoryBean = context.getBean("&carFactoryBean");
+assert carFactoryBean.getClass().equals(CarFactoryBean.class);
+----
+
+== 示例代码
+本文示例代码参见 https://github.com/belonk/spring5-demo/tree/master/01-spring-ioc/[Github]。
+
+[bibliography]
+== 参考文档
+- https://docs.spring.io/spring/docs/5.2.6.RELEASE/spring-framework-reference/core.html#beans[Spring官方文档]

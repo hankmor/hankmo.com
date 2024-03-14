@@ -1,0 +1,318 @@
+---
+title: Spring Cloud服务注册中心Eureka
+slug: springcloud-eureka-standalone
+img: /images/thumbnail/attachment/20190615/d637fe24669e4e939ca705b5c6991746.png
+categories:
+  - Spring
+tags:
+  - eureka
+  - springcloud
+  - 服务发现
+  - 服务治理
+  - 服务注册
+  - 微服务
+description: >-
+  Eureka，字面意思即"发现"之意，是Netflix下开源的服务治理（注册、发现等）中间件。Spring Cloud
+  Eureka在其基础上进行了二次封装，添加了自动化配置等功能，使其成为Spring Cloud微服务体系中核心的服务治理方案之一。
+date: 2018-08-15 16:48:42
+updated: 2019-06-15 08:35:48
+---
+
+= Spring Cloud服务注册中心Eureka
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: Spring Cloud,微服务,Spring Boot,Eureka,netflix,服务治理,服务注册,服务发现,客户端发现，服务端发现,服务消费者,服务提供者,注册中心,服务注册表
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: eureka,springcloud,服务发现,服务治理,服务注册,微服务
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+上一篇，我们学习了Spring Cloud配置集成化组件Config，在本篇，我们来学习Spring Cloud微服务架构的一个核心组件----Eureka。
+
+
+== 服务治理
+ 
+服务治理，即将体系中各个微服务统一纳入服务注册中心，由注册中心维护各个微服务的名称、地址、端口、状态等信息，并提供服务自动化注册和发现机制。
+
+* **为什么需要服务治理？**
+
+**对**于传统应用而言，应用数量少，各应用间的API调用我们可以通过在配置文件中写入IP地址和端口的方式来进行维护。那么对于现在的微服务架构而言，应用的服务数量上百甚至上千，如果还使用传统的配置方式来维护各个服务信息及其其调用管理，那么无疑是困难重重，不仅容易出错，而且成本直线上升。
+
+
+image::/images/attachment/20180815/379e2fc20c4644a4b221a81deec35d38.png[]
+
+
+<p style="text-align: center;">没有服务治理时，如何管理各个服务？
+
+<p style="text-align: left;">在微服务体系中，服务实例的网络位置都是动态分配的，而且实例的地址可能会经常性的改变，有了服务治理，不再需要人为的维护各个服务信息，一切交给服务注册中心来自动管理和维护，大大提高了效率。
+
+* **几个核心概念** 
+** 服务注册表：维护了服务实例的网络地址、名称等信息的数据库
+** 服务提供者：提供RESTApi以供其他服务调用的被调用方
+** 服务消费者：调用服务端提供的RESTApi接口，发起服务请求的请求方
+** 服务注册：将服务注册表中提供服务信息进行注册服务的行为
+** 服务发现：从服务注册表中查询服务实例信息的行为
+
+接下来，我们看看服务发现的两种模式。
+
+* **服务发现模式**
+
+服务发现主要有两种模式：**服务端发现模式**和**客户端发现模式**。
+
+1、客户端发现模式
+
+即由客户端来获取服务实例列表和网络位置，并且进行负载均衡。客户端查询服务注册表（一个维护了服务实例和其网络位置等信息的数据库），获取服务实例列表，并且采用负载均衡算法，从列表中选择一个服务实例作为请求目标。
+
+.客户端发现模式示意图
+image::/images/attachment/20180815/5861a1cd40a540e88d7966d39af398e1.png[]
+
+Eureka采用的就是客户端发现模式。
+
+2、服务端发现模式
+
+即由服务端来发现服务实例并进行负载均衡：客户端通过负载均衡器向某个服务提出请求，负载均衡器查询服务注册表，并将请求转发到可用的服务实例。
+
+.服务端发现模式示意图
+image::/images/attachment/20180815/0dfd91076c6943e196f9312ba8e49e6c.png[]
+
+``AWS Elastic Load Balancer（ELB）``采用的是服务端发现模式。
+
+本篇讲解的``Spring Cloud Eureka``采用的是客户端发现模式，接下来我们看看eureka的基本概念。
+
+
+== Eureka简介
+ 
+Eureka，字面意思即"发现"之意，是Netflix下开源的服务治理（注册、发现等）中间件。``Spring Cloud Eureka``在其基础上进行了二次封装，添加了自动化配置等功能，使其成为Spring Cloud微服务体系中核心的服务治理方案之一。
+
+Eureka包括三个角色，如下图所示：
+
+.Eureka基础架构（图片来源网络）
+image::https://img-blog.csdn.net/20161221133727612[]
+
+
+* Eureka Server：服务注册中心，维护了服务注册表，提供服务注册、服务发现、刷新和取消注册等功能
+* Service Provider：服务提供者，对外提供服务，一般为RESTApi接口
+* Service Consumer：服务消费者，调用服务提供者接口，实现具体业务逻辑
+
+由上图可见，Service Provider将注册中心注册服务，Service Consumer从注册中心查询服务注册表，获取服务实例信息，并通过负载均衡算法获取到一个服务提供者实例，并发起调用请求。
+
+Eureka Server并没有后端存储机制，注册表中的所有服务实例必须发送心跳监测以保证正确连接（内存中实现），服务实例（客户端）会将服务端注册表拉去到本地并缓存在内存中，而不是每次都向服务端发送请求来获取服务实例注册信息。
+
+前边介绍了Eureka和服务治理相关的理论，接下来，我们来编程实现服务注册中心。
+
+
+== 单节点服务注册中心
+ 
+
+=== 编写服务注册中心
+ 
+1、新建名为``01-eureka-server``的``Spring Boot``工程，作为服务注册中心
+
+2、引入如下依赖
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-eureka-server</artifactId>
+</dependency>
+----
+ 
+上边的starter为eureka的服务端依赖。
+
+3、在``application.properties``进行如下配置
+
+[source,block]
+----
+spring.application.name=eureka-node
+# eureka server config
+server.port=8888
+# 注册中心实例主机名
+eureka.instance.hostname=localhost
+# 是否将自身作为客户端注册到服务中心，这里本身份为注册中心，所以设置为false
+eureka.client.register-with-eureka=false
+# 是否需要获取服务注册信息，这里注册中心本身在维护服务列表，不需要检索服务，所以设置为false
+eureka.client.fetch-registry=false
+# 开发用，关闭服务端自我保护，防止关闭的实例不能被剔除
+eureka.server.enable-self-preservation=false
+# 服务注册中心访问地址
+eureka.client.service-url.defaultZone=http://${eureka.instance.hostname}:${server.port}/eureka
+# 使用客户端IP地址，而非hostname
+eureka.instance.prefer-ip-address=true
+----
+ 
+默认情况下，每一个Eureka服务端同样也是一个Eureka客户端，因此至少需要配置一个其他的Eureka服务端URL来让自己完成注册。如果不提供这个服务端URL，服务端本身可以正常运行和提供服务，但是控制台会打印许多无法成功注册的日志信息。如果需要使用单节点模式，可以使用如下配置来禁止默认注册行为：
+
+----
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+----
+
+即是说，服务端本身不需要作为客户端向其他服务端进行注册。
+
+4、启动类上添加``@EnableEurekaServer``注册，表明该工程为Eureka服务端工程
+
+5、启动应用，然后访问``http://localhost:8888/``，可以看到Eureka的主界面，表明服务注册中心启动成功
+
+.Eureka启动主界面
+image::/images/attachment/20180815/6c74c5b37b504c32879cb5d608c91d41.png[]
+
+
+image:://note.youdao.com/src/8F8696060D7B4930AA5AE339DB1C47BB[]
+
+=== 编写服务提供者
+
+1、新建一个 ``01-service-demo``的 ``Spring Boot``工程，作为服务提供者
+
+2、引入如下依赖
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-eureka</artifactId>
+</dependency>
+----
+ 
+3、添加如下配置项
+
+[source,block]
+----
+server.port=8080
+spring.application.name=hello-service
+# 服务注册中心访问地址
+eureka.client.service-url.defaultZone=http://localhost:8888/eureka
+----
+ 
+重点是最后一行配置，告诉应用服务注册中心所在的网络位置，注意后边的名称是``/eureka``，不要更改。
+
+4、在启动类上添加``@EnableDiscoveryClient``注解
+
+前边已经提到过，Eureka使用的是客户端发现，此注解即表明启用成功后会根据配置的地址向服务注册中心进行服务注册。
+
+5、编写一个``Controller``，简单的打印一个字符串
+
+[source,java]
+----
+@RestController
+public class DemoController {
+    @GetMapping("/sayHello")
+    public String say(String name) {
+        return "hello, " + name + "!";
+    }
+}
+----
+ 
+6、启动应用，可以看到控制台显示应用已经成功注册
+
+----
+``com.netflix.discovery.DiscoveryClient    : DiscoveryClient_HELLO-SERVICE/hello-service:-1778284792 - registration status: 204``
+----
+
+7、访问``http://localhost:8080/sayHello?name=belonk``，成功打印``Hello belonk!``，表明服务提供者运行成功。
+
+8、再次访问``http://localhost:8888/``，首页可以看到``HELLO-SERVICE``已经被成功注册
+
+最后，我们来编写一个服务消费者，通过注册中心查询服务实例，并进行远程调用。
+
+
+=== 编写服务消费者
+ 
+``Spring Cloud``提供的服务发现和消费有``Ribbon``和``Feign``，前者基于``RestTemplate``，后者为声明式服务调用框架。后边详细讨论，这里仅简单使用Ribbon，来演示服务消费者。
+
+1、新建``01-ribbon-consumer``的``Spring Boot``工程
+
+2、引入如下依赖
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-eureka</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.cloud</groupId>
+<artifactId>spring-cloud-starter-ribbon</artifactId>
+</dependency>
+----
+ 
+3、添加如下配置
+
+[source,block]
+----
+server.port=9090
+spring.application.name=ribbon-consumer
+# 服务注册中心访问地址
+eureka.client.service-url.defaultZone=http://localhost:8888/eureka
+----
+ 
+4、在启动类上添加``@EnableDiscoveryClient``注解，启用客户端发现
+
+5、在启动类上注入``RestTemplate``对象
+
+[source,java]
+----
+@Bean
+@LoadBalanced
+RestTemplate restTemplate() {
+    return new RestTemplate();
+}
+----
+ 
+这里的``@LoadBalanced``注解不可缺少，它保证使用``LoadBalancerClient``进行服务发现
+
+6、编写一个``Controller``，来消费``HELLO-SERVICE``服务
+
+[source,java]
+----
+@RestController
+public class ConsumerController {
+    /**
+     * 服务调用地址，根据服务名称
+     */
+    public static final String SERVICE_URL = "http://hello-service";
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @GetMapping("/hello")
+    public String helloConsumer(String name) {
+        // 请求服务的hello api
+        return restTemplate.getForEntity(SERVICE_URL + "/sayHello?name={1}", String.class, name).getBody();
+    }
+}
+----
+ 
+在Eureka中，服务名称不区分大小写
+
+7、启动应用，访问``http://localhost:9090/hello?name=belonk``，正确输出``Hello, belonk!``，服务消费者调用成功。
+
+8、再次访问``http://localhost:8888/``，首页可以看到现在已经有两个服务注册成功，一个为``HELLO-SERVICE``，还有一个为``RIBBON-CONSUMER``。
+
+
+== 总结
+ 
+本文先介绍了服务治理的概念和必要性，然后介绍了服务发现常见的两种模式。最后，我们通过编码逐步实现了一个服务注册中心、服务提供者和服务消费者，从整体上了解了Eureka的基本概念和结构关系。
+
+但是，我们编写的是一个单节点的注册中心，注册中心一旦出现故障，那么会影响整个微服务体系，导致其不可用，在下一篇，我们来看看如何使用Eureka搭建高可用、双节点的服务注册中心。
+
+**示例代码：
+https://github.com/belonk/springcloud-demo/tree/master/02-eureka[github]**
+
+
+**参考文章：**
+
+* https://www.nginx.com/blog/service-discovery-in-a-microservices-architecture/[https://www.nginx.com/blog/service-discovery-in-a-microservices-architecture/]
+* https://docs.spring.io/spring-cloud-netflix/docs/2.2.9.RELEASE/reference/html/[Spring Cloud官方文档]

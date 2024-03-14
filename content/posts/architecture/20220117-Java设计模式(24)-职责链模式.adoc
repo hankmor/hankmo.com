@@ -1,0 +1,350 @@
+---
+title: Java设计模式(24)-职责链模式
+slug: java-chainofresp-pattern
+date: 2022/01/17
+updated: 2022/01/17
+img:
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 职责链模式
+description: 您有没有遇到各种需要走流程的事情？比如，请假申请，假设公司规定，3天以内的请假申请组长可以直接审批，而4到7天的请假申请必须要让部门经理来审批了，超过7天的请假申请只能由公司总经理来审批。类似的场景还有很多，尤其在工作流中，比如物资审批、报账审批、资金审批等等……
+---
+
+= Java设计模式(24)-职责链模式
+:key_word: 设计模式,职责链模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2022/01/12
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+== 引言
+
+您有没有遇到各种需要走流程的事情？比如，请假申请，假设公司规定，3天以内的请假申请组长可以直接审批，而4到7天的请假申请必须要让部门经理来审批了，超过7天的请假申请只能由公司总经理来审批。类似的场景还有很多，尤其在工作流中，比如物资审批、报账审批、资金审批等等……
+
+image::/images/attachment/designpattern/chainofresp-view.png[width="600"]
+
+这里场景中，请求要发送给多个处理者，处理者要能够向后继续转发请求。存在着两种情况：
+
+. 一方面，每一个处理者有自身能够处理的权限范围，超过权限范围的请求自身不处理，而是将请求转交给上级来处理，如果处理了则终止；
+. 另一方面，每一个处理者可以部分处理请求，处理后可以再将请求发送给上级，也可以决定是否终止。
+
+这样，可能多个处理者处理同一个请求，也有可能只有一个处理者能够处理请求，如下图所示：
+
+image::/images/attachment/designpattern/chainofresp-view2.png[width="600"]
+
+多个处理者连成了一条链，请求沿着这条链可以向后传递，这里就会用到今天要讲的职责链模式。我么以请假流程为例，看看使用职责链模式前后的变化，感受职责链模式带来的好处。
+
+== 请假流程初步
+
+根据前边的场景描述：3天以内的请假申请组长可以直接审批，而4到7天的请假申请必须要让部门经理来审批了，超过7天的请假申请只能由公司总经理来审批。具备面向对象思维的我们不难写出如下的代码：
+
+1、定义请假请求
+
+.请假请求类
+[source,java]
+----
+class LeaveRequest {
+	private final int days; // <1>
+	private final String name; // <2>
+	public LeaveRequest(int days, String name) {
+		this.days = days;
+		this.name = name;
+	}
+	// …… 省略getter和toString
+}
+----
+
+<1> 请假的天数，它来决定谁可以审批这个请假请求
+<2> 请假人的名称
+
+2、既然请假要求领导审批，我们来抽象一个领导的接口
+
+.抽象的领导接口，默认实现了请假审批逻辑
+[source,java]
+----
+interface Leader {
+	default void handle(LeaveRequest request) { // <1>
+		Random random = new Random(47);
+		if (canHandle(request)) { // <2>
+			if (random.nextBoolean()) {
+				System.out.println(this.getClass() + " [通过] 了请假请求: " + request);
+			} else {
+				System.out.println(this.getClass() + " [拒绝] 了请假请求: " + request);
+			}
+			return;
+		}
+		throw new RuntimeException(this.getClass() + " 不能处理请假请求: " + request);
+	}
+	boolean canHandle(LeaveRequest request); // <3>
+}
+----
+
+<1> 请假审批方法，默认通过一个随机数来模拟请求审批的成功与失败
+<2> 如果自身不能处理请求，则抛出异常
+<3> 是否可以处理请假请求
+
+3、现在，可以编写具体的领导们了，这里模拟组长、部门经理和公司总经理三个领导
+
+.组长类
+[source,java]
+----
+class GroupLeader implements Leader {
+	@Override
+	public boolean canHandle(LeaveRequest request) {
+		return request.getDays() <= 3;
+	}
+}
+----
+
+.部门经理类
+[source,java]
+----
+class DeptManager implements Leader {
+	@Override
+	public boolean canHandle(LeaveRequest request) {
+		return request.getDays() >= 4 && request.getDays() <= 7;
+	}
+}
+----
+
+.公司总经理类
+[source,java]
+----
+class CompanyManager implements Leader {
+	@Override
+	public boolean canHandle(LeaveRequest request) {
+		return request.getDays() > 7;
+	}
+}
+----
+
+这三个类的逻辑很简单，根据请假天数判断自身是否可以处理请求。
+
+4、由于领导们都比较独立，没有上报的功能，那么客户端就比较麻烦了
+
+.客户端调用代码
+[source,java]
+----
+public class AskForLeave {
+	static final Random random = new Random(47);
+	public static void main(String[] args) {
+		int times = 10;
+		for (int i = 0; i < times; i++) { // <1>
+			askForLeave();
+		}
+	}
+	public static void askForLeave() { // <2>
+		int days = random.nextInt(10) + 1;
+		LeaveRequest request = new LeaveRequest(days, "张三");
+		System.out.println("请假请求：" + request);
+		GroupLeader groupLeader = new GroupLeader();
+		DeptManager deptManager = new DeptManager();
+		CompanyManager companyManager = new CompanyManager();
+		if (groupLeader.canHandle(request)) { // <3>
+			groupLeader.handle(request);
+		} else if (deptManager.canHandle(request)) {
+			deptManager.handle(request);
+		} else if (companyManager.canHandle(request)) {
+			companyManager.handle(request);
+		} else {
+			System.err.println("没有人能处理这个请假请求");
+		}
+	}
+}
+----
+
+<1> 模拟10次请假申请
+<2> 具体的请假处理逻辑
+<3> 从直属上级开始，依次判断是否可以审批，不能则找上级审批
+
+可以看到，上下级关系由客户端来判断并调用不同的上级来处理请求，客户端的职责过多，如果现在要增加一个领导层级，客户端的代码改动较大。
+
+如果让下级领导可以感知到上级领导，并在自己不能处理时转交给上级，这样就会灵活很多，这就是职责链模式。
+
+== 职责链模式
+
+先来看看什么是职责链模式。
+
+=== 概念
+
+DP 对职责链模式的定义：职责链模式（Chain Of Responsibility），使多个对象都有机会处理请求，从而避免请求的发送者和接收者之间的耦合关系。将这些对象连成一条链，并沿着这条链传递该请求，直到有一个对象处理它为止。
+
+从这个定义可知，它包含的是前边说的第一种情况：只要有一个处理者能够处理对象，则终止，因为多个对象都处理并转发请求的过程复杂的多，具体可以由开发者自行实现，其思想仍然是一种职责链模式。
+
+=== 结构
+
+职责链模式的结构如下：
+
+image::/images/attachment/designpattern/chainofresp-class.png[width="600"]
+
+职责链模式有以下几个角色：
+
+* Handler: 处理者，它定义了处理请求的接口方法，还可以设置后继者，通常会定义是否能够处理请求的方法
+* AbstractHandler: 抽象处理者(可选)，抽取样板代码，定义通用处理逻辑
+* ConcreteHandler: 具体处理者，实现 `Handler` 或继承 `AbstractHandler`，实现具体的处理逻辑，可以访问它的后继者，如果自己不能处理请求，则转发给后继者，否则直接处理
+* Client: 客户端，向链上的 `ConcreteHandler` 提交请求
+
+=== 优缺点
+
+职责链模式的优点：
+
+. 降低耦合度：客户端无需知道哪一个具体处理者能够处理请求，只是简单将请求提交给其中一个对象，链中的处理者不需要关心链的结构，也无需知道后继对象的详细信息，只持有一个后继者的引用，这简化了对象的相互连接
+. 灵活易扩展：可以动态的对职责链中的对象进行排序以调整处理顺序，增加、移除职责链也非常容易
+
+缺点：
+
+. 链中的对象过多，造成链庞大、结构复杂度增加
+. 如果链中的对象没有能够处理请求，此时请求得不到处理
+
+=== 使用场景
+
+职责链模式适合以下场景：
+
+. 有多个对象都可以处理同一个请求，哪一个对象处理请求在运行时确定
+. 不知道具体的请求接收者，只知道从包含多个对象的集合中选择一个来处理时
+
+== 改进请假流程
+
+现在，我们使用职责链模式来改进前边的请假流程。我们要做的就是让处理者能够知道自己的上级是谁，所以需要改进 `Leader` 接口。
+
+1、改造 `Leader` 接口，增加设置上级的方法
+
+.抽象的领导接口
+[source,java]
+----
+interface Leader {
+	default void handle(LeaveRequest request) { // <1>
+		Random random = new Random(47);
+		if (canHandle(request)) {
+			if (random.nextBoolean()) {
+				System.out.println(this.getClass() + " [通过] 了请假请求: " + request);
+			} else {
+				System.out.println(this.getClass() + " [拒绝] 了请假请求: " + request);
+			}
+			return;
+		}
+		Leader superior = getSuperior();
+		if (superior != null) {
+			superior.handle(request); // <2>
+		} else {
+			throw new RuntimeException(this.getClass() + " 不能处理请假请求: " + request);
+		}
+	}
+	boolean canHandle(LeaveRequest request); // <3>
+	void setSuperior(Leader leader1); // <4>
+	Leader getSuperior(); // <5>
+}
+----
+
+<1> 请假审批方法，默认通过一个随机数来模拟请求审批的成功与失败
+<2> 如果自身不能处理请求，则交给上级领导来处理
+<3> 是否可以处理请假请求
+<4> 设置当前处理者的上级领导，处理者必须知道上级领导是谁，以便自己不能处理时好转发请求
+<5> 查询当前处理者的上级领导
+
+2、每一个 `Leader` 都可以设置自己的上级，我们可以将对上级领导感知的功能放到抽象类中
+
+.抽象领导实现，可以感知上级领导
+[source,java]
+----
+abstract class AbstractLeader implements Leader {
+	private Leader superior; // <1>
+	public abstract boolean canHandle(LeaveRequest request); // <2>
+	@Override
+	public void setSuperior(Leader superior) {
+		this.superior = superior;
+	}
+	@Override
+	public Leader getSuperior() {
+		return this.superior;
+	}
+}
+----
+
+<1> 聚合一个上级领导
+<2> 抽象方法，是否可以处理这个请求，由子类实现
+
+3、现在，具体的领导对象直接继承抽象的 `AbstractLeader` 并实现 `canHandle(LeaveRequest request)` 方法即可
+
+.组长类
+[source,java]
+----
+class GroupLeader extends AbstractLeader {
+	@Override
+	public boolean canHandle(LeaveRequest request) {
+		return request.getDays() <= 3;
+	}
+}
+----
+
+.部门经理类
+[source,java]
+----
+class DeptManager extends AbstractLeader {
+	@Override
+	public boolean canHandle(LeaveRequest request) {
+		return request.getDays() >= 4 && request.getDays() <= 7;
+	}
+}
+----
+
+.公司总经理类
+[source,java]
+----
+class CompanyManager extends AbstractLeader {
+	@Override
+	public boolean canHandle(LeaveRequest request) {
+		return request.getDays() > 7;
+	}
+}
+----
+
+4、客户端代码
+
+[source,java]
+----
+public class AskForLeaveChain {
+	static final Random random = new Random(47);
+	public static void main(String[] args) {
+		int times = 10;
+		for (int i = 0; i < times; i++) {
+			askForLeave();
+		}
+	}
+	public static void askForLeave() {
+		int days = random.nextInt(10) + 1;
+		LeaveRequest request = new LeaveRequest(days, "张三");
+		System.out.println("请假请求：" + request);
+		GroupLeader groupLeader = new GroupLeader();
+		DeptManager deptManager = new DeptManager();
+		CompanyManager companyManager = new CompanyManager();
+		groupLeader.setSuperior(deptManager);
+		deptManager.setSuperior(companyManager);
+		groupLeader.handle(request); // <1>
+	}
+}
+----
+
+<1> 请假请求首先交给组长审批，然后再沿着链传播
+
+此时，如果需要增加领导层级，客户端稍作改动（改变上级关系）即可实现。
+
+== 总结
+
+职责链模式是一种行为型设计模式，它主张将对各可以处理同一请求的对象连接起来形成一条链状结构，并在其上传播请求，以降低发送者和接收者之间的耦合程度。
+
+职责链模式是一种常用的设计模式，各大框架都有它的身影。比如，Spring 的 `HandlerExecutionChain`，MyBatis 的 `InterceptorChain` 等等。
+
+本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/respchain/[github]。

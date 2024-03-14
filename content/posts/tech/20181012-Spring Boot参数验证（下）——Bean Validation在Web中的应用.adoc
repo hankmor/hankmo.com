@@ -1,0 +1,415 @@
+---
+title: Spring Boot参数验证（下）——Bean Validation在Web中的应用
+slug: spring-boot-validation-2
+img: /images/thumbnail/attachment/20190615/0956f9795f554e6f94b43c7354deafeb.png
+categories:
+  - Spring
+tags:
+  - validation
+  - springboot
+description: >-
+  Spring Boot的Web Starter已经加入了Bean
+  Validation(JSR303)的依赖，可以直接使用。在使用时，只需在需要校验的方法上加上@Valid或者@Validated注解即可，如果需要编码自定义校验结果，则在校验的参数后加上BindingResult参数，注意对应关系；否则，为了模块化需要，也可以屏蔽校验失败业务逻辑，编写全局校验器，校验失败自动返回JSON校验结果即可。
+date: 2018-10-12 16:52:20
+updated: 2019-06-15 08:31:15
+---
+
+= Spring Boot参数验证（下）——Bean Validation在Web中的应用
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: WEB,Spring Boot,Bean Validation,JSR303,Valid,validated,BindingResult
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: validation,springboot
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在 **Spring Boot参数验证（上）--Bean Validation及其Hibernate实现** 一篇中，我们介绍了验证标准``Bean Validation``和其Hibernate实现，在本篇，我们看看它们是如何应用在Spring Boot Web项目中。
+
+
+== **Spring Validator**
+
+其实，Spring很早就有了自己的Bean验证机制，其核心为``Validator``接口，表示校验器：
+
+[source,java]
+----
+public interface Validator {
+    // 检测Validator是否支持校验提供的Class
+    boolean supports(Class<?> clazz);
+
+    // 校验逻辑，校验的结果信息通过errors获取
+    void validate(@Nullable Object target, Errors errors);
+}
+----
+
+Errors接口，用以表示校验失败的错误信息：
+
+[source,java]
+----
+public interface Errors {
+    // 获取被校验的根对象
+    String getObjectName();
+
+    // 校验结果是否有错
+    boolean hasErrors();
+
+    // 获取校验错误数量
+    int getErrorCount();
+
+    // 获取所有错误信息，包括全局错误和字段错误
+    List<ObjectError> getAllErrors();
+
+    // 获取所有字段错误
+	List<FieldError> getFieldErrors();
+
+    ……
+}
+----
+
+当Bean Validation被标准化过后，从Spring3.X开始，已经完全支持JSR 303(1.0)规范，通过Spring的``LocalValidatorFactoryBean``实现，它对Spring的``Validator``接口和``javax.validation.Validator``接口进行了适配。
+
+
+=== 全局Validator
+
+全局Validator通过上述的``LocalValidatorFactoryBean``类来提供，只要使用``@EnableWebMvc``即可（Xml配置开启``<mvc:annotation-driven>``），也可以进行自定义：
+
+[source,java]
+----
+@Configuration
+@EnableWebMvc
+public class WebConfig extends WebMvcConfigurerAdapter {
+
+    @Override
+    public Validator getValidator(); {
+        // return "global" validator
+    }
+}
+----
+
+
+=== 私有validator
+
+Spring也支持特定Controller私有的验证器，需要使用``@InitBinder``将验证器与``Controller``进行绑定，一个典型的应用场景是：一个Bean的几个属性的校验逻辑在同一个验证器完成。例如：定义如下的Bean，并未使用``JSR303``，而是使用自定义验证器来校验它的几个属性，示例代码如下：
+
+1、定义Bean：
+
+[source,java]
+----
+@Data
+public class Employee {
+    private int id;
+    private String name;
+    private String role;
+}
+----
+
+2、自定义验证器：
+
+[source,java]
+----
+@Component
+public class EmployeeFormValidator implements Validator {
+    @Override
+    public boolean supports(Class<?> clazz) {
+        return Employee.class.equals(clazz);
+    }
+
+    @Override
+    public void validate(@Nullable Object target, Errors errors) {
+        // id不能为空
+        ValidationUtils.rejectIfEmptyOrWhitespace(errors, "id", "id.required");
+        Employee emp = (Employee) target;
+        if (emp.getId() <= 0) {
+            errors.rejectValue("id", "negativeValue", new Object[]{"'id'"}, "id can't be negative");
+        }
+        ValidationUtils.rejectIfEmptyOrWhitespace(errors, "name", "name.required", "name cant't be null");
+        ValidationUtils.rejectIfEmptyOrWhitespace(errors, "role", "role.required", "role cant't be null");
+    }
+}
+----
+
+需要实现Spring的``Validator``接口，这里使用了Spring提供的``ValidationUtils``工具类，该验证器将``Employee``的三个属性都进行了校验。
+
+3、绑定到Controller：
+
+[source,java]
+----
+@RestController
+@RequestMapping("/emp")
+public class EmployeeController {
+    @Autowired
+    @Qualifier("employeeFormValidator")
+    private Validator validator;
+
+    @InitBinder
+    private void initBinder(WebDataBinder binder) {
+        // 绑定验证器
+        binder.setValidator(validator);
+    }
+
+    @PostMapping(produces = "application/json;charset=utf-8")
+    public ResultMsg save(@RequestBody @Validated Employee employee,
+                          BindingResult bindingResult, Model model) {
+        if (bindingResult.hasErrors()) {
+            // 校验失败，获取校验错误信息
+            List<FieldError> errors = bindingResult.getFieldErrors();
+            StringBuilder sb = new StringBuilder();
+            for (FieldError error : errors) {
+                sb.append(String.format("错误字段：%s，错误值：%s，原因：%s",
+                        error.getField(),
+                        error.getRejectedValue(),
+                        error.getDefaultMessage())
+                ).append("\r\n");
+            }
+            return ResultMsg.error(MsgDefinition.ILLEGAL_ARGUMENTS.codeOf(), sb.toString());
+        } else {
+            return ResultMsg.success(employee);
+        }
+    }
+}
+----
+
+要开启自动校验功能，需要在Controller校验的Bean上添加Spring的``@Validated``注解或者Bean Validation的``@Valid``注解(二者的区别请看文末的特别说明)，然后在被校验的Bean参数后加上``BindingResult``接口，用以接收校验失败的错误信息，该接口扩展了``Errors``接口。
+
+4、测试
+
+编写单元测试代码，测试Controller：
+
+[source,java]
+----
+@RunWith(SpringRunner.class)
+@SpringBootTest
+public class EmployeeControllerTest {
+    private MockMvc mockMvc;
+    @Autowired
+    protected WebApplicationContext wac;
+
+    @Before
+    public void setUp() {
+        this.mockMvc = MockMvcBuilders.webAppContextSetup(wac)
+                .alwaysExpect(MockMvcResultMatchers.status().isOk())
+                .build();
+    }
+
+    @Test
+    public void testAdd() throws Exception {
+        Employee employee = new Employee();
+        employee.setId(-1);
+        employee.setName("张三");
+        // employee.setRole("哈哈");
+        MvcResult mvcResult = mockMvc.perform(
+                MockMvcRequestBuilders
+                        .post("/emp")
+                        .accept("application/json;charset=utf-8")
+                        .characterEncoding("utf-8")
+                        // 设置请求的content-type
+                        .contentType("application/json;charset=utf-8")
+                        // 设置json格式请求参数
+                        .content(JsonUtil.toJson(employee))
+        ).andReturn();
+        MockHttpServletResponse resultResponse = mvcResult.getResponse();
+        String result = resultResponse.getContentAsString();
+        System.out.println(result);
+        // {"rtnCode":"4002","rtnMsg":"错误字段：id，错误值：-1，原因：id can't be negative\r\n错误字段：role，错误值：null，原因：role cant't be null\r\n","data":null,"type":"error"}
+    }
+}
+----
+
+可以看到，校验功能已经启动，Spring进行了参数校验，成功输出校验的错误信息。
+
+上边的内容仅仅简单介绍了Spring的校验机制，更多``Spring Validator``的详细信息可以看 https://docs.spring.io/spring/docs/4.3.18.RELEASE/spring-framework-reference/htmlsingle/#validation-beanvalidation[这里]。
+
+
+== Web中集成Bean Validation
+
+前边说过，Spring从3.0已经全面支持``Bean Validation 1.0``，在Spring Boot工程中，可以直接使用它来作为Bean校验框架，我们来看看如何使用。
+
+
+=== 编码处理校验结果
+
+前边已经说过，可以在被校验的Bean参数前加上``@Valid``或者``@Validated``注意来开启Bean校验，后加上``BindingResult``接口来获取校验失败信息（见 <</2018/10/10/spring-boot-validation-1#, Spring Boot参数验证（上）----Bean Validation及其Hibernate实现>> 一篇）：
+
+* @Valid：标准JSR-303规范的标记型注解，用来标记验证属性和方法返回值，进行级联和递归校验
+* @Validated：Spring的注解，Spring's JSR-303规范，是标准JSR-303的一个变种，提供了一个分组功能，可以在入参验证时，根据不同的分组采用不同的验证机制
+* @BindingResult：扩展自Errors接口，表示校验失败的结果
+
+在校验方法参数时，使用``@Valid``和``@Validated``并无特殊差异，但``@Validated``注解可以用于类级别，而且支持分组，而@Valid可以用在属性级别约束，用来表示级联校验。关于``@Valid``和``@Validated``的区别，请查阅相关资料，这里不再赘述。
+
+需要注意的是，校验的Bean和``BindingResult``作为方法的参数，需要对应。示例代码见上文绑定到Controller章节。
+
+
+=== 编写全局异常处理校验结果
+
+多数情况下，异常处理逻辑基本上是相同的，可以将编码校验工作抽取出来，让Controller层只需要使用注解来标记验证约束，而不需要关注校验结果，只需要校验失败时，自动返回校验失败的信息。
+
+一种方式时，使用Spring Boot的全局异常处理机制。基本思路是：Spring在参数校验失败时，会抛出``MethodArgumentNotValidException``，只需要编写异常处理器来处理该异常即可。关于如何定义全局异常，可以看 http://www.belonk.com/c/springboot_global_exception_and_page.html[Spring boot全局异常处理和自定义异常页面]一文。
+
+我们看看如何实现：
+
+1、定义校验Bean实体：
+
+[source,java]
+----
+@Data
+public class Person {
+    @Size(min = 2, max = 30)
+    private String name;
+
+    @NotEmpty(message = "邮箱地址不能为空")
+    @Email(message = "邮箱地址格式错误")
+    private String email;
+
+    @Min(value = 18, message = "年龄必须大于18")
+    @Max(value = 100, message = "年龄必须小于100")
+    private Integer age;
+
+    private Gender gender;
+
+    @DateTimeFormat(pattern = "MM/dd/yyyy")
+    @Past(message = "生日必须为过去的时间")
+    private Date birthday;
+
+    @Phone(message = "号码格式不正确")
+    private String phone;
+}
+----
+
+这里的@Phone为自定义注解，有兴趣可以查阅源码。
+
+2、定义Controller，进行Bean校验：
+
+[source,java]
+----
+@RestController
+@RequestMapping("/person")
+public class PersonController {
+    @PostMapping(produces = "application/json;charset=utf-8")
+    public ResultMsg add(@RequestBody @Valid Person person, Model model) {
+        return ResultMsg.success(person);
+    }
+}
+----
+
+由于这里请求的数据为json字符串，所以使用``@RequestBody``注解来接收参数并自动转换Bean。
+
+3、定义全局异常处理器：
+
+[source,java]
+----
+@ControllerAdvice
+public class MethodArgumentNotValidExceptionHandler {
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseBody
+    public ResultMsg handleMethodArgumentNotValid(HttpServletRequest req, Exception e) {
+        MethodArgumentNotValidException ex = (MethodArgumentNotValidException) e;
+        BindingResult bindingResult = ex.getBindingResult();
+
+        StringBuilder stringBuilder = new StringBuilder();
+        for (FieldError error : bindingResult.getFieldErrors()) {
+            String field = error.getField();
+            Object value = error.getRejectedValue();
+            String msg = error.getDefaultMessage();
+            String message = String.format("错误字段：%s，错误值：%s，原因：%s；", field, value, msg);
+            stringBuilder.append(message).append("\r\n");
+        }
+        return ResultMsg.error(MsgDefinition.ILLEGAL_ARGUMENTS.codeOf(), stringBuilder.toString());
+    }
+}
+----
+
+当校验失败时，Spring会抛出``MethodArgumentNotValidException``异常，该异常会持有校验结果对象``BindingResult``，从而获得校验失败信息，并转换为请求结果对象，最终会以JSON的格式响应给请求端。
+
+4、编写单元测试代码：
+
+[source,java]
+----
+@Test
+public void testAdd() throws Exception {
+    Person person = new Person();
+    person.setName("张三");
+    person.setEmail("abc123");
+    person.setAge(10);
+    person.setBirthday(new Date(System.currentTimeMillis() + 1000 * 10));
+    person.setPhone("123");
+    MvcResult mvcResult = mockMvc.perform(
+            MockMvcRequestBuilders
+                    .post("/person")
+                    .accept("application/json;charset=utf-8")
+                    .characterEncoding("utf-8")
+                    // 设置请求的content-type
+                    .contentType("application/json;charset=utf-8")
+                    // 设置json格式请求参数
+                    .content(JsonUtil.toJson(person))
+    ).andReturn();
+    MockHttpServletResponse resultResponse = mvcResult.getResponse();
+    String result = resultResponse.getContentAsString();
+    Assert.assertTrue(result.contains("\"rtnCode\":\"4002\""));
+}
+----
+
+最终结果与预想的一致，json输出结果为：
+
+----
+``{"rtnCode":"4002","rtnMsg":"错误字段：birthday，错误值：Thu Oct 11 11:58:43 CST 2018，原因：``
+----
+
+
+== @Validated和@Valid的区别
+
+两者都是用来做bean校验的，前者由Spring提供，后者是java标准定义的，他们的主要区别在于：
+
+1、用的位置不同，``@Validated``只能用在类、方法和参数上，而``@Valid``可用于方法、字段、构造器和参数上
+
+2、``@Validated``可以支持分组，而``@Valid``不支持，这是最主要的区别
+
+3、``@Validated``是对``@Valid``的一种扩展，他们都可用在方法参数上以启用参数自动校验，但是只有前者可以定义当前需要校验的分组，而后者只能将所有参数全部校验；
+
+看一个例子：
+
+[source,java]
+----
+public interface DeleteChecks {}
+
+@Data
+@EqualsAndHashCode
+public class ShoppingCartQuery implements Query {
+    @NotEmpty
+    @Equal
+    private String userOpenId;
+
+    @NotEmpty(groups = {DeleteChecks.class})
+    private List<Long> ids = new ArrayList<>();
+}
+----
+
+[source,java]
+----
+@PostMapping(path = "/_delete_by_query", consumes = MediaType.APPLICATION_JSON_UTF8_VALUE)
+public Response deleteByQuery(@Validated(DeleteChecks.class) @RequestBody ShoppingCartQuery query) {
+    return Response.success(shoppingCartService.batchDelete(query.getUserOpenId(), query.getIds()));
+}
+@GetMapping({"/", ""})
+public Response queryAll(@Validated @RequestBody ShoppingCartQuery query) {
+    return Response.success(shoppingCartService.findAll(query));
+}
+----
+
+我希望通过Spring的Bean校验机制，自动校验``ShoppingCartQuery``，但是删除和查询方法所校验的属性不同，删除时需要传递``ids``，而查询时不需要。要达到这个目的，我们必须使用``@Validated``注解，还需要定义一个分组``DeleteChecks``，然后删除方法的``@Validated``注解使用该分组，以此达到分开校验的目的（分组定义不清楚的可以看 http://www.belonk.com/c/bean_validation_hibernate.html#toc9[这里]）。
+
+
+== 总结
+
+Spring Boot的Web Starter已经加入了Bean Validation(JSR303)的依赖，可以直接使用。在使用时，只需在需要校验的方法上加上@Valid或者@Validated注解即可，如果需要编码自定义校验结果，则在校验的参数后加上BindingResult参数，注意对应关系；否则，为了模块化需要，也可以屏蔽校验失败业务逻辑，编写全局校验器，校验失败自动返回JSON校验结果即可。
+
+本篇源码见 https://github.com/belonk/springboot-demo/tree/master/06-webapp-demo[``Github``]。

@@ -1,0 +1,410 @@
+---
+title: RabbitMQ服务器管理（二）——权限管理
+slug: rabbitmq-permission
+img: /images/thumbnail/attachment/20180412/2db544d0eae0474bbd3340f6d34d6ec1.png
+categories:
+  - 中间组件
+tags:
+  - rabbitmq
+description: >-
+  RabbitMQ有一套独立的权限机制：配置、写、读，通过三个正则表达式来分别匹配所访问资源的这三项权限。权限的设置需要使用rabbitmqctl控制台工具来输入命令完成，基本思路是：创建虚拟机、创建用户，然后给用户授予权限。rabbitmq还支持为topic交换器设置消息权限，该权限基于消息的routing
+  key，通过正则匹配消息的routing key来控制具体消息的发布和消费。
+date: 2018-04-12 12:31:32
+updated: 2018-08-09 15:37:17
+---
+
+= RabbitMQ服务器管理（二）——权限管理
+:author: belonk.com
+:date: 2018-08-09
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: rabbitmq,权限,topic权限,rabbitmqctl,用户,虚拟主机,授权,删除权限
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: rabbitmq
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+RabbitMQ有用一套专门的权限控制系统，用来控制不同用户对不同虚拟主机的访问控制。基本思路同大多系统一样：先创建用户，然后为用户授予权限。
+
+大多数系统并没有严格区分认证和鉴权，但是在RabbitMQ中，对这两个概念做了明确的区分：
+
+* 认证：识别用户身份，即：识别当前用户，认证其身份信息
+* 鉴权：明确了用户身份，那么授权就是要检查该用户是否拥有相应的权限，即：检查授予用户的权限
+
+== 虚拟主机和guest用户
+ 
+在 http://www.belonk.com/c/RabbitMQ%E5%9F%BA%E7%A1%80%E4%B8%83%E8%99%9A%E6%8B%9F%E4%B8%BB%E6%9C%BA.html[RabbitMQ基础（七）----虚拟主机vhost]一篇，我们已经详细介绍了虚拟主机。我们说过，首次安装好RabbitMQ时，会拥有一个默认的虚拟主机“/”。同时，还有一个默认的用户“guest”，密码也为“guest”，该用户有用默认虚拟主机的全部权限。
+
+如果你得RabbitMQ需要公网访问，出于安全性考虑，官方建议删掉该用户或者修改其密码。默认情况下，RabbitMQ禁止guest用户远程访问，只可以访问本地的mq服务。这个是通过loopback_users配置项决定的，如果需要取消该限制，仅需将该选项配置为none即可：
+
+----
+loopback_users = none
+----
+
+如果是3.7之前的版本，还不支持这样key=value的配置格式，那么你需要配置成这样：
+
+----
+``[{rabbit, [{loopback_users, []}]}].``
+----
+
+该配置想的意思是，取消所有用户的本地访问限制。按照  https://github.com/rabbitmq/rabbitmq-server/blob/master/docs/rabbitmq.conf.example[官方的示例配置文件]，如果仅需要取消guest用户本地访问限制，那么进行以下配置：
+
+----
+loopback_users.guest = false
+----
+
+否则设置为true即可。
+
+关于MQ的配置文件，我们将在后续博文中详细讨论，官方文档见  http://www.rabbitmq.com/configure.html[这里]。
+ 
+
+== 权限工作机制
+ 
+当客户端与服务端建立连接时，第一级权限控制将会执行：服务器会检查连接的用户是否有用访问其连接的虚拟主机的权限，没有则会拒绝连接，否则连接建立成功。
+
+用户操作虚拟主机的资源（路由器、队列、绑定等）时，RabbitMQ会启用第二级权限控制，验证用户是否具有访问虚拟机的资源的权限。
+
+
+=== 权限定义
+ 
+具体而言，在RabbitMQ中，对资源的操作定义了三种权限：
+
+* 配置：创建和删除资源，或者改变它们的行为；
+* 写：发布消息到资源；
+* 读：从资源获取消息；
+
+下表显示了对执行权限检查的所有AMQP命令所需的资源类型的权限：
+
+[cols="2,2,1,2,2"]
+|====
+|AMQP 0-9-1 Operation||configure|write|read
+
+|exchange.declare
+|(passive=false)
+|exchange
+||
+
+|exchange.declare|(passive=true)|&nbsp;|&nbsp;|&nbsp;
+|exchange.declare|(with&nbsp;  http://www.rabbitmq.com/ae.html[AE])
+|exchange|exchange (AE)|exchange
+
+|exchange.delete|&nbsp;|exchange|&nbsp;|&nbsp;
+
+|queue.declare|(passive=false)|queue|&nbsp;|&nbsp;
+
+|queue.declare|(passive=true)|&nbsp;|&nbsp;|&nbsp;
+
+|queue.declare|(with&nbsp;  http://www.rabbitmq.com/dlx.html[DLX])|queue|exchange (DLX)|queue
+
+|queue.delete|&nbsp;|queue|&nbsp;|&nbsp;
+
+|exchange.bind|&nbsp;|&nbsp;|exchange (destination)|exchange (source)
+
+|exchange.unbind|&nbsp;|&nbsp;|exchange (destination)|exchange (source)
+
+|queue.bind|&nbsp;|&nbsp;|queue|exchange
+
+|queue.unbind|&nbsp;|&nbsp;|queue|exchange
+
+|basic.publish|&nbsp;|&nbsp;|exchange|&nbsp;
+
+|basic.get|&nbsp;|&nbsp;|&nbsp;|queue
+
+|basic.consume|&nbsp;|&nbsp;|&nbsp;|queue
+
+|queue.purge|&nbsp;|&nbsp;|&nbsp;|queue
+
+|====
+ 
+说明：
+
+* passive的理解：passive意思是被动的，当设置为true，那么交换器或者队列存在，则返回true，否则会抛出异常，但是不会创建新的交换器或队列；
+* AE：Alternate Exchanges，备用交换器
+* DLX：Dead Letter Exchanges，死信交换器
+
+=== 权限表示
+ 
+RabbitMQ中，权限使用三个正则表达式来分别代表虚拟主机的配置、写、读权限，这些正则表达式用来匹配授权用户所访问的资源（交换器、队列和绑定），格式如下：
+
+----
+`config表达式' 'write表达式' 'read表达式'
+----
+
+例如：
+
+* '.\*' '.*' '.*'：这个表达式的权限设置表示，用户拥有操作资源的全部权限；
+
+[WARNING]
+.注意
+RabbitMQ可能缓存每个连接或每个通道的访问控制检查结果。因此，对用户权限的更改可能只在用户重新连接时才会生效。
+
+== Topic授权
+ 
+从3.7版本开始，RabbitMQ开始支持为topic交换器设置权限，在设置权限时，要结合发布到主题交换器的消息的routing key信息（例如，在RabbitMQ默认授权后端，routing key与正则表达式是否匹配，决定了消息是否可以路由到下游）。
+
+设置了topic授权后，向topic路由器发布消息，或者从topic路由器接收消息，都会依据消息的routing key进行权限检查，如果routing key与权限设置匹配，则成功，否则抛出异常。
+
+看下边的一个例子，假如有一个虚拟机名称为vhost1，具有全部权限的用户vhost1，现在我设置一下topic权限如下：
+
+----
+rabbitmqctl.bat set_topic_permissions -p vhost1 vhost1 topicExchange "^log.*" "^log.*"
+----
+
+上边的含义是：用户vhost1在vhost1虚拟机上的topicExchange交换器具备如下权限：能够发布和消费以"log."开头的消息，关键测试代码如下：
+
+.TopicACLServer
+[source,java]
+----
+public static final String VHOST = "vhost1";
+public static final String TOPIC_EXCHANGE = "topicExchange";
+public static final String USER_NAME = "vhost1";
+public static final String PWD = "123456";
+
+public static void main(String[] args) throws IOException, TimeoutException {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setVirtualHost(VHOST);
+    factory.setUsername(USER_NAME);
+    factory.setPassword(PWD);
+    Connection conn = factory.newConnection();
+    Channel channel = conn.createChannel();
+
+    channel.exchangeDeclare(TOPIC_EXCHANGE, "topic");
+    channel.basicPublish(TOPIC_EXCHANGE, "log.controller", null,
+                "this is controller log".getBytes("utf-8"));
+    channel.basicPublish(TOPIC_EXCHANGE, "log.service", null,
+                "this is service log".getBytes("utf-8"));
+    channel.basicPublish(TOPIC_EXCHANGE, "log.model", null,
+                "this is model log".getBytes("utf-8"));
+    // 无法成功发布消息：reply-text=ACCESS_REFUSED - access to topic 'other\.*' in exchange，即没有该routing key的权限
+    // channel.basicPublish(TOPIC_EXCHANGE, "other.key", null,
+    //     "this is other log".getBytes("utf-8"));
+    channel.close();
+    conn.close();
+ }
+----
+
+.TopicACLClient
+[source,java]
+----
+ConnectionFactory factory = new ConnectionFactory();
+factory.setVirtualHost(VHOST);
+factory.setUsername(USER_NAME);
+factory.setPassword(PWD);
+Connection conn = factory.newConnection();
+Channel channel = conn.createChannel();
+channel.exchangeDeclare(TOPIC_EXCHANGE, "topic");
+String queueName = channel.queueDeclare().getQueue();
+channel.queueBind(queueName, TOPIC_EXCHANGE, "log.*");
+// 无法消费：reply-text=ACCESS_REFUSED - access to topic 'other\.*' in exchange，即没有该routing key的权限
+// channel.queueBind(queueName, TOPIC_EXCHANGE, "other-*");
+channel.basicConsume(queueName, true, new DefaultConsumer(channel) {
+    @Override
+    public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+        System.out.println("收到消息：" + new String(body, "utf-8"));
+    }
+});
+----
+ 
+当在发布消息或者消费消息时，如果routing key不是以log.开头，则直接抛出异常：
+
+----
+'config表达式' 'write表达式' 'read表达式'
+----
+
+== 设置权限
+ 
+其实在 <<RabbitMQ基础（七）——虚拟主机vhost.adoc#rabbitmq-vhost, RabbitMQ基础（七）--虚拟主机vhost>>一篇中，我们已经简单介绍了权限的相关操作了。要设置权限，需要在rabbitmqctl控制台进行，基本思路：创建虚拟机、创建用户、为用户授予权限。
+
+=== 用户管理
+ 
+Rabbitmqctl管理RabbitMQ内部用户数据库，来自任何其他身份验证后端的用户对rabbitmqctl都不可见。
+
+* 添加用户：
+
+----
+add_user username password
+----
+* username 被创建的用户名
+* password 用于对应的访问密码
+
+* 删除用户
+
+----
+delete_user username
+----
+* username 被删除的用户名
+
+* 修改密码
+
+----
+change_password username newpassword
+----
+* username 被修改密码的用户名
+* newpassword 新密码
+
+* 清除密码
+
+----
+clear_password username
+----
+* username 被清除密码的用户名
+备注：清除密码后，用户无法登录
+
+* 用户校验
+
+----
+authenticate_user username password
+----
+* username 被校验的用户名
+* password 被校验的密码
+
+验成功则返回success，否则出现错误信息。
+
+* 为用户做标签
+
+----
+set_user_tags username [tag ...]
+----
+* username 被标记的用户名
+* tag 零个或多个标签
+
+e.g. `rabbitmqctl set_user_tags tonyg administrator`
+
+* 查询用户
+
+----
+list_users
+----
+列出所有用户，结果的每一行显示为用户名和用户的标签
+
+=== 虚拟机管理
+ 
+* 添加虚拟机
+
+----
+add_vhost vhost
+----
+vhost： 虚拟机名称
+
+* 删除虚拟机
+
+----
+delete_vhost vhost
+----
+host: 被删除的虚拟机名称
+
+* 查询虚拟机
+
+----
+list_vhosts [vhostinfoitem ...]
+----
+vhostinfoitem:: 用于标识在结果中包含哪些虚拟主机信息项，结果中的列顺序将与参数的顺序匹配。vhostinfoitem可以从以下列表中获取任何值:
+name:: 虚拟机的名称
+tracing:: 虚拟机是否开启tracing
+
+e.g. `rabbitmqctl list_vhosts name tracing`
+
+
+=== 授予权限
+ 
+* 授权
+
+----
+set_permissions [-p vhost] user conf write read
+
+vhost 被授权的虚拟机，默认是“/”
+user 被授权的用户
+conf 允许具有配置权限的资源正则表达式
+write 允许具有写权限的资源正则表达式
+read 允许具有读权限的资源正则表达式
+----
+e.g. rabbitmqctl set_permissions -p /myvhost tonyg “^tonyg-.*” “.*” “.*”
+
+含义：用户tonyg具有虚拟机myvhost的写、读的全部权限，但是仅有名称以tonyg-开头的资源的配置权限。
+
+* 清除权限
+
+----
+clear_permissions [-p vhost] username
+
+vhost 目标虚拟机
+username 被清除权限的用户
+----
+* 虚拟机权限查询
+
+----
+list_permissions [-p vhost]
+
+vhost 目标虚拟机名称
+----
+以虚拟机为基础，查询虚拟机的访问权限，结果以用户和权限展示。
+
+* 用户权限查询
+
+----
+list_user_permissions username
+
+username 被查询的用户名
+----
+以用户为基础，查询用户的权限，结果以虚拟机和权限展示。
+
+* topic权限设置
+
+----
+set_topic_permissions [-p vhost] user exchange write read
+
+vhost 虚拟机名称
+user 用户名
+exchange 交换器
+write 写权限
+read 读权限
+----
+e.g.
+
+----
+rabbitmqctl set_topic_permissions -p /myvhost tonyg amq.topic “^tonyg-.*” “^tonyg-.*”
+----
+用户tonyg能够从myvhost虚拟机的amq.topic交换器发布和消费消息，并且这些消息的routing key必须以tonyg开头。
+
+* 清除topic权限
+
+----
+clear_topic_permissions [-p vhost] username [exchange]
+
+vhost 虚拟机名称，默认是“/”
+username 用户名
+exchange topic交换器名称，不设置则为username用户授权的所有topic交换器
+----
+* 虚拟机的topic权限查询
+
+----
+list_topic_permissions [-p vhost]
+
+vhost 虚拟机名称
+----
+结果列为用户 topic交换器 权限
+
+* 用户的topic权限查询
+
+----
+list_user_topic_permissions username
+
+username 用户名
+----
+结果列为虚拟机 topic交换器 权限。
+
+== 总结
+ 
+RabbitMQ有一套独立的权限机制：配置、写、读，通过三个正则表达式来分别匹配所访问资源的这三项权限。权限的设置需要使用rabbitmqctl控制台工具来输入命令完成，基本思路是：创建虚拟机、创建用户，然后给用户授予权限。需要注意的是，虽然默认的guest用户有用默认虚拟机"/"的全部权限，但是出于安全考虑，它仅能通过本地访问，要取消该限制，还需要修改rabbitmq的配置文件。
+
+此外，rabbitmq还支持为topic交换器设置消息权限，该权限基于消息的routing key，通过正则匹配消息的routing key来控制具体消息的发布和消费。

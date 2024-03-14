@@ -1,0 +1,343 @@
+---
+title: 使用Springboot开发websocket程序(二)——基于原生websocket的web聊天室
+slug: springboot-websocket-chatroom
+img: /images/thumbnail/attachment/20191101/13874411cf4544ae96376d628fae428f.png
+categories:
+  - Spring
+tags:
+  - websocket
+description: >-
+  websocket是一种由HTML5定义的浏览器和服务器保持长连接的通信协议，可以进行实时数据交换。WebSocket客户端除了支持Html5的浏览器外，还包括各大语言提供的WebSocket实现，比如Java中Spring框架的实现，从而在没有浏览器时也能进行websocket通信。HTML5中WebSocket
+  API请看这里。服务端中，Java定义Java WebSocket API标准 JSR-356，Java主流容器都已经支持websocket。
+date: 2019-11-01 16:22:25
+updated: 2019-11-03 23:32:20
+---
+
+= 使用Springboot开发websocket程序(二)——基于原生websocket的web聊天室
+:author: belonk.com
+:date: 2019-11-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: websocket,聊天室,WebSocketHandler,WebSocketConfiguer,TextWebSocketHandler,HandshakeInterceptor
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: websocket
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+上一篇介绍了什么是websocket，说到websocket是一种由HTML5定义的浏览器和服务器保持长连接的通信协议，可以进行实时数据交换。在本篇，我们将使用Spring boot，基于原生websocket开发一个web聊天室，并一步步介绍如何在spring boot中开发websocket程序。
+
+一个WebSocket程序包括客户端和服务端。WebSocket客户端除了支持Html5的浏览器外，还包括各大语言提供的WebSocket实现，比如Java中Spring框架的实现，从而在没有浏览器时也能进行websocket通信。HTML5中WebSocket API请看 https://www.w3cschool.cn/html5/html5-websocket.html[这里]。服务端中，Java定义Java WebSocket API标准  JSR-356[JSR-356]，Java主流容器都已经支持websocket，主要包括Tomcat 7.0.47 +，Jetty 9.1 +，GlassFish 4.1 +，WebLogic 12.1.3+和Undertow 1.0+（以及WildFly 8.0+）等。
+
+
+== 整体功能
+ 
+现在我们来写一个简单的web的聊天室程序，并一步步学习Spring中是如何封装WebSocket的，这里工程还是使用Spring Boot。
+
+整体功能界面如下：
+
+
+image::/images/attachment/20191101/03f1faa7b23c40c89338f57c78093f54.png[]
+
+
+功能很简单：用户填写上自己的用户名，然后点击链接按钮进入聊天室，然后就可以发送消息给其他人，聊天室中的用户可以看到他人的连入信息和发送的消息。
+
+我们看看在spring boot中如何编写以上程序。
+
+
+== 服务端
+ 
+1、新建一个springboot-websocket的maven工程，引入如下依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-websocket</artifactId>
+</dependency>
+----
+ 
+引入该启动器后，Spring boot会自动引入一下几个启动器或jar包：
+
+* spring-boot-starter：spring boot启动器
+* spring-boot-starter-web：spring boot web工程启动器
+* spring-messaging：包含对消息传递应用程序的基础支持，下一篇用到的STOMP协议的支持也在这个模块。它是Spring Integration项目中的关键抽象，包含Message，MessageChannel，MessageHandler和其他可以作为此类消息传递体系结构基础支撑
+* spring-websocket: Spring对websocket的支持，它与Java WebSocket API标准（ JSR-356[JSR-356]）兼容，并且还提供了很多扩展
+
+由此可见，对websocket的支持在``spring-websocket``和``spring-messaing``两个模块。
+
+2、编写启动类：
+
+[source,java]
+----
+@SpringBootApplication
+public class SpringWebsocketApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SpringWebsocketApplication.class, args);
+    }
+}
+----
+ 
+上边的两步没什么说的，常规的spring boot工程开发。
+
+3、编写websocket握手拦截器：
+
+[source,java]
+----
+public class MyWebSocketHandshakeInterceptor extends HttpSessionHandshakeInterceptor {
+    private static Logger log = LoggerFactory.getLogger(MyWebSocketHandshakeInterceptor.class);
+
+    @Override
+    public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
+        log.info("Before handshake");
+        if (request instanceof ServletServerHttpRequest) {
+            ServletServerHttpRequest servletServerHttpRequest = (ServletServerHttpRequest) request;
+            String userName = (String) servletServerHttpRequest.getServletRequest().getSession().getAttribute("userName");
+            attributes.put(MyWebsSocketHandler.WEB_SOCKET_USER_NAME, userName);
+        }
+        return super.beforeHandshake(request, response, wsHandler, attributes);
+    }
+
+    @Override
+    public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, Exception ex) {
+        log.info("After handshake");
+        super.afterHandshake(request, response, wsHandler, ex);
+    }
+}
+----
+ 
+Spring提供了websocket握手阶段的拦截器HandshakeInterceptor：
+
+[source,java]
+----
+public interface HandshakeInterceptor {
+    // 握手前调用
+    boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
+			WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception;
+
+    // 握手之后调用
+    void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
+			WebSocketHandler wsHandler, Exception exception);
+
+}
+----
+ 
+``MyWebSocketHandshakeInterceptor``继承自``HttpSessionHandshakeInterceptor``，它是``HandshakeInterceptor``的实现，它的作用在获取request里的用户信息，并将其放到handshake attributes的Map中，这样，后续就可以通过``WebSocketSession.getAttributes()``方法来获取该属性的值了。说白了，就是``HttpSessionHandshakeInterceptor``拦截器就是将Http请求中的信息交给``WebSocketSession``，这个实在握手阶段来完成的。
+
+4、编写信息处理器：
+
+[source,java]
+----
+public class MyWebsSocketHandler extends TextWebSocketHandler {
+    private static Logger log = LoggerFactory.getLogger(MyWebsSocketHandler.class);
+    private static final Map<String, WebSocketSession> WEB_SOCKET_SESSION_CACHE = new ConcurrentHashMap<>();
+    static final String WEB_SOCKET_USER_NAME = "web_socket_user_name";
+
+    private DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    @Override
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        String userName = (String) session.getAttributes().get(WEB_SOCKET_USER_NAME);
+        WEB_SOCKET_SESSION_CACHE.put(userName, session);
+        super.afterConnectionEstablished(session);
+        log.info("User [" + userName + "] connect to the websocket.");
+        log.info("Current connected user number : " + WEB_SOCKET_SESSION_CACHE.size());
+
+        // 发送进入信息
+        for (String user : WEB_SOCKET_SESSION_CACHE.keySet()) {
+            WebSocketSession webSocketSession = WEB_SOCKET_SESSION_CACHE.get(user);
+            webSocketSession.sendMessage(new TextMessage(nowStr() + ": 用户[" + userName + "]进入聊天室"));
+        }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        String userName = (String) session.getAttributes().get(WEB_SOCKET_USER_NAME);
+        WEB_SOCKET_SESSION_CACHE.remove(userName);
+        super.afterConnectionClosed(session, status);
+        log.info("User [" + userName + "] disconnect to the websocket.");
+        log.info("Current connected user number : " + WEB_SOCKET_SESSION_CACHE.size());
+
+        // 发送退出信息
+        for (String user : WEB_SOCKET_SESSION_CACHE.keySet()) {
+            WebSocketSession webSocketSession = WEB_SOCKET_SESSION_CACHE.get(user);
+            webSocketSession.sendMessage(new TextMessage(nowStr() + ": 用户[" + user + "]退出聊天室"));
+        }
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        log.info("message : " + message);
+        String curUser = (String) session.getAttributes().get(WEB_SOCKET_USER_NAME);
+        // 群聊
+        for (String userName : WEB_SOCKET_SESSION_CACHE.keySet()) {
+            WebSocketSession webSocketSession = WEB_SOCKET_SESSION_CACHE.get(userName);
+            webSocketSession.sendMessage(new TextMessage(nowStr() + " 用户[" + curUser + "]对大家说：  
+" + message.getPayload()));
+        }
+        super.handleTextMessage(session, message);
+    }
+
+    private String nowStr() {
+        return formatter.format(LocalDateTime.now());
+    }
+}
+----
+ 
+Websocket处理的信息一般是文本，也可以支持二进制。在Spring中，提供了``WebSocketHandler``接口，它就用来管理websocket信息的生命周期，并处理消息。一般我们会用到两个消息处理类：``TextWebSocketHandler``和``BinaryWebSocketHandler``，分别对应文本消息和二进制消息。
+
+在上边的自定义消息处理器中，我们重载了几个方法：
+
+* ``afterConnectionEstablished``：在建立连接后调用，这里实现的业务是从``WebSocketSession``中获取用户名，并缓存连接的websocket session信息，然后给所有客户端发送用户连入聊天室信息
+* ``afterConnectionClosed``：在连接关闭时调用，通常是获取用户名，并给所有人发送用户退出聊天室信息
+* ``handleTextMessage``：消息处理方法，接收客户端发送来的消息，并转发给所有人
+
+``WebSocketHandler``是核心，websocket对应的事件和消息处理都在这里完成。
+
+5、编写配置文件：
+
+[source,java]
+----
+@Configuration
+@EnableWebSocket
+public class WebSocketConfig implements WebSocketConfigurer {
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        // 注册处理器，并定义websocket处理的uri，在链接是需要指定该uri
+        registry.addHandler(myHandler(), "/chatroom")
+                // 添加请求拦截器
+                .addInterceptors(new MyWebSocketHandshakeInterceptor());
+    }
+
+    @Bean
+    public MyWebsSocketHandler myHandler() {
+        return new MyWebsSocketHandler();
+    }
+}
+----
+ 
+这里的``@EnableWebSocket``注解表示启用websocket消息处理，实现的``WebSocketConfigurer``接口用来定义启用websocket后的回调，它定义一个方法：
+
+[source,java]
+----
+public interface WebSocketConfigurer {
+    void registerWebSocketHandlers(WebSocketHandlerRegistry registry);
+}
+----
+ 
+``registerWebSocketHandlers``方法用来注册websocket处理器。这里注册我们自定义的处理器，并添加了握手拦截器。
+
+
+== 客户端
+ 
+到这里，服务端代码已经编写完成，接下来，我们需要编写客户端。
+
+1、在工程的static目录下新建一个html，用来编写聊天室界面，html代码就不贴了，有兴趣可以看文末的源码地址
+
+2、编写js代码，处理业务逻辑，关键代码如下：
+
+[source,javascript]
+----
+// 连接点击按钮
+$connect.click(function () {
+    // 发送给服务端输入的用户名
+    $.post('/username', {userName: $username.val()}, function () 
+        if (connected) {
+            disconnect();
+        } else {
+            if ($username.val())
+                connect();
+        }
+    });
+});
+// 消息发送
+$send.click(function () {
+    if ($content.val())
+        send();
+});
+// websocket连接
+function connect() {
+    ws = new WebSocket('ws://localhost:8081/chatroom');
+    // 连接建立事件
+    ws.onopen = function (data) {
+        console.log(data);
+    };
+    // 连接关闭事件
+    ws.onclose = function (data) {
+        console.log(data);
+    };
+    ws.onmessage = function (data) {
+        // 展示收到的消息
+        showMessage(data.data);
+    };
+    setConnected(true);
+}
+// 断开连接处理
+function disconnect() {
+    if (ws != null) {
+        ws.close();
+    }
+    setConnected(false);
+}
+// 发送消息
+function send() {
+    ws.send($content.val());
+}
+----
+ 
+这里主要用到HTML5的WebSocket对象:
+
+
+----
+``var ws = new WebSocket(url, [protocal] );``
+----
+
+以上代码中的第一个参数 url, 指定连接的 URL。第二个参数 protocol 是可选的，指定了可接受的子协议。
+
+``new WebSocket('ws://localhost:8081/chatroom')``用于建立连接，这里的``chatroom``即是后端注册处理器时指定的uri。websocket连接使用ws开头(类似http)，如果是ssl则使用wss（类似https），域名为后端服务器同域，也可以在后台配置允许的域名：
+
+[source,java]
+----
+@Override
+public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+    registry.addHandler(myHandler(), "/myHandler").setAllowedOrigins("http://mydomain.com");
+}
+----
+ 
+然后就使用ws对象的几个监听方法来处理业务逻辑：
+
+
+|====
+|事件|事件处理程序|描述
+
+|open|Socket.onopen|连接建立时触发
+
+|message|Socket.onmessage|客户端接收服务端数据时触发
+
+|error|Socket.onerror|通信发生错误时触发
+
+|close|Socket.onclose|连接关闭时触发
+
+|====
+ 
+然后，发送消息是在调用``ws.send(xxx)``，断开连接时使用``ws.close()``方法来关闭websocket连接。
+
+3、启动应用程序，浏览器访问``http://localhost:8081/index.html``，然后就可以进入聊天室聊天了。
+
+到这里，服务端和客户端都已经开发完成，基于Spring对websocket的封装，已经极大地简化了开发人员的工作。
+
+
+== 总结
+ 
+本篇用了Spring对websocket协议的原生支持，来开发了一个简单的web聊天室。但是它仅支持群发消息，如果要支持点对点消息，我们还需要做大量的开发工作。其实，websocket也支持使用其子协议，来完成更高级的功能。在下一篇，我们将介绍websocket的自协议STOMP，并用它来升级我们的聊天室程序。
+
+完整实例代码在 https://github.com/belonk/springboot-demo/tree/master/13-websocket[这里]。

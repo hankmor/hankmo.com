@@ -1,0 +1,99 @@
+---
+title: Windows server 2012 R2评估版本激活
+slug: windows-server-2012r2-active
+img: /images/thumbnail/attachment/20180228/8368e3d1553b45f5bac26884bd43575f.png
+categories:
+  - 工具软件
+tags:
+  - os
+  - windows
+description: >-
+  Windows server 2012
+  R2评估版本，只能试用180天，到期后，系统激活前每隔一个小时会自动关机。激活系统需要进行两步：将评估板升级为标准版（standard版），使用购买的key或激活工具进行激活。
+date: 2017-12-05 10:04:53
+updated: 2018-08-16 14:34:39
+---
+
+= Windows server 2012 R2评估版本激活
+:author: belonk.com
+:date: 2018-08-16
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: windows,激活
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: os,windows
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+原来服务器安装了Windows server 2012 R2评估版本，只能试用180天，最近刚好到期了，系统激活前每隔一个小时会自动关机，所以必须进行激活。 
+
+要激活分为两步： 
+
+1、将评估版升级为标准版 
+ 
+2、使用激活工具激活 
+
+== 将评估版升级为标准版
+
+=== 查看系统当前版本
+ 
+最好以管理员身份运行cmd，输入命令： 
+ 
+----
+DISM /online /Get-CurrentEdition
+----
+
+可以查询当前安装的版本是什么。
+ 
+如果是评估版，例如Standard，把“ServerStandardEval”中的Eval这四个字母去掉，就是你的当前版本。
+ 
+我的当前版本就是ServerStandard，如下图所示：
+ 
+ 
+image::/images/attachment/20171205/01f50a45731d45e4a095f16977157a3e.png[]
+
+=== 升级为标准版
+ 
+同样在cmd中输入如下命令：
+ 
+----
+DISM /online /Set-Edition:ServerStandard /ProductKey:你的标准版key /AcceptEula
+----
+
+ServerStandard为查出来的EDITION ID，ProductKey为标准版key，例如我使用如下命令成功升级为标准版：
+ 
+----
+DISM /online /Set-Edition:ServerStandard /ProductKey:M98WF-NY2PP-73243-PC8R6-V6B4Y /AcceptEula
+----
+
+如果提示key无效或不可用，多找一些key试试。
+
+升级完成后，重启系统，现在桌面的标准评估版本已经不再显示，右键点击我的电脑-属性，可以看到现在为standard版本，说明升级成功，但是仍然没有激活。
+
+== 使用激活工具激活
+ 
+我尝试使用KMSTools激活工具激活，结果激活失败。
+ 
+最终，在网上找到了小马激活工具，成功激活。
+ 
+工具下载地址：  https://pan.baidu.com/s/1qYwqI2w[https://pan.baidu.com/s/1qYwqI2w]。
+ 
+**注意：博主亲测可以激活，但杀毒软件可能会报病毒，博主是直接绕过杀毒软件的，存在一定的风险，请谨慎考虑。**
+ 
+激活成功后，再次重启系统，可以看到已经成功激活了。
+ 
+image::/images/attachment/20171205/e979e889bc83444d8be5c533026eb77f.png[]
+
+[IMPORTANT]
+.申明
+本文章仅供个人学习参考使用，如需商业用途，建议大家支持正版系统。

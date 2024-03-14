@@ -1,0 +1,320 @@
+---
+title: Java设计模式(8)-建造者模式
+slug: java-builder-pattern
+date: 2020/08/23
+img: /images/thumbnail/broken-house.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 建造者模式
+description: 建造者模式（Builder Pattern），旨在解决复杂对象的创建过程，将对象与其创建过程分离，通过相同的创建过程创建多种不同的对象。
+---
+
+[[designpattern-builder]]
+= Java设计模式(8)-建造者模式
+:key_word: 
+:Author: belonk.com belonk@126.com
+:Date: 2020/08/23
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+建造者模式（Builder Pattern），旨在解决复杂对象的创建过程，将对象与其创建过程分离，通过相同的创建过程创建多种不同的对象。
+
+生活中有很多复杂对象构建的例子。例如，汽车生产线的组装，都要经过车架、车身、变速箱、发动机、车轮等零部件的组装过程，如果将这些组装过程单独抽取出来，将组装结果——汽车独立出来，那么这个组装过程就可以重用，比如组装不同颜色、不同品牌的各种汽车。再比如，建房子，需要经过打地基、搭框架、砌墙、封顶等一系列复杂过程，如果对这个过程进行抽象，将房子和其建造过程分离，则更灵活，如通过这个建造过程可以建造高层建筑、低层建筑、普通民房等房屋。
+
+== 什么是建造者模式
+
+建造者模式（Builder Pattern），又叫生成器模式，将复杂对象的创建过程和对象本身进行抽象和分离，使得创建过程可以重用并创建多个不同表现的对象。
+
+优点：::
+1. 各个具体的建造者相互独立，有利于系统的扩展;
+2. 客户端不必知道产品内部组成的细节，便于控制细节风险。
+
+缺点：::
+1. 产品的创建过程相同才能重用，有一定的局限性；
+2. 产品的内部创建过程变化。
+
+== 建造者模式结构
+
+建造者模式有4个角色：::
+. 产品角色（Product）：复杂对象，复杂的创建过程中包含多个创建步骤，由具体建造者来实现各个创建步骤的业务逻辑；
+. 抽象建造者（Abstract Builder）：抽象产品角色的多个创建步骤，可以是接口和抽象类，通常会定义一个方法来创建复杂产品，一般命名为``build``；
+. 具体建造者(Concrete Builder）：实现抽象建造者中定义的创建步骤逻辑，完成复杂产品的各个部件的具体创建方法；
+. 指挥者（Director）：调用抽象建造者对象中的部件构造与组装方法，然后调用``build``方法完成复杂对象的创建；
+
+他们之间的关系如下图所示：
+
+.建造者模式类结构图
+image::/images/attachment/designpattern/builder-pattern.png[]
+
+Director内部组合了抽象的Builder，用来构建产品；Client依赖Director创建产品，但是需要告诉它使用什么具体的Builder来创建,也就是会依赖具体的构建器.
+
+抽象的Builder有两种形式：抽象类和接口。图中抽象的Builder为抽象类，其内部组合依赖了Product，并在build方法直接返回它；如果抽象Builder为接口，那么内部不会依赖Product，类结构上也会有一些变化，如下图所示:
+
+.Builder为接口时的类结构图
+image::/images/attachment/designpattern/builder-pattern1.png[]
+
+最显著的区别是，具体构建器需要实现build方法，返回具产品信息。标准设计模式提供的是一种思路，在具体实现的时候有很多形式，但是其核心思想是不变的。
+
+== 示例
+
+下面我们看一个简单的示例：我们建设生产一部普通汽车，都需要经过组装底盘、组装变速箱、发动机、车架等步骤，如果我们把汽车和它的生产过程分离开，使用建造者模式来实现，该怎么做呢？
+
+1、首先，汽车就是我们需要建造的产品，其定义如下：
+
+.产品
+[source,java]
+----
+class Car {
+	// 发动机
+	private String motor;
+	// 变速箱
+	private String gearbox;
+	// 底盘
+	private String chassis;
+	// 车架
+	private String frame;
+}
+----
+
+为了简单，这里省略了getter和setter。这里的产品已经是具体的产品了，实际上，这个产品一般是抽象的产品，下边可能会有多个具体的产品信息。
+
+2、然后，抽象汽车生产过程，定义抽象的建造者：
+
+.抽象建造者
+[source,java]
+----
+abstract class CarBuilder {
+	protected Car car = new Car();
+
+	// 构建发动机
+	abstract void buildMotor();
+
+	// 构建变速箱
+	abstract void buildGearbox();
+
+	// 构建底盘
+	abstract void buildChassis();
+
+	// 构建车架
+	abstract void buildFrame();
+
+	public Car build() {
+		return car;
+	}
+}
+----
+
+这里使用抽象类来定义抽象构建器。
+
+3、然后，加入指挥者Director角色，让其决定具体组装汽车的步骤，先组装什么、后组装什么：
+
+.指挥者
+[source,java]
+----
+// 指挥者
+class CarDirector {
+	private CarBuilder carBuilder;
+
+	public CarDirector(CarBuilder carBuilder) {
+		this.carBuilder = carBuilder;
+	}
+
+	public void setCarBuilder(CarBuilder carBuilder) {
+		this.carBuilder = carBuilder;
+	}
+
+	// 指挥者决定最终如何组装产品
+	public Car buildCar() {
+		carBuilder.buildChassis();
+		carBuilder.buildGearbox();
+		carBuilder.buildMotor();
+		carBuilder.buildFrame();
+		return carBuilder.build();
+	}
+}
+----
+
+指挥者需要依赖建造者具体实现，才能完成汽车组装，那么我们再来定义两个具体建造者。
+
+4、假设我们有两个具体的构建者：一个国产车构建者、一个进口车构建者：
+
+.国产车组装车间——具体的建造者
+[source,java]
+----
+class ChineseCarWorkShop extends CarBuilder {
+	@Override
+	public void buildMotor() {
+		car.setMotor("国产发动机");
+	}
+
+	@Override
+	public void buildGearbox() {
+		car.setGearbox("国产变速箱");
+	}
+
+	@Override
+	public void buildChassis() {
+		car.setChassis("国产底盘");
+	}
+
+	@Override
+	public void buildFrame() {
+		car.setFrame("国产车架");
+	}
+}
+----
+
+.进口车组装车间——具体的建造者
+[source,java]
+----
+class ForeignCarWorkShop extends CarBuilder {
+	@Override
+	public void buildMotor() {
+		car.setMotor("进口发动机");
+	}
+
+	@Override
+	public void buildGearbox() {
+		car.setGearbox("进口变速箱");
+	}
+
+	@Override
+	public void buildChassis() {
+		car.setChassis("进口底盘");
+	}
+
+	@Override
+	public void buildFrame() {
+		car.setFrame("进口车架");
+	}
+}
+----
+
+现在，万事俱备，然后我们看看客户端如何使用。
+5、客户端的调用代码如下：
+
+.客户端
+[source,java]
+----
+public class CarBuilderDemo {
+	public static void main(String[] args) {
+		// 国产车间，开始组装纯国产汽车
+		ChineseCarWorkShop chineseCarWorkShop = new ChineseCarWorkShop();
+		CarDirector carDirector = new CarDirector(chineseCarWorkShop);
+		Car chineseCar = carDirector.buildCar();
+		System.out.println(chineseCar);
+
+		// 国外车间，组装进口汽车
+		ForeignCarWorkShop foreignCarWorkShop = new ForeignCarWorkShop();
+		carDirector = new CarDirector(foreignCarWorkShop);
+		Car importCar = carDirector.buildCar();
+		System.out.println(importCar);
+	}
+}
+----
+
+至此，一个标准建造者模式已经实现完成，如果抽象构建器为接口，可以看文末地址的源码。
+
+== Java Bean建造者
+
+我们最常用的建造者，其实是对Bean的构建，我们也称为构建器。该构建器也是建造者模式的运用，它的目的在于隐藏bean的创建过程，对外通过构建器提供易于阅读和理解的api，并且可以链式调用，通过这些api来对bean进行属性赋值，最后通过调用构建方法（如``build``）完成对象创建过程。
+
+一个简单的例如如下：
+
+.java bean的构建器
+[source,java]
+----
+class SimpleCar {
+	// 发动机
+	private String motor;
+	// 变速箱
+	private String gearbox;
+	// 底盘
+	private String chassis;
+	// 车架
+	private String frame;
+
+	public static Builder builder() { // <1>
+		return new Builder();
+	}
+
+	public static class Builder { // <2>
+		private String motor;
+		private String gearbox;
+		private String chassis;
+		private String frame;
+
+		public Builder motor(String motor) { // <3>
+			this.motor = motor;
+			return this;
+		}
+
+		public Builder gearbox(String gearbox) {
+			this.gearbox = gearbox;
+			return this;
+		}
+
+		public Builder chassis(String chassis) {
+			this.chassis = chassis;
+			return this;
+		}
+
+		public Builder frame(String frame) {
+			this.frame = frame;
+			return this;
+		}
+
+		public SimpleCar build() { // <4>
+			SimpleCar simpleCar = new SimpleCar();
+			simpleCar.setMotor(this.motor);
+			simpleCar.setGearbox(this.gearbox);
+			simpleCar.setChassis(this.chassis);
+			simpleCar.setFrame(this.frame);
+			return simpleCar;
+		}
+	}
+
+	// 省略getter、setter
+}
+----
+<1> 通过静态方法创建该Bean的构建器
+<2> 静态内部类的构建器
+<3> 通过链式调用的api，完成对bean属性的赋值，取代原来的set方法
+<4> 最后，提供构建方法，返回创建好的bean对象
+
+客户端的调用代码如下：
+.客户端代码
+
+[source,java]
+----
+SimpleCar simpleCar = SimpleCar.builder() // <1>
+		.motor("发动机") // <2>
+		.frame("车架")
+		.chassis("底盘")
+		.gearbox("变速箱")
+		.build(); // <3>
+----
+<1> 静态方法创建构建器
+<2> 链式调用并属性赋值
+<3> 完成对象创建
+
+可以看到，这里以一种优雅的方式来创建对象，取代了传统的new对象、然后一个个调用set方法完成对象赋值的模式。
+
+前边说过，这种模式是建造者模式的简单运用，这里的产品是Bean本身，而指挥者、抽象建造者、具体建造者都是``Builder``本身。
+
+上边的构建器，开发的时候还是有点点麻烦，其实，`lombok`工具已经为我们提供了简单的创建方式，只需要使用``@Builder``注解来自动生成这个构建器，大大简化了开发工作量，有兴趣可以自行研究。
+
+建造者模式应用比较广泛，如JDK的``StringBuilder``、Spring的``ServerRequest.Builder``、``BeanDefinitionBuilder``等等。
+
+本文示例代码见: https://github.com/belonk/java-designpattern/tree/master/src/com/belonk/designpattern/builder[Github]

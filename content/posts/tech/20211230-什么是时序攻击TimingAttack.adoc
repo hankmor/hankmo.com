@@ -1,0 +1,155 @@
+---
+title: 什么是时序攻击Timing Attack
+slug: timing-attach
+img: /images/thumbnail/attachment/20180228/68e9074929724d1497c87fe2aa7bcaa0.jpg
+categories:
+  - 高新技术
+tags:
+  - 安全
+description: 最近在维护一个老项目的时候，看到一段密码匹配的代码，感觉很奇怪，于是遍寻资料，最终还是很有收获。在密码学中,时序攻击是一种侧信道攻击,攻击者试图通过分析加密算法的时间执行来推导出密码。每一个逻辑运算在计算机需要时间来执行,根据输入不同,精确测量执行时间,根据执行时间反推出密码。
+date: 2021-12-30 11:30:00
+updated: 2021-12-30 11:30:00
+---
+
+[[timing-attack]]
+= 什么是时序攻击Timing Attack？
+:key_word: 时序攻击,Timing Attack,安全
+:Author: belonk.com belonk@126.com
+:Date: 2021-12-30
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+最近在维护一个老项目的时候，看到一段密码匹配的代码，感觉很奇怪，于是遍寻资料，最终还是很有收获。
+
+== 密码匹配
+
+事情是这样的，一个项目遇到输入的密码总是提示密码错误的问题，于是debug跟踪了一下代码，发现该项目使用了 Spring Security 3.2.2 的 `PasswordEncoder` 来做密码MD5加密和密码匹配验证，`PasswordEncoder` 只是一个接口，其实现使用的是 `StandardPasswordEncoder` 类，它的密码匹配代码引起了我的注意：
+
+[source,java]
+----
+public boolean matches(CharSequence rawPassword, String encodedPassword) { // <1>
+    byte[] digested = decode(encodedPassword);
+    byte[] salt = subArray(digested, 0, saltGenerator.getKeyLength());
+    return matches(digested, digest(rawPassword, salt));
+}
+
+private boolean matches(byte[] expected, byte[] actual) { // <2>
+    if (expected.length != actual.length) {
+        return false;
+    }
+
+    int result = 0;
+    for (int i = 0; i < expected.length; i++) {
+        result |= expected[i] ^ actual[i]; <3>
+    }
+    return result == 0;
+}
+----
+
+<1> 验证密码是否匹配
+<2> 将密文按照十六进制解码为字节数组，然后在进行比较
+<3> 两个字节位运算
+
+这段代码要做的事情很简单，比较两个加密的密文，验证他们是否相同。注意看真正比较的 `matches` 方法（标记2），它首先比较两个字节数组的长度，不同则直接返回 `false`，否则循环遍历，依次进行位运算来，最后查看位运算的结果 `result` 是不是0，0则说明相同，否则说明不同。
+
+[NOTE]
+====
+.代码中位运算的含义
+两个字节先做 *异或* 运算，异或运算简单理解为找差异，两个位相同为0，不同为1，即：`1 ^ 0 = 1，1 ^ 1 = 0，0 ^ 0 = 0`，因此，只要两个位不同，肯定异或的结果是1（如果不用比较整个字节数组，其实这里就可以直接返回 `false` 了）。
+
+然后 `result` 在与异或的结果求 *或* 运算，或运算只要有一个是1，则结果就是1，即：`1 | 0 = 1, 1 | 1 = 1, 0 | 0 = 0`。显然，前边异或的两个位相同，则 `result` 为0，否则为1。
+
+也就是说，整个遍历结束后，如果 `result` 值为0，说明相同，否则不同。这就是为什么最后需要 `return result == 0`。
+====
+
+一开始我以为这么做的好处是效率更高，但是后来仔细思考了一下感觉不对，因为这个算法会循环整个字节数组的长度。一般而言，只需要找到第一个不相同的字节就可以直接返回了。为什么比较两个字符串，不直接使用 `String` 的 `equals` 方法呢？
+
+.String 的 equals 方法实现
+[source,java]
+----
+public boolean equals(Object anObject) {
+    if (this == anObject) {
+        return true;
+    }
+    if (anObject instanceof String) {
+        String anotherString = (String)anObject;
+        int n = value.length;
+        if (n == anotherString.value.length) {
+            char v1[] = value;
+            char v2[] = anotherString.value;
+            int i = 0;
+            while (n-- != 0) {
+                if (v1[i] != v2[i]) // <1>
+                    return false;
+                i++;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+----
+
+<1> 从前到后依次比较，发现不同的 `char`，直接返回 `false`。
+
+可以看到，两个 `String` 比较的时候，按照对应的 `char[]` 从前到后依次比较，只要找到不同的 `char` 就直接返回 `false`。
+
+到这里，我们知道了两个信息::
+. matches方法会遍历整个字节数组
+. matches方法效率并不是最高的
+
+为什么 `Spring Security` 会这么做呢？边思考变看代码，原来 `matches` 方法的注释信息已经明确说明了原因：
+
+[source,text]
+----
+ Constant time comparison to prevent against timing attacks.
+----
+
+翻译过来就是：恒定时间比较以 *防止时序攻击*。
+
+恍然大悟，原来这么做是为了安全考虑。那么，什么是“时序攻击”呢？
+
+== 时序攻击
+
+网上对时序攻击的解释如下：
+
+[quote,百度百科]
+____
+在密码学中,时序攻击是一种侧信道攻击,攻击者试图通过分析加密算法的时间执行来推导出密码。每一个逻辑运算在计算机需要时间来执行,根据输入不同,精确测量执行时间,根据执行时间反推出密码。
+____
+
+耗子叔footnote:[https://coolshell.cn/articles/21003.html]已经对时序攻击的基本原理做了详细的剖析，有兴趣的可以去看看，这里说下我的理解。
+
+接着前边的场景，设置密码的时候按照一定规则加密，然后在密码验证的时候，一般都是按照原有的加密规则对密码进行加密，然后与原有密码进行比对，从而检查验证是否正确。伪代码如下：
+
+[source,java]
+----
+String encrypedPwd = encode(srcPwd);
+boolean match = matches(encrypedPwd, srcEncrypedPwd);
+----
+
+前边说过，如果匹配字符串时，遇到第一个不同的字符就直接返回，所以 *两个字符串匹配程度越大，服务器响应时间越慢，反之则越快*。
+
+虽然MD5是单向不可逆加密算法，要破解只能通过暴力穷举的方式，难度较大。但是，如果攻击者知道密码匹配的请求地址，然后按照字符串的每一个字符挨个采用穷举的方式来推算，但并不是蛮干，而是 *每次请求记录下服务器的响应时间* ，通过请求一定的次数，然后统计每个字符的平均响应时间，看哪一个字符最快，哪一个最慢, *最快说明字符位位置不匹配，最慢说明匹配成功*。
+
+举个例子：一个字符串 `abcd`，如果从 `0000` 开始穷举，那么 `0000` 响应的时间肯定比 `a000` 的时间快，因为 `0000` 第一个字符都不匹配，服务器直接返回，而 `a000` 第一个字符匹配成功，接着比配第二个字符 `0` 的时候才返回。此时，第一位的字符 `a` 就被推算出来了，依次类推就可以推算处整个字符串。基本思想就是这样，当然，这并没有那么容易，这还涉及到噪声信号的过滤、统计学算法等处理手段。
+
+== 防止攻击
+
+既然攻击者利用服务器响应时间来实现密码推算，那么只要服务器给密文匹配一个比较恒定的时间，就可以防止时许攻击。所以，这就是为什么前边提到的 `Spring Security` 要遍历整个字符数组来一一比较（有时候服务器太快响应也不是什么好事😅！）。
+
+另外，防止攻击一般常规的做法是：设定一个最大密码匹配次数，超过次数则锁定账号，这样就有效防止了黑客的攻击！
+
+参考资料::
+. https://coolshell.cn/articles/21003.html[]
+. https://cloud.tencent.com/developer/article/1692278[]
+. https://baike.baidu.com/item/%E6%97%B6%E5%BA%8F%E6%94%BB%E5%87%BB[]

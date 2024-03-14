@@ -1,0 +1,323 @@
+---
+title: Java设计模式(23)-备忘录模式
+slug: java-memento-pattern
+date: 2022/01/12
+updated: 2022/01/12
+img:
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 备忘录模式
+description: 中国有句古话："千金难买后悔药"。生活中很多时候，我们做过了的事情，虽然后悔，却无济于事。但是，在软件世界，我们却可以自己制作"后悔药"。比如，以前玩"仙剑"，每每遇到Boss战，那必须要存档的，就算没打过也可以恢复存档再来一次，否则，玩过的人都知道，哭去吧……这里的游戏存档，就会用到今天说的——备忘录模式。
+---
+
+= Java设计模式(23)-备忘录模式
+:key_word: 设计模式,备忘录模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2022/01/12
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+中国有句古话："千金难买后悔药"。生活中很多时候，我们做过了的事情，虽然后悔，却无济于事。但是，在软件世界，我们却可以自己制作"后悔药"。比如，以前玩"仙剑"，每每遇到Boss战，那必须要存档的，就算没打过也可以恢复存档再来一次，否则，玩过的人都知道，哭去吧……这里的游戏存档，就会用到今天说的——备忘录模式。
+
+image::/images/attachment/designpattern/memento-view.png[width="600"]
+
+其实还有很多这种例子，比如Word等办公软件的撤销操作，撤销后需要恢复到前一状态；又比如，虚拟机或者今天的云服务器都支持创建快照，如果系统出问题了，可以直接恢复到快照版本……
+
+== 概念
+
+备忘录，顾名思义用来做备份的，后续可能按照备份数据进行恢复。DP 对备忘录模式的定义如下：
+
+[NOTE]
+====
+.定义
+备忘录模式(Memento Pattern)：在 *不破坏封装性* 的前提下，捕获一个对象的内部状态，将在 *该对象之外* 保存这个状态。这样以后就可将该对象恢复到原先保存的状态。
+====
+
+这个定义比较好理解，其基本思想就是要将对象的内部状态保存下来，便于之后恢复，但是保存的逻辑不由对象本身负责，而是单独抽出取来，减轻对象的职责，同时也便于扩展。这个思想与前边的 <</2022/01/11/java-mediator-pattern#, 迭代器模式>> 非常类似。
+
+需要保存内部状态的这个对象，我们称为 *原发器* (Originator)，抽取出来的保存原发器状态的对象我们称为 *备忘录* (Memento)，我们来看看它们之间的关系。
+
+== 结构
+
+备忘录模式的结构如下：
+
+image::/images/attachment/designpattern/memento-class.png[width="800"]
+
+可以看到，备忘录模式中有三种角色：
+
+* Originator: 即原发器，持有内部状态，提供创建备忘录的方法，以保存某个时刻内部的全部或部分状态，同时还提供还原的方法，从而支持后续可以还原到保存的状态
+* Memento: 备忘录对象，它存储 Originator 的状态，但要求它能够防止除了 Originator 之外的对象访问备忘录
+* Caretaker: 管理者，它负责管理备忘录，包括存储、删除操作，但是要求它本身不能访问和修改备忘录
+
+[IMPORTANT]
+====
+.备忘录的宽窄接口
+备忘录对象它要求能够防止除了 Originator 之外的对象访问备忘录，而管理者又不能访问和修改备忘录，因此，要求备忘录能够具有 *宽窄两种接口*，Originator 能够通过 *宽接口* 创建、访问、修改备忘录对象，而管理者只能使用 *窄接口* 存储、删除和允许他人查询备忘录，本身不能修改和访问备忘录。
+====
+
+备忘录模式具有如下的优缺点：
+
+. 抽取了备忘录对象，用来保存状态，减轻了原发器的职责
+. 备忘录和原发器都可以再次抽象出单独的接口，便于扩展
+. 备忘录会创建多个状态的副本，可能造成很大的开销
+. 管理者管理多个备忘录，但它并不知道备忘录的内部状态，一个小的管理者可能存储和删除很大的备忘录，带来大的开销
+
+备忘录模式适用于以下场景：
+
+. 对象需要保存自身某一时刻的状态，以便后续进行恢复
+. 对象保存自身状态时不暴露其实现细节，需要保持其封装性不被破坏
+
+== 实现
+
+备忘录模式的实现大概有三种方式，每一种都有其适用场景。
+
+=== 标准实现
+
+标准实现方式，它抽取备忘录为单独的对象，由管理者来存储。我们以仙剑游戏为例，看看示例代码实现，如下：
+
+1、定义备忘录对象
+
+[source,java]
+----
+public class Memento {
+	private State state;
+	public Memento(State state) { // <1>
+		this.state = state;
+	}
+	public State getState() {
+		return state;
+	}
+	public void setState(State state) {
+		this.state = state;
+	}
+}
+----
+
+<1> 内部存储了原发器的状态对象
+
+2、定义原发器
+
+.状态对象
+[source,java]
+----
+public final class State {
+	// 攻击力
+	private final int ack;
+	// 防御力
+	private final int def;
+	// 血量
+	private final int hp;
+	// 蓝量
+	private final int mp;
+	public State(int ack, int def, int hp, int mp) {
+		this.ack = ack;
+		this.def = def;
+		this.hp = hp;
+		this.mp = mp;
+	}
+	@Override
+	public String toString() {
+		return "攻击力 " + ack + ", 防御力 " + def + ", 血量 " + hp + ", 蓝量 " + mp;
+	}
+}
+----
+
+状态对象定义了攻击力、防御力、血量和蓝量值等属性。
+
+.原发器对象
+[source,java]
+----
+public class Originator {
+	private State state;
+	// 角色名称
+	private final String name;
+	// 角色称号
+	private String title;
+	public Originator(String name) {
+		this.name = name;
+	}
+	public Memento createMemento() { // <1>
+		return new Memento(this.state);
+	}
+	public void recover(Memento memento) { // <2>
+		this.state = memento.getState();
+	}
+	// 省略getter/setter...
+	@Override
+	public String toString() {
+		return this.name + "[" + this.title + "] : " + this.state.toString();
+	}
+}
+----
+
+<1> 创建备忘录对象
+<2> 用备忘录恢复原发器到某一个时刻的状态
+
+3、定义管理者
+
+[source,java]
+----
+public class Caretaker {
+	private Memento memento;
+	public Memento getMemento() { // <1>
+		return memento;
+	}
+	public void setMemento(Memento memento) { // <2>
+		this.memento = memento;
+	}
+}
+----
+
+<1> 供其他对象查询存储的备忘录
+<2> 存储备忘录
+
+可以看到，管理者只是存储备忘录和提供查询接口，本身并不修改备忘录。为了简单，这里略去了删除备忘录操作。
+
+4、客户端调用
+
+[source,java]
+----
+public class MementoClient {
+	public static void main(String[] args) {
+		// 初始状态
+		String name = "李逍遥";
+		Originator originator = new Originator(name);
+		originator.setState(new State(10, 10, 100, 100));
+		originator.setTitle("出生小菜鸟");
+		System.out.println(originator);
+		// 打怪升级一段时间后
+		originator.setState(new State(40, 50, 40, 10));
+		originator.setTitle("江湖小虾米");
+		System.out.println(originator);
+		// 弄了一套装备，准备打boss
+		originator.setState(new State(90, 80, 100, 100));
+		originator.setTitle("武林高手");
+		System.out.println(originator);
+		// 存档
+		Memento memento = originator.createMemento(); // <1>
+		Caretaker caretaker = new Caretaker();
+		caretaker.setMemento(memento); // <2>
+		// 打BOSS之后，挂了，需要恢复存档
+		originator.setState(new State(90, 80, 0, 0));
+		System.out.println("挑战boss失败：" + originator);
+		originator.recover(caretaker.getMemento()); // <3>
+		System.out.println("恢复存档：" + originator);
+	}
+}
+----
+
+<1> 原发器创建备忘录
+<2> 管理者存储备忘录
+<3> 原发器从管理者那儿获取备忘录对象并恢复
+
+上边的代码输出如下：
+
+[source,text]
+----
+李逍遥[出生小菜鸟] : 攻击力 10, 防御力 10, 血量 100, 蓝量 100
+李逍遥[江湖小虾米] : 攻击力 40, 防御力 50, 血量 40, 蓝量 10
+李逍遥[武林高手] : 攻击力 90, 防御力 80, 血量 100, 蓝量 100
+挑战boss失败：李逍遥[武林高手] : 攻击力 90, 防御力 80, 血量 0, 蓝量 0
+恢复存档：李逍遥[武林高手] : 攻击力 90, 防御力 80, 血量 100, 蓝量 100
+----
+
+=== 内部类实现
+
+还可以使用内部类的方式实现，这样就可以将备忘录对象完全隐藏在原发器对象内部。为了简单，这里我省略了管理者对象，代码如下：
+
+[source,java]
+----
+public class OriginatorWithInnerClass {
+	private State state;
+	private InnerMemento innerMemento;
+	private final String name;
+	private String title;
+	public OriginatorWithInnerClass(String name) {
+		this.name = name;
+	}
+	public void createMemento() { // <1>
+		this.innerMemento = new InnerMemento(this.state);
+	}
+	public void recover() { // <2>
+		this.state = this.innerMemento.getState();
+	}
+	// 省略getter/setter......
+	@Override
+	public String toString() {
+		return this.name + "[" + this.title + "] : " + this.state.toString();
+	}
+	private class InnerMemento { // <3>
+		private final State state;
+		InnerMemento(State state) {
+			this.state = state;
+		}
+		State getState() {
+			return state;
+		}
+	}
+}
+----
+
+<1> 创建备忘录，保存在原发器对象自身中
+<2> 恢复到上一个备忘录
+<3> 内部类实现备忘录对象
+
+此时，备忘录对象完全被封装到原发器，原发器创建备忘录并保存它。
+
+=== 原型模式实现
+
+前边的示例，都是将原发器对象的状态进行了保存。有时候，我们需要保存整个对象，即在某一时刻复制当前原发器对象，此时就是创建原发器对象的快照，我们很容易想到使用 <</2020/07/15/java-prototype-pattern#, 原型模式>> 来实现。示例代码如下：
+
+[source,java]
+----
+public class PrototypeOriginator implements Cloneable { // <1>
+	private State state;
+	private final String name;
+	private String title;
+	public PrototypeOriginator(String name) {
+		this.name = name;
+	}
+	public PrototypeOriginator createMemento() {
+		return this.clone();
+	}
+	public void recover(PrototypeOriginator memento) {
+		this.setState(memento.getState());
+		this.setTitle(memento.getTitle());
+	}
+	// 省略getter/setter ...
+	@Override
+	public String toString() {
+		return this.name + "[" + this.title + "] : " + this.state.toString();
+	}
+	@Override
+	protected PrototypeOriginator clone() { // <2>
+		PrototypeOriginator originator = new PrototypeOriginator(this.name);
+		originator.setState(this.getState());
+		originator.setTitle(this.getTitle());
+		return originator;
+	}
+}
+----
+
+<1> 实现 `Cloneable` 接口已实现原型模式
+<2> 实现 `clone()` 方法，注意这里必须使用 *深拷贝*
+
+这种方式，原发器对象本身就是备忘录，其他与标准实现相同，不再贴代码了，有兴趣可以看文末源码。
+
+== 总结
+
+当需要保存对象的状态，又不想暴露对象的实现细节，此时可以考虑使用原型模式，将备忘录和其保存的逻辑抽取出来，对象仅需暴露一个创建备忘录和一个恢复到备忘录的方法即可，便于扩展。但是，备忘录对象会保存原发器的部分甚至整个状态，会带来很大的开销，因此使用时需要权衡利弊。
+
+本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/memento[github]

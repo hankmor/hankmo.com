@@ -1,0 +1,164 @@
+---
+title: MySQL中批量插入和批量更新
+slug: mysql-batch-insert-update
+img: /images/thumbnail/attachment/20180228/1dc6923a20154adfa569f016af43ab8a.png
+categories:
+  - 中间组件
+tags:
+  - mysql
+description: >-
+  大批量同步数据到MySQL中，涉及到更新和新增数据，如果仅仅循环一次次插入，不仅耗费过多的网络开销，性能低下，而且频繁的获取数据库连接、操作数据库，增加数据库压力，甚至严重影响数据库性能。因此，此时我们需要批量操作，来减轻数据库压力，提升应用性能。
+date: 2018-02-27 19:22:14
+updated: 2018-08-16 14:32:47
+---
+
+= MySQL中批量插入和批量更新
+:author: belonk.com
+:date: 2018-08-16
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: MySQL,批量插入,批量更新,replace into
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: mysql
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+大批量同步数据到MySQL中，涉及到更新和新增数据，如果仅仅循环一次次插入，不仅耗费过多的网络开销，性能低下，而且频繁的获取数据库连接、操作数据库，增加数据库压力，甚至严重影响数据库性能。因此，此时我们需要批量操作，来减轻数据库压力，提升应用性能。
+
+== 数据准备
+ 
+首先创建一张测试表，插入一些初始数据：
+
+[source,sql]
+----
+CREATE TABLE `hello` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) DEFAULT NULL,
+  `age` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8;
+
+INSERT INTO `test`.`hello` (`id`, `name`, `age`) VALUES ('1', 'zhangsan', '30');
+INSERT INTO `test`.`hello` (`id`, `name`, `age`) VALUES ('2', 'lisi', '18');
+INSERT INTO `test`.`hello` (`id`, `name`, `age`) VALUES ('3', 'wangwu', '22');
+INSERT INTO `test`.`hello` (`id`, `name`, `age`) VALUES ('4', 'zhaoliu', '25');
+----
+ 
+
+== 批量更新
+ 
+MySQL批量更新总结下来有大概有四种常用方式：
+
+=== replace into
+ 
+基本语法
+
+----
+replace into test_tbl (id,dr) values (1,'2'),(2,'3'),...(x,'y');
+----
+用于替换指定条件的字段值，本质上是先删除记录，在重新添加，所以 未指定的字段会被重置为默认值（例如NULL）。
+
+举例：
+
+----
+replace into hello (id, age) VALUES (1, 30)
+----
+
+结果：受影响的行数为2，而且name字段被更新为NULL了。
+
+=== insert into on duplicate key update
+ 
+插入时检查主键是否存在，存在则进行更新。
+
+基本语法
+
+----
+insert into test_tbl (id,dr) values (1,'2'),(2,'3'),...(x,'y') on duplicate key update dr=values(dr)
+----
+
+举例：
+
+----
+insert into hello(id, name, age) VALUES(2,'李四', 30),(3,'王五',31) ON DUPLICATE key UPDATE name=values(name),age=values(age)
+----
+结果：受影响的行数为4.
+
+[IMPORTANT]
+====
+.注意
+replace into&nbsp; 和 insert into on duplicate key update的不同在于：
+
+* replace into 操作本质是对重复的记录先delete 后insert，如果更新的字段不全会将缺失的字段置为缺省值，用这个要悠着点否则不小心清空大量数据可不是闹着玩的。
+* insert into 则是只update重复记录，不会改变其它字段。
+====
+
+=== 临时表批量更新
+ 
+----
+DROP TEMPORARY TABLE tmp;
+create temporary table tmp(id bigint primary key, name varchar(255), age int(11));
+insert into tmp values(2,'lisi', 21),(3,'wangwu',22);
+update hello, tmp set hello.name=tmp.name,hello.age=tmp.age where hello.id=tmp.id;
+----
+
+这种方法需要用户有temporary表的create权限，并且较为繁琐。
+
+== 4、mysql特性语句
+ 
+----
+UPDATE hello
+SET name =
+CASE id
+WHEN 2 THEN '李四'
+WHEN 3 THEN '王五'
+END,
+age =
+CASE id
+WHEN 2 THEN 30
+WHEN 3 THEN 31
+END
+WHERE id IN(2, 3)
+----
+利用CASE WHEN语句，根据主键id判断，设置对应的值。
+
+由于没有做具体的性能测试，目前项目采用的这种方式。
+
+
+== 批量插入
+
+基本语法：
+
+----
+INSERT INTO
+[表名]([列名],[列名])
+VALUES
+([列值],[列值])),
+([列值],[列值])),
+([列值],[列值]));
+----
+
+例如：
+
+----
+INSERT INTO hello VALUES(NULL, 'NAME1', 10), (NULL, 'NAME2', 11), (NULL, 'NAME3', 12)
+----
+
+== MyBatis实现
+ 
+批量更新：
+
+image::/images/attachment/20180227/f44fe32f11e44f209511c1f9952c78ae.png[]
+
+批量插入：
+
+image::/images/attachment/20180227/e89699d05c8d4375b17820c35dafcd90.png[]

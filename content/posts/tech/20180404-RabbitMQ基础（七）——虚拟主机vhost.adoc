@@ -1,0 +1,256 @@
+---
+title: RabbitMQ基础（七）——虚拟主机vhost
+slug: rabbitmq-vhost
+img: /images/thumbnail/attachment/20180404/7974866d38ce484fb56e47e7d1cc8c38.png
+categories:
+  - 中间组件
+tags:
+  - rabbitmq
+description: >-
+  虚拟主机是RabbitMQ的逻辑单元，有用单独的连接、队列、交换器、绑定等等信息，多个虚拟主机相互隔离、互不影响。这解决了RabbitMQ数据量庞大时的各种管理问题，可以按照业务模块分别建立不同的虚拟主机，单独为独立的业务功能服务，而不会产生诸如命名冲突等问题。
+date: 2018-04-04 15:46:21
+updated: 2018-08-09 15:37:39
+---
+
+[rabbitmq-vhost]
+= RabbitMQ基础（七）——虚拟主机vhost
+:author: belonk.com
+:date: 2018-08-09
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: /images
+:keywords: rabbitmq,queue,交换器,队列,vhost,虚拟主机
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: rabbitmq
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+image::/images/attachment/20180404/7974866d38ce484fb56e47e7d1cc8c38.png[]
+
+== 简介
+
+RabbitMQ是一个多租户系统：连接、交换器、队列、绑定、用户权限、策略和其他的东西都属于虚拟主机（virtual hosts，v_host），他们是整个RabbitMQ的逻辑分组。
+
+虚拟主机类似于 https://httpd.apache.org/docs/2.4/vhosts/[Apache的虚拟主机]和 https://www.nginx.com/resources/wiki/start/topics/examples/server_blocks/[Nginx的server块]，最重要的区别是：Apache的虚拟主机通过配置文件定义，然而在RabbitMQ中，RabbitMQ只能通过rabbitmqctl控制台工具或者HTTP API来创建。
+
+
+=== 逻辑和物理分隔
+
+如果没有虚拟主机，当RabbitMQ中的数据越来越庞大，队列越来越多，随之而来的是令人头痛的管理问题，比如队列、交换器命名冲突，它们相互影响等等。虚拟主机能够解决这些问题，而不需要我们部署多个RabbitMQ来负责不同的业务。
+
+虚拟主机提供了资源的逻辑分组和分隔，每一个虚拟主机本质上是mini版的RabbitMQ服务器，他们有用自己的连接、队列、绑定、交换器，更重要的是有用自己的权限机制，这有点类似服务器和运行在服务器上的虚拟机一样。
+
+=== 客户端连接
+
+通队列、交换器一样，虚拟主机必须定义名称。当AMQP 0-9-1的客户端连接到RabbitMQ时，需要指定虚拟主机名称，同时还需要提供用户名和密码，只有用户具有相关的权限才能建立连接（关于权限控制的详细信息可以看  http://www.rabbitmq.com/access-control.html[这里]）。
+
+通常，一个虚拟主机的连接只能操作属于该虚拟主机的交换器、队列和绑定等等内容。但是，当客户端同时连接了多个虚拟主机时，可能产生多个虚拟主机内的交换器、队列相互连接的情况，这种情景典型的例子是虚拟主机处于不同的RabbitMQ集群或者同一个集群中，&nbsp;  http://www.rabbitmq.com/shovel.html[RabbitMQ Shovel plugin]就是一个这种场景应用的实例。
+
+=== 虚拟主机和STOMP、MQTT
+
+同AMQP 0-9-1一样，STOMP协议也有虚拟主机的概念，具体参见 https://stomp.github.io/stomp-specification-1.2.html#CONNECT_or_STOMP_Frame[这里]。
+
+相反，MQTT并不支持虚拟主机，MQTT连接默认使用单一的RabbitMQ主机，有MQTT特定的约定和特性，使客户机能够连接到特定的虚拟主机，而无需修改任何客户端lib库。有关详细信息，请参阅 http://www.rabbitmq.com/mqtt.html[MQTT指南]。
+
+== 虚拟主机管理
+
+RabbitMQ包含一个默认的虚拟主机：“/”，我们默认操作的都是这个虚拟主机，其用户名和密码默认都是guest，为了安全起见我们应该修改其密码（后续文章将详细介绍权限管理）。
+
+=== 查询
+
+命令：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+该命令会查询当前RabbitMQ服务中所有的虚拟机，由于我没有创建任何虚拟机，所以只能看到默认的：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+=== 创建
+
+命令：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+创建时必须指定名称：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+创建完成后，查询：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+可以看到刚创建的虚拟主机。
+ 
+
+=== 删除
+
+命令：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+同样必须指定要删除的vhost的名称：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+查询：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+=== 添加用户和授权
+ 
+
+添加用户：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+授权：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+这里我们暂时不讨论RabbitMQ权限的细节，仅是为了让我们的虚拟主机能够连接上。
+
+== 配置数量限制
+
+有时候，我们需要限制虚拟主机的最大队列数量或者并发客户端链接数量，可以通过rabbitmqctl或者 http://www.rabbitmq.com/management.html#http-api[HTTP API]来设定。
+
+=== 命令行配置
+
+语法：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+该命令需要指定虚拟机名称和JSON格式的配置内容。
+ 
+
+=== 最大连接数
+ 
+
+例如，配置虚拟主机的最大链接数量：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+不允许客户端连接到虚拟主机，可以设置最大连接数为0：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+如果要解除限制，只需设置为-1即可：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+=== 最大队列数
+ 
+
+配置虚拟主机的最大队列数量：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+同样，解除限制只需设置为-1：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+== 连接虚拟主机
+ 
+
+现在，我们来创建一个虚拟主机，并使用Java来编写一个客户端，连接到vhost上。
+
+创建虚拟主机：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+创建用户：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+授予权限：
+
+[source, java]
+----
+rabbitmqctl list_vhosts
+----
+
+连接到虚拟主机：
+
+[source, java]
+----
+ConnectionFactory factory = new ConnectionFactory();
+factory.setHost("localhost");
+// 需要连接的虚拟主机
+factory.setVirtualHost(vhostName);
+// 用户名
+factory.setUsername("vhost1");
+// 密码
+factory.setPassword("123456");
+Connection connection = factory.newConnection();
+Channel channel = connection.createChannel();
+----
+ 
+
+== 总结
+ 
+
+虚拟主机是RabbitMQ的逻辑单元，有用单独的连接、队列、交换器、绑定等等信息，多个虚拟主机相互隔离、互不影响。这解决了RabbitMQ数据量庞大时的各种管理问题，可以按照业务模块分别建立不同的虚拟主机，单独为独立的业务功能服务，而不会产生诸如命名冲突等问题。
+

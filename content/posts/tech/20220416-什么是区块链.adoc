@@ -1,0 +1,174 @@
+---
+title: 什么是区块链
+slug: blockchain-intro
+categories:
+  - 高新技术
+tags:
+  - 区块链
+  - 以太坊
+  - 比特币
+description: 区块链是这几年非常火热的一个话题，越来越多的人加入到”区块“大军之中。他们其中一些人，积极投入到挖矿、炒币行列之中，甚至发行自己的数字货币来创收，这部分人社称之为”币圈“；另一部分人，深入探究区块链底层技术，期望不断改进并将区块链技术运用到更多领域中，这部分人社称之为”链圈“。越来越多的人积极群涌入区块链，游弋于“币圈"和"链圈&quot;之间，忙的不亦乐乎。本文将简单介绍区块链的一些入门知识，并介绍区块链开发所需要具备的基础知识，希望对准备进入区块链的开发者们会有一些帮助。
+date: 2022-04-17 21:45:50
+updated: 2022-04-17 21:45:54
+---
+
+= 什么是区块链
+:author: belonk.com
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+区块链是这几年非常火热的一个话题，越来越多的人加入到”区块“大军之中。他们其中一些人，积极投入到挖矿、炒币行列之中，甚至发行自己的数字货币来创收，这部分人社称之为”币圈“；另一部分人，深入探究区块链底层技术，期望不断改进并将区块链技术运用到更多领域中，这部分人社称之为”链圈“。越来越多的人积极群涌入区块链，游弋于“币圈"和"链圈"之间，忙的不亦乐乎。
+
+本文将简单介绍区块链的一些入门知识，并介绍区块链开发所需要具备的基础知识，希望对准备进入区块链的开发者们会有一些帮助。
+
+== 什么是区块链
+
+区块链（Blockchain）源于 https://bitcoin.org[比特币]，它其实是对比特币的底层技术的一种扩展和创新。2008年，一位网名“中本聪”的日本大佬发布了一篇名为 https://bitcoin.org/bitcoin.pdf[《比特币：一种点对点的电子现金系统] 的论文（比特币 https://bitcoin.org/files/bitcoin-paper/bitcoin_zh_cn.pdf[白皮书]），文中总结了之前的数字货币发明，提出了一种完全去中心化的数字货币系统，即比特币。文中并没有提及“区块链”一词，而是使用了“区块”（Block）和“链”（Chain）来描述比特币底层技术，后来人们将区块、链合并在一起，正式提出“区块链”（Blockchian）这一概念。
+
+image:https://bitcoin.org/img/home/bitcoin-img.svg?1648897668[比特币]
+
+区块链是一系列技术的组合，包括P2P动态组网、密码学、基于密码学的共享账本、共识机制、智能合约等。简单而言，区块链可以看做一个全球互联的超级账本，链中的每一台计算机通过P2P组网连接并保留了账本的副本，这样，链中的计算机都有一份账本。每一笔交易都需要记录到账本中，当一笔交易产生后，产生这笔交易的计算机将交易信息广播出去，其他链上的计算机就会收到交易信息，它们会进行一系列复杂计算，最终由率先计算完成的计算机将这笔交易信息记录到账本上。具体的计算机制其实是由不同的区块链设计好的，与该区块链的结构相关。比如按照比特币的设计，计算机需要将10分钟内的全部交易打包，再加上一个随机数，然后穷举随机数计算一个256位的哈希值，使得其符合一定的条件，这样就可以获得交易记账权，一旦计算完成并记账，该计算机要快速将计算的区块广播出去，由其他计算机来验证计算的正确性，防止他人篡改。
+
+每产生一笔交易并不是立即就要被区块的各个节点记账，而是按设计要求被打包到一起，比特币设计为每10分钟将所有新交易打包（而以太坊时间更短，大约9秒左右），形成了一个**区块**（Block），然后将区块广播出去，区块链中的计算机都需要验证区块的正确性，并将其写入自己的账本中，完成记账。区块链则是由一个个相互连接的区块组成的，每一个区块都记录了上一个区块的 `HASH` 值，第一个区块没有上一个区块的 `HASH` 值，称之为”**创世区块**“。计算哈希值竞争记账权的计算机称为**“矿工”**，计算的过程称为”**挖矿**“，挖矿成功则获得交易记账权，记录打包好的交易信息并写入最新的区块，称为”**出块**“，最新出块的矿工可以获得一定的手续费收入。
+
+区块链中的计算机都有账本，那么如果确定各个账本数据的一致性呢？区块链采用”**共识机制**“来保证大部分诚实计算机的账本一致性，这样就实现了完全去中心化。常用的共识机制有Pow（工作量证明机制，例如挖矿机制）、PoS（权益证明）、DPos（股权授权证明）和分布式一致性算法（如拜占庭容错算法、Paxos、Raft）。
+
+与传统的中心化应用相比，区块链具有如下特点：
+
+* 去中心化：区块链本质是基于P2P对等网络的**分布式系统**，链上的每一个节点都存有相同的数据，通过共识机制来决定交易数据的同步，不需要中心化服务器。但是目前，还不能做到完全的去中心化，某些场景还是具备中心化的特征。
+* 高度开放：公有链上的区块链系统通常都是开源的，任何人都可以查询区块链上的数据，智能合约代码高度公开、透明，数据存储与链上所有节点中，不用担心中心化应用的资金安全等一系列问题。
+* 高度可用：区块链应用由区块链上的每一个节点共同维护，任何一个或几个节点宕机不影响整个应用的可用性。
+* 高度安全：区块链技术采用一系列加密措施（如非对称加密、哈希算法、椭圆曲线算法等）来对交易进行加密和签名，保证交易不能被伪造、篡改，然后借助分布式系统中各个节点的共识算法形成强大算力来抵御破坏者的攻击，从而保证链上数据的安全性。
+* 匿名性：区块链上的用户信息都是匿名的，仅对外暴露钱包公钥和地址，就可以完成交易，完全不需要用户的真实身份信息。
+
+== 什么是以太坊
+
+比特币作为一种虚拟数字货币，为金融领域开创了一种全新的去中心化货币系统。比特币的狂热粉们一直在探索，比特币技术能否使用到其他非金融领域呢？ https://ethereum.org/zh/[以太坊] 的出现，为区块链技术迎来了崭新的时代。
+
+2013年，比特币的忠实拥护者 https://en.wikipedia.org/wiki/Vitalik_Buterin[Vitalik Buterin] （人称V神）提出了一种构想：区块链不应该仅用于金融领域，而是应该开放出来形成一个开放平台，供人们开发更多的去中心化应用，为此他提出了以太坊，并发表了《以太坊：一个下一代智能合约和去中心化应用平台》，也就是后来的 https://ethereum.org/zh/whitepaper/[《以太坊白皮书》]。
+
+image:/images/blockchain/Vitalik-Buterin.png[Vitalik Buterin]
+
+https://ethereum.org/zh/[以太坊] 是一个去中心化的、开源的、图灵完备的、有智能合约功能的区块链开放平台。
+
+首先，以太坊是一条发行有自己货币（ether，以太币）的区块链；其次，以太坊具备开发去中心化应用功能，它具有能够在以太坊虚拟机（EVM）上运行的 https://en.wikipedia.org/wiki/Smart_contract[智能合约] 功能，开发者可以编写智能合约来自主控制去中心化应用；第三，以太坊优化了PoW（工作量证明机制），并提供了PoS权益证明共识机制，大大加快了区块链交易确认速度（比特币确定一笔交易需要10分钟，而以太坊减少到9秒左右），为去中心化应用开发提供了必要条件。
+
+总之，以太坊是一个区块链开放平台，通过它可以开发自己的区块链 https://zh.wikipedia.org/wiki/%E5%8E%BB%E4%B8%AD%E5%BF%83%E5%8C%96[去中心化]（Decentralization）应用（Dapps）。
+
+image:/images/blockchain/ethereum.png[width=80%]
+
+以太坊被称为"第二代的区块链平台"， https://txstreet.com/v/eth-btc[这个网站] 用车站的例子动态、形象地展示了以太坊和比特币之间的一些差别，非常生动有趣。
+
+== 区块链中的一些基本概念
+
+了解了区块链和以太坊，现在我们来看看区块链中的一些概念。
+
+* 区块链：Blockchain，共享的分布式账本，交易附加到区块上存储并记录。
+* 区块：Block，多个交易被打包为区块并存储，区块之间相互连接，形成一个链状结构，每一个区块都有一个哈希值加以区分，区块在链中的长度称为区块高度。
+* 钱包：Wallet，存储用户虚拟货币的地方，对外暴露公共地址和公钥，内部包含有绝对私密的私钥信息。
+* 以太坊：Ethereum，一个基于区块链的去中心化运行智能合约的平台，旨在解决与审查，欺诈和第三方干扰相关的问题。
+* 主链：Mainnet，正式运行的区块链的主网络，一个区块链项目经过前期的技术开发后，最终都会发布到区块链主网上线，比如 https://ethereum.org/zh/[以太坊主网]。
+* 侧链：Sidechains，侧链实质上不是特指某个区块链，而是指遵守侧链协议的所有区块链，该名词是相对于主链而言的。侧链协议是指可以让主币安全地从区块链主链转移到其他区块链，又可以从其他区块链安全地返回主链的一种协议。侧链与主链共存，并可以扩展主链的功能、提高交易速度等，比如ETM就是以太坊ETH的侧链。
+* 测试链：Testnet，与主链功能相同的测试网络，以测试为目的搭建，可以免费从**水龙头**获得测试币在测试链上进行开发测试，如 https://testnet.bscscan.com/[币安测试链]。
+* 交易：由原始帐户签署的提交到以太坊区块链的数据，并以特定地址为目标。交易包含元数据，例如交易的燃气限额（Gas limit）。
+* 区块链浏览器：查询区块链中数据的工具网站，可以详细查询区块链上的详细信息，如 https://etherscan.io/[以太坊浏览器]、 https://bscscan.com/[币安链浏览器]等等。
+* Dapp：去中心化应用，基于区块链技术开发的应用程序，数据存储于区块链中。
+* DAO：去中心化自治组织，一种将组织的管理和运营规则以智能合约的形式编码在区块链上，从而在没有集中控制或第三方干预的情况下自主运行的组织形式。DAO 有望成为应对不确定、多样、复杂环境的一种新型有效组织。
+* 以太币：Ether，以太坊生态系统中使用的本地货币，在执行智能合约时承担gas费用，它的符号是 `Ξ`.
+* 以太坊虚拟机：EVM，Ethereum Virtual Machine, 基于栈的、执行智能合约字节码的虚拟机。
+* 智能合约：Smart Contract，在以太坊的虚拟机中执行的程序，有开发者编写以控制链上业务逻辑。
+* 水龙头：Faucet，一个网站，用来向测试用户提供一定数量的测试币，供测试使用，测试币除了测试并没有真正的价值。
+* Solidity：过程式（命令式）编程语言，语法类似于 Javascript, C++ 或 Java，以太坊智能合约最流行和最常使用的语言。由以太坊架构师 Gavin Wood 发明。
+* https://zh.wikipedia.org/wiki/%E5%9C%96%E9%9D%88%E5%AE%8C%E5%82%99%E6%80%A7[图灵完备]：Turing Complete，在计算理论中，如果数据操纵规则（如计算机的指令集，程序设计语言或细胞自动机）可用于模拟任何图灵机，则它被称为图灵完备或计算上通用的。这个概念是以英国数学家和计算机科学家**阿兰图灵**命名的。
+
+== 区块链学习路线
+
+区块链包括非常多的内容，体系非常庞大且繁杂。对于初学者，可以从比特币官网、以太坊官网开始学习，结合一些社区和书籍，由浅入深逐步学习。这个 https://github.com/Dapp-Learning-DAO/Dapp-Learning[Github仓库]的为初学者提供了学习指引，可以参考。此外， https://learnblockchain.cn/[登链社区]提供了大量的中文文档和相关文章，可以多逛逛。
+
+就个人而言，建议参考如下路线：
+
+. 掌握比特币、区块链的基础知识，可以参阅 https://bitcoin.org/en/[比特币官网]，推荐阅读书籍《精通区块链编程》， https://github.com/inoutcode/bitcoin_book_2nd[在线阅读地址]见这里；
+. 掌握以太坊基础知识，从 https://ethereum.org/zh/[官网]入手，了解以太坊钱包、ETH、Dapps、NFT、DeFi、DAO、GameFi等基础概念，资料： https://ethereum.org/zh/[官方文档]、 https://knol.ethereum.cn/hello_eth[以太坊开发者手册中文]；
+. 开始重点学习以太坊的核心内容，通过官方文档和社区资料，结合 https://github.com/inoutcode/ethereum_book[《精通以太坊》]这本书，包括：
+.. 在Chrome中安装 https://docs.metamask.io[MetaMask]，注册账号并学会使用钱包，资料： https://docs.metamask.io/guide/[官方文档]；
+.. 了解以太坊的几个测试链，掌握官方测试链Ropsten和其 https://ropsten.etherscan.io/[浏览器]的使用，并从MetaMask https://faucet.metamask.io[水龙头]获得测试以太币；
+.. 初步掌握 `Solidity` 语言和智能合约开发，使用在线的智能合约开发工具 http://remix.ethereum.org/[remix]编写合约并测试，资料： https://soliditylang.org/[官网]、 https://learnblockchain.cn/docs/solidity/[中文文档]；
+.. 安装和学习以太坊客户端 https://geth.ethereum.org/[Geth]，然后学习 `Web3.js` 并在Geth中实践，资料：Web3.js https://learnblockchain.cn/docs/web3.js/[中文文档]，Geth https://learnblockchain.cn/docs/web3.js/[官网]；
+. 尝试做一个简单的Dapp项目，比如水龙头、投票等，使用网页页面，练习智能合约开发和使用Web3.js与链上、MetaMask钱包交互；
+
+完成这些后，基本上掌握了Dapp开发的流程。然后，可以慢慢深入学习区块链的应用领域，如去中心化金融DeFi、区块链游戏GameFi、去中心化自治组织DAO等等。此时，可以学习如下的内容：
+
+. 使用 https://learnblockchain.cn/docs/truffle/[Truffle]框架以及 https://github.com/trufflesuite/ganache[Ganache]来编写、部署和测试智能合约；
+. 深入学习智能合约，了解 https://learnblockchain.cn/docs/eips/[EIPs]，掌握ERC20、ERC721等合约规范；学习和阅读 https://docs.openzeppelin.com/[OpenZeppelin]合约源码；掌握如何发布自己的代币；
+. 深入研究区块链的核心技术，如梅克尔树、共识机制、密码学等；
+. 深入学习钱包的工作原理，掌握如何开发自己的钱包应用；
+. 深入学习去中心化交易所的实现原理，如 https://docs.uniswap.org/[Uniswap]等；
+. 学习超级账本项目 https://www.hyperledger.org/[Hyperledger]；
+. ……
+
+== 区块链开发准备
+
+如果您是一名程序员，那么区块链开发入门比较简单，区块链开发钱需要做好以下准备：
+
+. 掌握区块链基础知识，尤其是以太坊、`Web3.js`、`Solidity` 和智能合约；
+. 掌握一种后端编程语言，Java、Go、Node.js、Python等都可以；
+. 科学上网工具，如V2ray，区块链很多资源国内都无法访问；
+. 熟练使用MetaMask钱包，这是区块链开发中使用最多的钱包；
+. 拥有自己的钱包；
+. 熟悉 https://remix.ethereum.org/[Remix]的使用。
+
+做好了如上准备工作，现在可以着手区块链开发了。编写合约实现也无需求，部署合约到区块链上，然后用 `Web3.js` 与合约交互，最简单的开发工作基本遵循这样的流程。但是，区块链的开发远没有那么简单。区块链上的程序**一旦发布不可修改**，一旦造成损失将无法挽回！因此，开发Dapp就如同造火箭，一旦生产过程中出现了哪怕极微小的漏洞，也可能导致功亏一篑，尤其是要自己生产代币时，更是需要反复测试以确保万无一失！
+
+== 常用区块链资源
+
+推荐书籍::
+
+* https://github.com/inoutcode/bitcoin_book_2nd[《精通比特币》]
+* https://github.com/inoutcode/ethereum_book[《精通以太坊》]
+* https://github.com/yeasy/blockchain_guide[《区块链原理、设计与应用》]
+* 《区块链技术指南》
+
+社区网站::
+
+* 登链社区： https://learnblockchain.cn/
+* 以太坊中国： https://www.ethereum.cn/
+* EthHub： https://docs.ethhub.io/
+
+官方文档::
+
+* 比特币官网： https://bitcoin.org
+* 以太坊官网： https://ethereum.org/zh/
+* 比特币白皮书： https://bitcoin.org/files/bitcoin-paper/bitcoin_zh_cn.pdf
+* 以太坊白皮书： https://ethereum.org/zh/whitepaper/
+* 以太坊黄皮书： https://ethereum.github.io/yellowpaper/paper.pdf
+
+其他资源::
+
+* 以太坊开发工具和资源大全： https://learnblockchain.cn/article/2006
+* 以太坊浏览器:  https://etherscan.io/
+* 以太坊浏览器中文文档： https://learnblockchain.cn/docs/etherscan/
+* Remix Web IDE： https://remix.ethereum.org/
+* 小狐狸钱包地址:  https://metamask.io/
+* web3js中文文档： https://web3js.readthedocs.io/en/v1.7.0/getting-started.html
+* Solidity中文文档： https://learnblockchain.cn/docs/solidity/
+* Truffle中文文档： https://learnblockchain.cn/docs/truffle/
+* 以太坊改进提案EIPs： https://learnblockchain.cn/docs/eips/
+* Ropsten 水龙头： https://faucet.metamask.io/
+* Rinkeby水龙头： https://faucet.rinkeby.io/
+* Kovan 水龙头： https://github.com/kovan-testnet/faucet
+* Goerli水龙头： https://goerli-faucet.slock.it/
+* Java web3 API库 `Web3j`： https://github.com/web3j/web3j
+* Python web3 API库 `Web3.py`： https://github.com/ethereum/web3.py
+* Kotlin Web3 API库KEthereum： https://github.com/komputing/KEthereum

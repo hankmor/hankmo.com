@@ -1,0 +1,581 @@
+---
+title: 读《Java并发》— 线程安全性
+slug: jcip-concurrency-thread-safety
+img:
+categories:
+  - 并发编程
+tags:
+  - 并发
+  - Java并发编程实战
+description: 并发编程会带来诸多挑战，最基本的就是 *线程安全性*，但这又是一个非常复杂的主题。这一章重点介绍了什么是线程安全性、原子性、竞态条件等概念，以及在Java中如果通过加锁来确保线程安全性。要理解什么是线程安全性，必须先明白什么是正确性，因为正确性是线程安全性的核心概念。正确性的含义是，某个类的行为与其规范完全一致。这个定义从静态视角出发强调了类的规范重要性。通常，我们不会定义类的详细规范，但是我们应该为类和方法提供文档注释，来说明类是否是线程安全的，以及对于线程安全性如何保证。尤其在方法上，应该明确规定该方法是否已经保证了线程安全，调用者是否应该在同步机制内调用该方法等等。
+date: 2022-01-25 00:00:00
+updated: 2022-01-25 00:00:00
+---
+
+[[thread-security]]
+= 读《Java并发》- 线程安全性
+:author: belonk.com
+:date: 2022/01/22
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir:
+:keywords: 并发,Java
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: 书籍,电子书,并发
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+<</2022/01/22/jcip-concurrency-intro#thread-difficulty, 上一章>> 介绍过，并发编程会带来诸多挑战，最基本的就是 *线程安全性*，但这又是一个非常复杂的主题。这一章重点介绍了什么是线程安全性、原子性、竞态条件等概念，以及在Java中如何通过加锁来确保线程安全性。
+
+== 什么是线程安全性
+
+=== 正确性
+
+要理解什么是线程安全性，必须先明白什么是正确性，正确性是线程安全性的核心概念。
+
+[quota,Java并发编程实战]
+____
+正确性的含义是，某个类的行为与其规范完全一致。
+____
+
+这个定义从静态视角出发强调了类的规范重要性。通常，我们不会定义类的详细规范，但是我们应该为类和方法提供文档注释，来说明类是否是线程安全的，以及对于线程安全性如何保证。尤其在方法上，应该明确规定该方法是否已经保证了线程安全，调用者是否应该在同步机制内调用该方法等等。
+
+下边是 `ArrayList` 的类文档注释的节选，它告诉调用者关于线程安全的内容：
+
+[quota,Jdk8 的ArrayList文档注释（节选）]
+____
+Note that this implementation is not synchronized.
+If multiple threads access an ArrayList instance concurrently, and at least one of the threads modifies the list structurally, it must be synchronized externally.
+(A structural modification is any operation that adds or deletes one or more elements, or explicitly resizes the backing array; merely setting the value of an element is not a structural modification.) This is typically accomplished by synchronizing on some object that naturally encapsulates the list.
+
+If no such object exists, the list should be "wrapped" using the
+{@link Collections#synchronizedList Collections.synchronizedList} method.
+This is best done at creation time, to prevent accidental unsynchronized access to the list:
+
+----
+List list = Collections.synchronizedList(new ArrayList(...));
+----
+
+____
+
+大意是说，`ArrayList` 实现不是线程安全的，多个线程访问它时需要外部同步，也可以使用 `Collections.synchronizedList` 来将其包装为线程安全的 `List`。
+
+有了类规范说明，那么类表现的行为就应该与其规范一致。比如，`ArrayList` 不是线程安全的，那么多个线程在同时迭代、添加、删除元素时，会抛出 `IndexOutOfBoundsException` 或 `ConcurrentModificationException`。`Collections.synchronizedList` 包装的 `List` 是线程安全的，正确使用时不会出现这个问题 footnote:[示例代码见: https://github.com/koobyte/thinking-in-jcip/tree/main/src/main/java/com/koobyte/concurrency/c02[github]]，参看<<#not-safe-list,后文示例>>。
+
+=== 安全性
+
+理解了正确性，再来看看安全性的定义。
+
+[quota,Java并发编程实战]
+____
+什么是线程安全性？安全性指的是程序永远不会返回错误的结果。当多个线程访问某个类时，这个类始终都能表现出正确的行为，那么就称这个类是线程安全的。
+____
+
+简而言之，安全性就是指 *程序运行的结果与线程的调度方式和执行顺序无关*。这也是说，多线程程序运行的结果与操作系统无关，与多个线程孰先孰后执行也无关系，多线程程序在多个平台上执行的结果都应该是正确的。
+
+所以，正确性是安全性的核心。
+
+== 对象的状态
+
+要编写线程安全的代码，本质和核心是 *管理对象的状态访问和操作*。也就是说，对象状态决定了多个线程访问该对象的安全性。
+
+那么，什么是对象的状态？对象的状态指的是存在在状态变量（如实例、域）中的数据。通常情况下，对象的状态大多由其域决定。
+
+对象的状态，如果状态是 *可变的* (Mutable) 或 *共享的* (Shared)，那么我们在并发编程时必须要采用同步机制来保证安全性。这就涉及到编程时如何 *安全的发布对象*，关于 *对象的发布和逸出* 将在后一章来讨论。现在我们只需要知道，*共享* 和 *可变* 的状态表明多个线程可以同时访问和更改对象的状态，这就涉及如何安全的管理这些状态来保证线程安全性。
+
+比如， <</2022/01/22/jcip-concurrency-intro#unsafe-sequence, 并发简史中>> 的 `UnsafeSequence` 示例代码中，唯一的 `count` 域就体现了对象的状态：
+
+[[unsafe-sequence]]
+[source,java]
+----
+public class UnsafeSequence {
+	private int count;
+	public int increment() {
+		return count++;
+	}
+	public int getCount() {
+		return count;
+	}
+}
+----
+
+方法 `increment()`、`getCount()` 在更改和访问域 `count`，因此，我们说 `UnsafeSequence` 对象的状态是可变的(可以更改)和共享(多个线程共享)的。
+
+上边的示例展示了一个最简单的对象状态，复杂的对象其状态可能由多个域决定，包括依赖对象的域，比如下边的示例：
+
+[source,java]
+----
+public class ObjectState {
+	private static int number = 0; // <1>
+	public static final int id = number++; // <2>
+	private InnerStateClass1 innerState; // <3>
+	// ... 省略 innerState 的 getter/setter
+}
+class InnerStateClass1 {
+	public int state;
+	private InnerStateClass2 innerState; // <3>
+	// ... 省略 state、innerState 的 getter/setter
+}
+class InnerStateClass2 {
+	// 状态由静态域决定
+	public static int staticField; // <4>
+	// ... 省略 getter/setter
+}
+----
+
+<1> 静态可变域，但是不会再更改
+<2> 不可变域
+<3> 复杂可变对象域
+<4> 静态可变域
+
+可以看到，`ObjectState` 是一个复杂对象，其静态 `number` 域是可变的，不过没有公开修改的方法（不保证后续不公开）；`id` 在类加载时就已经确定，并且后续不可修改，因此它是不可变的；对于 `innerState` 域而言，它是一个对象，故其对象 `InnerStateClass1` 实例的状态决定了 `ObjectState` 的状态，同样，`InnerStateClass1` 对象依赖的 `InnerStateClass2` 对象也决定了其状态。
+
+所以，多线程安全性本质上是开发者如何来管理对象的状态，以保证它们在多个线程并发访问和修改时是线程安全的。要做到这一点，有三种方式：
+
+.保证可变状态变量安全性的方式
+[quota,Java并发编程实战]
+____
+有三种方式保证多个线程访问同一个可变的状态变量时的安全性：
+
+. 不在线程之间共享该状态变量
+. 将状态变量修改为不可变的变量
+. 在访问状态变量时使用同步
+____
+
+不共享状态变量有多种方式，最基本的方式是使用 *局部变量*，将类层面的变量放到方法内部，因为类层面的域变量多个线程可以共享，而方法内部的局部变量作用范围仅仅是调用该方法的线程，这也是避免线程安全性问题最简单有效的方式。
+
+如果不能避开共享变量，那么可以考虑将共享变量设计为不可变，下一章再单独讨论 *不可变* 问题，这里简单看一个示例：
+
+[source,java]
+----
+@Immutable
+public class ImmutableVariables {
+	private final int x;
+	private final int y;
+	public ImmutableVariables(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
+	// ... 省略 getter/setter
+}
+----
+
+`ImmutableVariables` 的 `x`、`y` 域是不可变的，它们的值在类实例化时就已经决定。
+
+还有一种常规的方式来保证状态变量的安全性，那就是使用同步机制。Java 的同步机制包括：`volatile`、`synchronized` 和 `Lock`，还可以使用 Java 提供了各种并发类来保证线程安全性。我们将在 <<#lock-mode, 同步机制>> 一节来讨论 Java 的同步机制。现在，我们先来了解对象状态管理中的一个核心概念：原子性。
+
+[[atomic]]
+== 原子性和竞态条件
+
+=== 原子性
+
+对于多个操作，原子性保证了它们的并发执行顺序，其定义如下：
+
+[quota,Java并发编程实战]
+____
+假定有两个操作A和B，如果从执行A的线程来看，当另一个线程执行B时，要么将B全部执行完，要么完全不执行B，那么A和B对彼此来说是原子的。
+____
+
+这个定义非常抽象，它是从运行状态而言的。如下图所示：
+
+image::/images/concurrency/2-1-原子性示意.png[]
+
+对于A、B两个操作，当线程1执行A操作时，线程B必须没有执行B或者全部执行完B，同理，当线程2执行B时，线程1要么全部执行完A，要么完全未执行A。这就好比A、B操作中有一道障碍（图中虚线部分），阻拦了它们，它们不能同时被执行（无交集）。
+
+对于一个由多个操作组合的操作序列而言，原子性可以将它们视为一个操作。原子性（Atomicity），简单而言就是 一个操作序列 *要么全部执行成功要么都不执行，不能部分成功或失败*。例如，对于一个操作序列A、B，多个线程要么将 A、B 都执行成功，要么一个都不执行，不能线程1执行A的同时线程B在执行B操作，那么就说 A、B 操作序列符合原子性。
+
+举个通俗的例子，转账时，包含转出和转入两个操作，这两个操作必须要么全部都成功，要么都不成功，不能转出成功而转入失败（钱少了），也不能转出失败而转入成功（钱多了）。
+
+看一个例子：
+
+[source,java]
+----
+public class NonAtomicOperation {
+	private int count;
+	public void increment() { // <1>
+		count++;
+	}
+	public void decrement() { // <2>
+		count--;
+	}
+	public void incAndDec() { // <3>
+		increment();
+		Thread.yield(); // <4>
+		decrement();
+	}
+	public static void main(String[] args) throws InterruptedException {
+		NonAtomicOperation atomicOperation = new NonAtomicOperation();
+		ExecutorService executorService = Executors.newCachedThreadPool();
+		for (int i = 0; i < 100; i++) {
+			executorService.execute(atomicOperation::incAndDec);
+		}
+		executorService.shutdown();
+		if (executorService.awaitTermination(1, TimeUnit.SECONDS)) {
+			System.out.println(atomicOperation.count);
+		}
+	}
+}
+----
+
+<1> 将count的值增加1
+<2> 将count的值减少1
+<3> 组合增加和减少操作为一个操作序列
+<4> 让出CPU，促使更快的产生不正确的结果
+
+这个示例想要将 `count` 的值先增加再减少1，但是 `incAndDec()` 操作序列不满足原子性，所以 `main` 方法执行的结果是不确定的。
+
+改进的方法有多种，第一种方式是将 `increment()` 和 `decrement()` 方法分别加锁，这样持有同一把锁的线程只能执行它们中的一个方法，此时 `increment()` 和 `decrement()` 互为原子性：
+
+[source,java]
+----
+public synchronized void increment() {
+	count++;
+}
+public synchronized void decrement() {
+	count--;
+}
+----
+
+第二种方式是将 `incAndDec()` 加锁，这样将 `increment()` 和 `decrement()` 组合成一个原子序列，可以将其视为一个同步方法，只能被一个线程执行，中间不能被打断：
+
+[source,java]
+----
+public synchronized void incAndDec() {
+	increment();
+	Thread.yield();
+	decrement();
+}
+----
+
+还有一种方式是使用Java类库提供的原子类来实现，比如将 `count` 改为 `AtomicInteger` ：
+
+[source,java]
+----
+@ThreadSafe
+public class AtomicOperation2 {
+	private final AtomicInteger count = new AtomicInteger(0);
+	public void increment() {
+		count.getAndIncrement();
+	}
+	public void decrement() {
+		count.getAndDecrement();
+	}
+	public void incAndDec() {
+		increment();
+		Thread.yield();
+		decrement();
+	}
+}
+----
+
+由于 `AtomicInteger` 是原子类 `increment()` 和 `decrement()` 方法的操作符合原子性。
+
+=== 竞态条件
+
+回到 <<#unsafe-sequence, UnsafeSequence>> 的例子，`increment()` 方法不满足原子性，看似 `count++` 只有一个操作，而实际上它包含三个操作：读取、修改、写入。先从线程的本地内存读取 `count` 值，然后将其加1，最后在写入主内存，而这三个步骤不符合原子性，也就是说当线程1刚读取了值，而线程2却可能执行了修改和写入操作，造成线程1读取的值无效，最后线程1将自己计算的错误值又写入了内容（覆盖），可以参考 <</2022/01/22/jcip-concurrency-intro#unsafe-sequence, 这里>> 的图示。
+
+这种 *多个线程并发读取和修改同一个状态变量，互相竞争导致其他线程已读取的数据失效而得出错误结果* 的情况，被称为 *竞态条件*（Race Condition）。简单而言，竞态条件就是线程间存在竞争，由于先后执行顺序导致结果不正确。看下边的示例代码：
+
+[source,java]
+----
+@NotThreadSafe
+public class LazyInitRace {
+	private static LazyInitRace instance;
+	public static LazyInitRace getInstance() {
+		if (instance == null) { // <1>
+			instance = new LazyInitRace();
+		}
+		return instance;
+	}
+}
+----
+
+<1> 存在竞态条件
+
+上边的示例就是典型却 *错误* 地 *单例模式* 实现，在标记1处，可能多个线程同时执行到这里，都看到 `instance` 变量不为 `null`，然后就创建了多个实例，单例模式的8种实现可以看 <</2020/05/29/java-singleton-pattern#, 这里>>。
+
+上边的示例提现了最简单的竞态条件：先检查后执行（Check Then Act），先检查某一个条件是否符合要求，符合则继续执行，可是检查这一步就已经存在竞态条件了。还有一个常见的竞态条件示例：复合操作，比如前边提到的 `count++` 和 `incAndDec()`，它们包含多个操作步骤，而且不是原子的。
+
+[[lock-mode]]
+== 同步机制
+
+前边的 `AtomicOperation2` 示例虽然使用 `AtomicInteger` 保证了增加和减少方法的原子性，但是它有个缺陷：*只能保证单个变量的原子性*，如果 `increment()` 和 `decrement()` 中还包括其他的复合，那么将存在 *竞态条件* 而破坏了原子性，如下代码示例：
+
+[source,java]
+----
+@NotThreadSafe
+public class UnsafeCachingFactorizer extends GenericServlet implements Servlet {
+    private final AtomicReference<BigInteger> lastNumber = new AtomicReference<BigInteger>();
+    private final AtomicReference<BigInteger[]> lastFactors = new AtomicReference<BigInteger[]>();
+    public void service(ServletRequest req, ServletResponse resp) {
+        BigInteger i = extractFromRequest(req);
+        if (i.equals(lastNumber.get())) // <1>
+            encodeIntoResponse(resp, lastFactors.get());
+        else {
+            BigInteger[] factors = factor(i);
+            lastNumber.set(i); // <2>
+            lastFactors.set(factors);
+            encodeIntoResponse(resp, factors);
+        }
+    }
+    // …… 省略部分代码
+}
+----
+
+<1> 竞态条件：读取的值可能被其他线程修改
+<2> 竞态条件：两个set操作不满足原子性
+
+这个示例代码 footnote:[来自《Java并发编程实战》： 见 https://github.com/koobyte/jcip-source-code-maven/blob/main/jcip-examples/src/main/java/net/jcip/examples/UnsafeCachingFactorizer.java[github]] 不是线程安全的，它想要对请求中的一个整型值做因式分解，并将最后的分解结果缓存起来，下次可以直接从缓存中获取。由于它存在两个共享的原子变量 `lastNumber` 和 `lastFactors`， `service` 方法中存在竞态条件，并不能保证 `lastNumber` 和 `lastFactors` 能够同时 `set` 成功，另外，一个线程在执行 `lastNumber.get()` 时，其他线程可能调用 `lastNumber.set(i)` 更改其值，导致线程原来读取的值失效。
+
+保证原子性最简单的方式是 *使用同步机制*。Java 的同步机制包括：`synchronized` 和 `Lock`，此外，还可以使用 `volatile` 来申明需要线程共享的变量。
+
+* `synchronized`：jvm内置的监听器，又称重量级锁，可以用在方法和同步代码块中，需要以一个对象作为 *监视器锁*，多个线程在相同锁上是互斥的，也就是说只有一个线程能够执行，而其他线程阻塞。其优点在于语义和编程上更简单，开发者不需要关注加锁和释放锁的过程，缺点是不能响应中断，线程阻塞后只能等待持有锁的线程释放锁。
+* `Lock`：Java提供的api层级的锁接口，直接实现为 `ReentrantLock`，底层基于 `AQS` (`AbstractQueuedSynchronizer`，juc并发包的基础框架) 和 `CAS`（比较并交换） 实现，需要开发者手动加锁和释放锁，使用稍复杂一些，但是功能更强大，支持超时、中断、多条件协同机制等。
+* `volatile`：java提供的一种轻量级的锁机制，用来修饰可变的共享变量，保证了可见性（值修改对其他线程立即可见）和有序性（禁止编译器重排序优化）。
+
+=== 什么时候使用同步
+
+Java提供了同步机制保证线程安全，那么什么时候应该使用同步呢？
+
+.什么时候使用同步？
+[quota,Java并发编程实战]
+____
+如果你正在写一个变量，它可能接下来将被另一个线程读取，或者正在读取一个上一次已经被另一个线程写过的变量，那么你必须使用同步，并且，读写线程都必须使用相同的监视器锁同步。
+____
+
+一句话，线程之间可能读取和写入共享变量时需要使用同步，如 `UnsafeSequence` 中的 `count` 和 `LazyInitRace` 中的 `instance`。
+
+=== 内置锁
+
+这里先重点介绍 `synchronized` 的同步机制，因为这是大多数情况下的首选。
+
+`synchronized` 是一个java关键字，也是由jvm内置支持的锁机制，语义清晰、使用简单，是开发者在大多数情况下的首选加锁方式。
+
+.为什么synchronized应该作为首选加锁方式
+[quota,Java编程思想]
+____
+当使用synchronized关键字时，需要写的代码量更少，并且用户出现错误的可能性也会降低，因此通常只有在解决特殊问题时，才使用显示的Lock对象。
+____
+
+[NOTE]
+====
+用生活中的例子来类比，锁可以类比为门锁，多个线程可以类比为进进出出的人，某人（某个线程）进门后将门锁住（持有锁），其他任何人（其他线程）无法进来，只有等在门外（阻塞），等到门内的人打开门（释放锁）其他人才能进入。
+====
+
+如果需要更多的控制锁，可以使用 `Lock` 对象。比如，需要尝试获取锁一段时间，然后放弃它，或者需要响应中断，或者同一把锁上需要支持多个条件的协同机制。
+
+`synchronized` 需要为其指定一个对象作为锁。可以使用在方法和同步代码块上，形式如下：
+
+[source,java]
+----
+public class SynchronizedDemo {
+	public synchronized void method1() { // <1>
+	}
+	public static synchronized void method2() { // <2>
+	}
+	public void method3() {
+		synchronized (this) { // <3>
+		}
+	}
+}
+----
+
+<1> 同步方法，锁对象为 `this` 指向的对象
+<2> 静态同步方法，锁对象为当前类的class，即：`SynchronizedDemo.class`
+<3> 同步代码块，可以自定义锁对象，这里为 `this`
+
+由于锁定方法通常开销大而且降低并发性，因此可以使用同步代码快 *仅锁定需要同步的代码*，从而最大程度保证性能和并发性。
+
+比如前边的 `UnsafeCachingFactorizer` 示例，可以使用 `synchronized` 来对整个 `service` 方法加锁，这虽然保证了安全性，但是，每次只有一个线程可以访问 `service` 方法，性能非常低，这被称为不良并发程序(Poor Concurrency)。
+
+[[sync-var]]
+=== 同步变量
+
+`synchronized` 不能修饰变量，如何保证一个变量的同步呢？
+// TODO 完善对象的共享连接
+一种方式是使用 `volatile` 来修饰，这表示所有线程对该变量的读写都是可见的，一个线程更改了其值，其他读取的线程都能立即看到修改后的值，这将在<<03-对象的共享#object-share,对象的共享>>一章再深入讨论。
+
+另一种方式是，将变量的读取和写入方法都加锁，如下所示：
+
+[source,java]
+----
+public class SyncVariable {
+	private int var;
+	public synchronized int getVar() {
+		return var;
+	}
+	public synchronized void setVar(int var) {
+		this.var = var;
+	}
+}
+----
+
+对读取加锁，防止线程读取到其他线程修改前的失效值，对写入加锁，防止多个线程并发写入时产生值覆盖。对于 `var` 而言，它的读取和写入方法都持有相同的锁，这种情况称为 *锁保护*，即 `var` 是被 `this` 指向的对象作为锁保护起来的。
+
+锁保护应该遵守如下的原则：
+
+.锁保护原则
+[quota,Java并发编程实战]
+____
+. 每个共享的和可变的变量都应该只由一个锁来保护，从而使维护人员知道是哪一个锁。
+. 对于每个包含多个变量的不变性条件，其中涉及的所有变量都需要由同一个锁来保护。
+____
+
+这两个原则非常重要，不正确的锁根本无法起到保护线程安全的作用。如果被锁保护的对象呈现不正确的结果，那么首先应该考虑共享变量是否被同一把锁保护，比如下边这个示例：
+
+[[not-safe-list]]
+[source,java]
+----
+@NotThreadSafe
+class BadListHelper <E> {
+    public List<E> list = Collections.synchronizedList(new ArrayList<E>());
+    public synchronized boolean putIfAbsent(E x) { // <1>
+        boolean absent = !list.contains(x); // <2>
+        if (absent)
+            list.add(x); // <3>
+        return absent;
+    }
+}
+----
+
+<1> 扩展的同步方法，没有则添加一个元素
+<2> 判断list是否存在元素x
+<3> 添加元素x到list
+
+这个示例想要扩展同步的 `List`，乍一看没有问题，但是程序确存在安全性问题，因为 *使用了错误的锁*！标记1的方法使用的锁为 `this` 指向的 `BadListHelper` 实例，而同步的 `list` 变量使用的锁确是 `list` 实例本身。因此，`putIfAbsent` 方法并不是线程安全的，当某个线程调用 `putIfAbsent` 时，其他线程仍然能够同时调用 `list` 的各个方法。正确的加锁方式应该是：
+
+[source,java]
+----
+@ThreadSafe
+class GoodListHelper <E> {
+    public List<E> list = Collections.synchronizedList(new ArrayList<E>());
+    public boolean putIfAbsent(E x) {
+        synchronized (list) { // <1>
+            boolean absent = !list.contains(x);
+            if (absent)
+                list.add(x);
+            return absent;
+        }
+    }
+}
+----
+
+<1> 现在，list 被同一把锁 (list本身) 保护了
+
+=== 锁重入
+
+Java的内置 `synchronized` 锁 和 `ReentrantLock` 都是可重入的。可重入表示，已经持有锁的线程内部，再次申请 *同一把锁* 时可以直接获得锁，而不会阻塞，这是java对加锁机制的一种优化。
+
+[NOTE]
+====
+锁重入可以简单类比一座房屋，房子有大门，各个房间有房门，假设大门和各个房门用的是同一把锁，进大门的人（线程）关上大门后（加锁），再进房间就不用再加锁了，可以直接进入各个房间（锁重入）。
+====
+
+看下边这个示例：
+
+[source,java]
+----
+public class ReentrantSynchronized {
+	public synchronized void f1(int cnt) {
+		if (cnt-- > 0) {
+			System.out.println("f1 calling f2, cnt: " + cnt);
+			f2(cnt);
+		}
+	}
+	public synchronized void f2(int cnt) {
+		if (cnt-- > 0) {
+			System.out.println("f2 calling f1, cnt: " + cnt);
+			f1(cnt);
+		}
+	}
+}
+----
+
+方法 f1 和 f2 用的是同一把锁，然后它们之间相互调用时能够直接获得锁而不会阻塞。
+
+== 综合示例：改进UnsafeCachingFactorizer
+
+现在，我们可以使用同步代码块来改进前边的 `UnsafeCachingFactorizer`，代码 footnote:[来自《Java并发编程实战》，见 https://github.com/koobyte/jcip-source-code-maven/blob/main/jcip-examples/src/main/java/net/jcip/examples/UnsafeCachingFactorizer.java[github]]如下：
+
+[source,java]
+----
+@ThreadSafe
+public class CachedFactorizer extends GenericServlet implements Servlet {
+    @GuardedBy("this") private BigInteger lastNumber;
+    @GuardedBy("this") private BigInteger[] lastFactors;
+    @GuardedBy("this") private long hits;
+    @GuardedBy("this") private long cacheHits;
+    public synchronized long getHits() { // <1>
+        return hits;
+    }
+    public synchronized double getCacheHitRatio() { // <1>
+        return (double) cacheHits / (double) hits;
+    }
+    public void service(ServletRequest req, ServletResponse resp) {
+        BigInteger i = extractFromRequest(req);
+        BigInteger[] factors = null;
+        synchronized (this) { // <2>
+            ++hits;
+            if (i.equals(lastNumber)) {
+                ++cacheHits;
+                factors = lastFactors.clone(); // <3>
+            }
+        }
+        if (factors == null) {
+            factors = factor(i); // <4>
+            synchronized (this) { // <5>
+                lastNumber = i;
+                lastFactors = factors.clone(); // <6>
+            }
+        }
+        encodeIntoResponse(resp, factors);
+    }
+    // ...
+}
+----
+
+<1> hits、cacheHits 都是同步变量，读取和写入时都进行了同步
+<2> 使用同步代码快，保证hits、cacheHits写入时同步，保证 lastNumber 读取时同步，lastNumber也是同步变量
+<3> 将 lastFactors 克隆一份然后赋值给局部变量 factors
+<4> 进行耗时的因式分解任务，线程内执行，不需要同步
+<5> 同步代码快，保证安全写入 lastNumber 和 lastFactors，
+<6> 将 factors 复制一份然后赋值给共享变量 lastFactors
+
+首先，`CachedFactorizer` 是线程安全的，其状态变量 `lastNumber`、`hits`、`cacheHits` 和 `lastFactors` 都是同步变量，被同一把锁保护着；
+
+其次，`CachedFactorizer` 使用同步代码块来保证操作序列的原子性，这很好的说明了 *仅锁定需要同步的代码* 的重要性；
+
+第三，由于锁重入，`service` 中调用标记1处的两个方法可以直接获得锁，提高了性能；
+
+总之，与 `UnsafeCachingFactorizer` 相比，增加了缓存命中率的统计，取消了 `AtomicReference` 改为 `BigInteger`，但这个程序同样既保证了线程安全性又具备良好的并发性能。
+
+[NOTE]
+====
+.为什么要克隆一份？
+这里标记3和6的代码为什么需要克隆一份 factors 和 lastFactors？
+
+其目的在于 *防止其他线程对数组进行修改* 以保证值的不变性，因为数组是引用传递，如果其他线程同时修改数组的值，那么就会造成错误的结果。虽然示例程序中不会修改数组，但是对于程序的维护者而言可能并不知道，不保证它们会不会修改，因此将数组克隆然后再赋值，保证数组不可变，符合并发程序开发规范。
+
+====
+
+注意，标记4的因式分解并没有进行加锁，耗时任务如果持有锁，那么会很大程序上降低性能，因为其他线程只能等待任务执行完成才可以访问，但是这个任务有会长时间占用锁。
+
+[quota,Java并发编程实战]
+____
+当执行时间较长的计算或者可能无法快速完成的操作时（例如，网络I/O或控制台I/O），一定不要持有锁。
+____
+
+== 总结
+
+本章主要介绍了线程安全性，以及如何通过同步机制保证线程安全性。
+
+线程的安全性核心在于结果的正确性，编写线程安全的代码本质是对对象状态的管理，一个对象可能有多个状态，也可能无状态，这主要体现在对象的共享和可变域中，可变和共享域表明可能存在多个线程访问和修改它们的情况。因此，java提供了 `synchronized` 内置监视器锁、api层面的 `Lock`，以及轻量级的 `volatile`。通常，除非编写复杂的场景所需，否则开发者更多的应该使用 `volatile` 和内置监视器锁来实现线程同步。

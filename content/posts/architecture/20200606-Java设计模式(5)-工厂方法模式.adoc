@@ -1,0 +1,168 @@
+---
+title: Java设计模式(5)-工厂方法模式
+slug: java-factory-method-pattern
+date: 2020/06/06
+updated: 2022/01/10
+img: /images/thumbnail/bridge.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 工厂方法模式
+description: >-
+  工厂方法模式，是工厂模式的一种，它对简单工厂模式进行进一步抽象化。它将工厂和产品进行抽象，抽象出来的工厂负责定义创建产品的规范，而抽象的产品负责定义产品规范，然后通过具体的工厂实现类来创建具体的产品。
+---
+
+[[designpattern-factorymethod]]
+= Java设计模式(5)-工厂方法模式
+:key_word:
+:Author: belonk.com belonk@126.com
+:Date: 2020/5/26
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+工厂方法模式，是工厂模式的一种，它对简单工厂模式进行进一步抽象化。它将工厂和产品进行抽象，抽象出来的工厂负责定义创建产品的规范，而抽象的产品负责定义产品规范，然后通过具体的工厂实现类来创建具体的产品。
+
+== 简介
+
+工厂方法模式（Factory Method Pattern），它的定义如下：定义一个创建产品对象的工厂接口，它负责定义创建产品的方法，而具体的产品创建工作推迟到具体工厂类当中来完成，具体工厂类来角色如何创建产品。
+
+优点::
+. 客户端（产品使用者）和产品的创建过程相分离，客户端无需关心产品的创建过程
+. 系统增加新的产品时，只需要添加具体产品类和创建它的具体工厂实现即可，无需修改原有代码，满足开闭原则
+
+缺点:: 每个具体的产品都对应了具体的工厂，系统复杂度增加。
+
+== 结构
+
+简单工厂模式在新加产品的时候会违背开闭原则，而工厂方法模式对其进行了改进，增加了抽象工厂和抽象产品。
+
+工厂方法模式由抽象工厂、具体工厂、抽象产品和具体产品构成，其类图如下：
+
+image::/images/attachment/designpattern/factory-method-pattern-class.png[]
+
+* 抽象工厂(AbstractFactory)：抽象了创建产品的方法，例如 `createProduct()`，但是不负责具体实现产品创建过程；这里的抽象工厂一般是接口，也可以是抽象类
+* 具体工厂(ConcreteFactory)：抽象工厂的具体实现类，实现了抽象工厂定义的产品创建方法
+* 抽象产品(AbstractProduct)：就是图中的Product，抽象产品对工厂生产的产品进行了抽象，定义了产品的规范，如产品的功能、参数、属性等；同样的，抽象产品也可以是抽象类或接口
+* 具体产品(ConcreteProduct)：抽象产品的具体实现，由具体工厂进行创建，通常，具体产品与具体工厂成一一对应关系
+
+== 示例
+
+继续使用 <</2020/06/05/java-simple-factory-pattern#, 上一篇>> 生产牛奶的例子。商品售卖各种牛奶，如纯牛奶、酸奶、高钙奶等等，前边使用的是简单工厂模式。现在，我们将其改为工厂方法模式。
+
+类的设计如下：
+
+image::/images/attachment/designpattern/factory-method-pattern-demo.png[]
+
+这里，抽象的产品是 `Milk`，抽象的工厂是 `MilkFactory`，具体的工厂是 `PureMilkFactory` 等，他们负责生产某一种具体的产品，如 `PureMilkFactory` 负责生产 `PureMilk`。商店 `Store` 不用关心具体的产品是什么，它只需要依赖抽象的工厂和产品即可。
+
+部分关键代码如下：
+
+.抽象工厂
+[source,java]
+----
+interface MilkFactory {
+	Milk createMilk();
+}
+----
+
+.抽象产品
+[source,java]
+----
+interface Milk {
+	String getName();
+}
+----
+
+.具体产品
+[source,java]
+----
+class PureMilk implements Milk {
+	@Override
+	public String getName() {
+		return "伊利纯牛奶";
+	}
+}
+----
+
+.具体工厂
+[source,java]
+----
+class PureMilkFactory implements MilkFactory {
+	@Override
+	public Milk createMilk() {
+		return new PureMilk(); // <1>
+	}
+}
+----
+<1> 具体工厂生产具体的产品，他们之间一一对应。
+
+现在，商店开始出售牛奶了：
+
+.商店
+[source,java]
+----
+class Store {
+	private MilkFactory milkFactory; // <1>
+
+	public Milk sale() { // <2>
+		System.out.println("顾客购买牛奶");
+		System.out.println("  > 生产牛奶");
+		Milk milk = milkFactory.createMilk();
+		System.out.println("  > 收款");
+		System.out.println("  > 拿货");
+		System.out.println("成功售出了" + milk.getName());
+		return milk;
+	}
+
+	public void setMilkFactory(MilkFactory milkFactory) {
+		this.milkFactory = milkFactory;
+	}
+}
+----
+<1> `Store` 依赖抽象工厂，用来生产具体的商品
+<2> `Store` 其实也不关心具体的牛奶，因为他是工厂生产的，它只依赖抽象产品即可
+
+然后，用户只需要告诉 `Store` 我需要买什么牛奶，然后客户端设置不同的具体工厂即可：
+
+[source,java]
+----
+public class FactoryMethodPattern {
+	public static void main(String[] args) {
+		Store store = new Store();
+		// 买纯牛奶
+		store.setMilkFactory(new PureMilkFactory());
+		store.sale();
+
+		// 买酸奶
+		store.setMilkFactory(new YogurtFactory());
+		store.sale();
+
+		// 买高钙奶
+		store.setMilkFactory(new HighCalciumMilkFactory());
+		store.sale();
+	}
+}
+----
+
+使用工厂方法模式之后，如果还要添加新的牛奶，那么只需要做两处改动：
+
+. 添加具体的产品实现，实现 `Milk` 即可
+. 添加具体的工厂实现，生产新的牛奶
+
+原有代码无需做任何改动，只要客户端代码设置了新的具体工厂，就可以出售新的牛奶了，符合软件设计的开闭原则。
+
+== 总结
+
+工程方法模式，对简单工厂进行了改进，遵循开闭原则，并抽象了四个具体的角色：抽象工厂、抽象产品、具体工厂、具体产品。通常，具体工厂和具体产品时一一对应的，但是，也可能存在一个工厂生产多种产品的形式。设计模式重要的是其核心思想，而在具体设计表现形式上可能存在多种变化。
+
+本文示例代码见： https://github.com/belonk/java-designpattern[Github]

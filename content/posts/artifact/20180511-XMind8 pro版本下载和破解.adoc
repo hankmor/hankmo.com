@@ -1,0 +1,101 @@
+---
+title: XMind8 pro版本下载和破解
+slug: xmind8-pro-crack
+img: /images/thumbnail/attachment/20180511/bfe6577318c544de83980b06dc20a4c2.png
+categories:
+  - 工具软件
+tags:
+  - 思维导图
+  - xmind
+description: >-
+  XMind是一款比较易用的思维导图软件，开源且功能强大，有免费版本，能够满足基本使用。如果需要使用更高级的功能，可以付费购买收费版本。破解XMind需要下载并安装Xmind，并下载破解补丁，修改XMind.ini配置，并输入激活码。
+date: 2018-05-11 15:28:05
+updated: 2018-05-29 12:10:55
+---
+
+= XMind8 pro版本下载和破解
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: XMind,下载,破解,激活码,MindManger,思维导图
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: 思维导图,xmind
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+image::/images/attachment/20180511/bfe6577318c544de83980b06dc20a4c2.png[]
+
+== 简介
+ 
+XMind是一款比较易用的思维导图软件，开源且功能强大，有免费版本，能够满足基本使用。如果需要使用更高级的功能，可以付费购买收费版本。
+
+官网： https://www.xmind.net/[https://www.xmind.net/]
+
+== 下载和破解
+ 
+1、从官网下载Xmind8&nbsp;pro，或者可以从百度云盘下载：
+
+[horizontal]
+链接:: https://pan.baidu.com/s/1OkSXoqcZA4unFbR1Crzl4w[https://pan.baidu.com/s/1OkSXoqcZA4unFbR1Crzl4w]
+密码:: wat9
+
+2、安装软件到指定目录
+
+3、下载破解文件：
+
+[horizontal]
+链接::  https://pan.baidu.com/s/1KJ0hkB_rl4qv1MS3a8L1Aw[https://pan.baidu.com/s/1KJ0hkB_rl4qv1MS3a8L1Aw]
+密码:: bgv4
+
+4、开始破解，步骤如下：
+
+（1）将破解文件``XMindCrack.jar``复制到安装根目录， 如: D:\Program Files\XMind 8 Update 32，以文本格式打开安装目录中XMind.ini
+
+（2）在 XMind.ini 最后追加：
+
+----
+-javaagent:D:/Program Files/XMind 8 Update 3/XMindCrack.jar
+----
+
+（3）打开C:\Windows\System32\drivers\etc路径，在hosts最后添加 127.0.0.1 www.xmind.net点击保存
+
+（4）断网情况下，打开XMind8→帮助→序列号→输入序列号，邮箱可以随便填写，序列号在附件内，点击注册即可完成破解！  
+
+（5）打开 XMind, 点击帮助----序列号，然后输入以下序列号 ，邮箱任意填写：
+
+----
+XAka34A2rVRYJ4XBIU35UZMUEEF64CMMIYZCK2FZZUQNODEKUHGJLFMSLIQMQUCUBXRENLK6NZL37JXP4PZXQFILMQ2RG5R7G4QNDO3PSOEUBOCDRYSSXZGRARV6MGA33TN2AMUBHEL4FXMWYTTJDEINJXUAV4BAYKBDCZQWVF3LWYXSDCXY546U3NBGOI3ZPAP2SO3CSQFNB7VVIY123456789012345
+----
+
+5、破解完成，可以使用任意的Pro版本的功能了，授权信息如下：
+
+image::/images/attachment/20180511/7a3f4b10df3d4819a89181067304ba37.png[]
+
+此时XMind是无法联网使用的，如果需要使用诸如在线图标的功能，需要恢复联网，即取消hosts的修改内容，建议关闭软件自动更新。
+
+== 对比分析
+ 
+之前博主曾介绍过另一款 http://www.belonk.com/c/MindManager16%E4%B8%8B%E8%BD%BD_%E5%B8%A6%E6%AD%A3%E7%89%88%E6%BF%80%E6%B4%BB%E7%A0%81.html[思维导图软件MindManager]，个人觉得也非常强大易用，只是没有中文版本（较早的版本有中文版，喜欢的可以查阅相关资料），这两者的文字对比分析可以看 http://www.xmindchina.net/xinwen/xmind-vs-mindmanager.html[这里]，这里不再详述。
+
+有大神对三款思维导图软件做了详细分析对比，见下图：
+
+image::/images/attachment/20180511/9690629fbc4b4da6853e5aba0fd880a4.jpg[三款常用思维导图的对比分析]
+
+图片来源： https://www.zhihu.com/question/22094277[https://www.zhihu.com/question/22094277]
+
+== 申明
+ 
+* 本站提供的破解软件仅供个人学习用，切勿用于商业用途！
+* 本站不对使用破解软件造成的任何损失承担责任！
+* 经济允许的话，请支持正版软件！

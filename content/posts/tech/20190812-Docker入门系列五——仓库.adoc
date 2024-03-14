@@ -1,0 +1,101 @@
+---
+title: Docker入门系列五——仓库
+slug: docker-repo
+img: /images/thumbnail/attachment/20190807/e512b5d1ba6940dcab8e0454e693d6b4.png
+categories:
+  - 中间组件
+tags:
+  - docker
+  - 仓库
+description: 镜像注册表，用来存储镜像数据的地方，官方的Docker hub就是一个公共的Registry，另外，还可以通过官方的registry镜像搭建私有的镜像注册表。通常所说的镜像仓库是泛指Registry，但并不完全准确，一个Registry可以包含多个Repository。例如，拉取镜像：docker pull registry.hub.docker.com/ubuntu:18.04，这里的registry.hub.docker.com就是官方提供的镜像注册表，可以省略不写。
+date: 2019-08-12 16:16:45
+updated: 2019-07-20 14:48:45
+---
+
+= Docker入门系列五——仓库
+:author: belonk.com
+:date: 2020-04-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器,镜像,容器基本操作,容器迁移,导出,导入
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: docker,容器,container,镜像
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+docker 仓库的概念与java的maven仓库非常类似，它们都用来存储数据，maven仓库存储的是 jar 包，docker 仓库存储的是镜像。许多第三方私有仓库工具如 nexus 既可以构建 maven 仓库，也支持 docker 仓库。
+
+## 镜像仓库和注册表
+
+
+### Registry
+
+镜像注册表，用来存储镜像数据的地方，官方的Docker hub就是一个公共的Registry，另外，还可以通过官方的registry镜像搭建私有的镜像注册表。通常所说的镜像仓库是泛指Registry，但并不完全准确，一个Registry可以包含多个Repository。
+例如，拉取镜像：docker pull registry.hub.docker.com/ubuntu:18.04，这里的registry.hub.docker.com就是官方提供的镜像注册表，可以省略不写。
+
+### Repository
+
+镜像库，包含多个镜像，存储于Registry中。在仓库搜索镜像时，按名称搜索在registry中查找repository。例如，我们所说的nginx镜像，一般就是指的nginx的Repository，它包含多个nginx镜像，它们通过tag来区分。
+
+镜像的类别：
+
+* 根镜像：Docker官方提供的基础镜像，单名字，如centos、ubuntu等
+* 用户的镜像：由docker用户创建并维护的镜像，带有用户名前缀，表明是某用户下的仓库，例如：ansible/centos7-ansible，belonk/mynginx等
+
+第三方镜像市场：阿里云、腾讯云、网易云等等
+
+## 搭建本地私有仓库
+
+执行如下命令：
+
+[source,shell]
+----
+docker run -d -p 5000:5000 registry:2
+----
+
+它会下载并启动一个registry容器，registry对应的是仓库镜像，版本为2。
+
+上传镜像到本地私有仓库：
+
+* 标记镜像: `docker tag ubuntu IP:端口/镜像`
+* 上传镜像: `docker push IP:端口/镜像`
+
+## 基本操作
+
+* 登录Docker hub
+
+Docker Hub是官方的公共镜像仓库，注册账号，然后在命令行进行登录：
+
+----
+docker login
+----
+
+输入账号和密码登录即可，登录信息保存在 `~/.docker/config.json`
+
+* 下载镜像
+
+----
+docker [image] pull
+----
+
+* 搜索镜像
+
+----
+docker search IMAGE
+----
+
+* 上传镜像
+
+----
+docker [image] push [REGISTRY_HOST[:REGISTRY_PORT] / ]NAME[:TAG]
+----

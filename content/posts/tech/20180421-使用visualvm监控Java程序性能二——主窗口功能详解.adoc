@@ -1,0 +1,368 @@
+---
+title: 使用visualvm监控Java程序性能二——主窗口功能详解
+slug: visualvm-overview
+img: /images/thumbnail/attachment/20180420/cbdb6d636de24970b3b7269022d33b08.png
+categories:
+  - 高新技术
+tags:
+  - visualvm
+  - 性能优化
+description: >-
+  VisualVM的概述页详细展示了应用程序和运行环境的参数信息；而监视页以图形化的方式直观的展示了当前监控程序的CPU、内存、类和线程的整体情况；线程页用于详细分析程序的线程情况，比如CPU占用情况、是否死锁等；抽样器则可以用来对CPU或者内存一定一段时间的数据抽样检查，并分析抽样结果；Profiler可以用于从整体上分析本地应用程序的性能，功能类似抽样器。
+date: 2018-04-21 20:11:35
+updated: 2018-05-29 12:14:01
+---
+
+= 使用visualvm监控Java程序性能二——主窗口功能详解
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: visualvm,监视器,概述,抽样器,分析器,profiler,程序监控,java,性能优化
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: visualvm,性能优化
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+无论是本地还是远程节点，双击或者右键打开应用程序，会直接在主窗口打开程序监控页。主窗口包括几个子页面：概述、监视、线程、抽样器，如果是本地程序且支持分析器还会显示Profiler页，根据安装插件的不同，还可能会显示一些插件的页面，例如MBeas等。
+
+.主窗口界面
+image::/images/attachment/20180421/ec88f5c8cfbc496e9a7474e2e4ab0cd5.png[]
+
+
+== 概述页
+ 
+概述页显示了应用程序和运行时环境的基本信息，如下图所示：
+
+.概述页界面
+image::/images/attachment/20180421/21c074caa0f94d8e9bcf136c3050539c.png[]
+
+概述信息包括基本参数、保存的数据、详细信息几个部分。
+
+
+=== 基本参数
+ 
+基本参数描述了应用程序的一些参数信息，包括如下信息：
+
+* PID：应用程序的进程ID
+* 主机：应用程序运行的系统地址
+* 主类：运行了main方法的类
+* 参数：应用启动时所传递的参数信息，例如传递给main方法的参数列表
+* JVM：当前的JVM信息
+* Java：当前使用的JDK信息
+* Java Home：JDK的位置
+* JVM标志：启动JDK时JVM使用的的标志
+* 出现OOME时生产堆dump：当前出现OOME时生产堆dump功能的开启/禁用状态
+
+除了基本信息外，还包括两个可以自主选择显示或隐藏的功能（右上角）：保存的数据和详细信息。
+
+
+=== 保存的数据
+ 
+显示VisualVM存储的当前应用程序的信息，例如线程dump的数量、堆dump和快照的数量等。
+
+
+=== 详细信息
+ 
+包括两个标签：JVM参数和系统属性。
+
+* JVM参数：配置的JVM启动的参数信息，例如堆大小；
+* 系统属性：JVM运行的系统属性，例如用户目录、文件编码；
+
+ 
+
+== 监视页
+ 
+监视tab页展示了监听了当前应用程序的整体情况，包括几个指标：CPU、内存、类、线程，它们都以直观的图形方式展现。
+
+.监视页界面
+image::/images/attachment/20180421/657793ae40054319b2a4cd9058753a65.png[]
+
+
+=== CPU
+ 
+该图展示了CPU的使用百分比走势，包括执行垃圾回收活动的时间等。可以从该图查看应用程序是否耗费CPU，是否频繁的进行垃圾回收，以便优化代码或者调整JVM内存设置。
+
+
+=== 内存
+ 
+反映了内存的占用情况，包括内存大小、最大值和已经使用的大小。内存情况又包括两部分：堆和Metaspace。
+
+* 堆：该页展示了堆内存的大小和堆内存使用走势情况。
+* Metaspace：即元空间，JDK8移除了永久代（PermGen），而类的元数据信息被存储在了Metaspace，具体请看 https://www.infoq.com/articles/Java-PERMGEN-Removed[这里]。该标签反映了元空间内存的使用情况。
+
+ 
+
+=== 类
+ 
+类视图显示了已经加载的类数量和共享类的数量走势情况。
+
+
+=== 线程
+ 
+线程视图显示了应用程序在JVM中生存和守护线程的数量走势情况。如果您想在特定的时间点捕获和查看应用程序线程的精确数据，可以打开线程标签页，使用VisualVM进行线程转储（稍后详述）。
+
+除了这四个图表，监视页还有两个重要的功能：执行垃圾回收和堆dump。
+
+* 执行垃圾回收：立即触发垃圾回收
+* 堆dump：执行堆dump，并在新的标签页打开，以查看对dump的详细信息(同右键应用程序--堆dump)。
+
+通常，需要长期监控应用程序的情况，幸好这不会带来太大的开销。
+
+
+我们看一个OOM的例子，看看VisualVM的监视页的监控情况。代码如下：
+
+ 
+[source,java]
+----
+public static void main(String[] args) {
+    List<Object> objects = new ArrayList<>();
+    new Thread(() -> {
+        while (true) {
+            objects.add(new Object());
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }).start();
+}
+----
+ 
+我们将JVM启动参数设置为：`-Xms10m -Xmx10m`，以便更好的观察结果。
+
+运行一段时间，程序会抛出OOM异常：
+
+[source,java]
+----
+Exception in thread "RMI TCP Connection(idle)" java.lang.OutOfMemoryError: GC overhead limit exceeded
+Exception in thread "RMI TCP Connection(idle)" java.lang.OutOfMemoryError: GC overhead limit exceeded
+Exception in thread "RMI TCP Connection(idle)" java.lang.OutOfMemoryError: GC overhead limit exceeded
+Exception in thread "RMI TCP Connection(idle)" Exception in thread "Thread-0" java.lang.OutOfMemoryError: GC overhead limit exceeded
+Exception in thread "Thread-1" 
+Exception: java.lang.OutOfMemoryError thrown from the UncaughtExceptionHandler in thread "RMI TCP Connection(idle)"
+----
+ 
+此时VisualVM的分析结果如下图：
+
+.程序出现OOME时的程序监控情况
+image::/images/attachment/20180421/e37d38d438bd4c09a334be2474ebff9c.png[]
+
+可以看出，由于线程不断的创建对象，堆内存不断被消耗，当堆内存不足时会触发GC，所以CPU视图可以看到频繁的进行GC活动，而堆内存视图可以看到，堆内存使用越来越高，GC过后变低，最后又升高，直到最后堆内存无法满足GC开销，导致OOM。
+
+
+== 线程页
+ 
+线程监控页展示了应用程序的线程数据，包括当前线程数、守护线程数，勾选线程可视化后，时间线窗口详细展示了程序的所有线程以及线程在程序启动后到当前时间的状态，还有线程运行时间(占比)。界面如下图所示：
+
+.线程页主界面
+image::/images/attachment/20180421/eec92e7211cd41aeac183b8b1bc29cfd.png[]
+
+程序所有线程的数据以表格的形式展示，通过不同的颜色标识了线程的状态变化情况，还包括运行、总计列：
+
+* 运行：指的是线程处于“正在运行”状态的时间；
+* 总计：指的是线程所有状态的总时间；
+* 百分占比：百分占比 = 运行 / 总计 × 100%
+
+从本视图可以看出线程的状态、执行时间情况，分析线程死锁等。另外，右上角还有一个线程dump的按钮，可以执行线程dump，并在新标签页打开结果。
+
+我们写一个线程死锁的例子，来看看VisualVM的分析情况。代码如下：
+
+[source,java]
+----
+public class DeadLockTest {
+    private static Object lock1 = new Object();
+    private static Object lock2 = new Object();
+    public static void main(String[] args) {
+        new Thread(new MyThread1(lock1, lock2)).start();
+        new Thread(new MyThread2(lock1, lock2)).start();
+    }
+}
+
+class MyThread1 implements Runnable {
+    private Object lock1;
+    private Object lock2;
+    public MyThread1(Object lock1, Object lock2) {
+        this.lock1 = lock1;
+        this.lock2 = lock2;
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            synchronized (lock1) {
+                System.out.println("using lock1");
+                synchronized (lock2) {
+                    System.out.println("using lock2");
+                }
+            }
+        }
+    }
+}
+
+class MyThread2 implements Runnable {
+    private Object lock1;
+    private Object lock2;
+    public MyThread2(Object lock1, Object lock2) {
+        this.lock1 = lock1;
+        this.lock2 = lock2;
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            synchronized (lock2) {
+                System.out.println("using lock2");
+                synchronized (lock1) {
+                    System.out.println("using lock1");
+                }
+            }
+        }
+    }
+}
+----
+ 
+程序运行一会儿就会出现死锁，现象就是控制台不再打印任何输出内容。此时，VisualVM的监控情况如下图所示：
+
+.VisualVM死锁监测情况
+image::/images/attachment/20180421/2fcf25a941854941862386fc8e5cc4cc.png[]
+
+界面上VisualVM准确的提示：检测到死锁！此时，我们点击线程dump，查看一下dump的结果：
+
+.出现死锁时线程dump的情况
+image::/images/attachment/20180421/b1db7f31ffd2440fb4d55a824046d31a.png[]
+
+可以看到，thread-1和thread-2都处于BLOCKED状态，而且都同时锁定同一把锁，也在同时等待同一把锁，互相无法获取锁从而导致了死锁，VisualVM也准确的报告了线程的状态和死锁的情况。
+
+
+== 抽样器
+ 
+抽样器用来抽取CPU和内存的样例数据，需要手动点击CPU和内存按钮进行抽样，或者点击停止按钮停止抽样。点击勾选设置选项，可以设置抽样参数，例如分析或不分析的包、抽样频率、结果刷新频率等，同时还可以将设置保存，以便手动加载。如下图所示：
+
+.抽样器主界面
+image::/images/attachment/20180421/65085e192bd648b983c4e23543fc2491.png[]
+
+抽样器包括CPU抽样和内存抽样两种。
+
+
+=== CPU抽样
+ 
+CPU抽样从CPU执行方法和线程两个方面分析CPU使用情况。
+
+* CPU样例：展示了方法级别CPU性能（执行的时间及占比）详细数据。
+* 线程CPU时间：反映了线程执行占用cpu的时间和占比。
+
+.CPU样例数据
+image::/images/attachment/20180421/ff20d6ef8f7c4a75a516f9cef55a6d72.png[]
+
+.线程CPU时间数据
+image::/images/attachment/20180421/d89d3da089774adbbb5a8ea0ca5d6218.png[]
+
+从上边的两个层面上，可以分析占用CPU较高的方法和线程，并进行优化。
+
+
+=== 内存抽样
+ 
+在进行内存抽样时，VisualVM开始检测加载的类，并显示每个类(包括数组类)在表中分配的对象总数。对于Java虚拟机(JVM)中当前装入类的每个类，分析结果显示自分析会话启动以来分配的对象的大小和数量。随着新对象的分配和新类的加载，结果会自动更新。
+
+VisualVM将对象的数量显示为绝对数量和百分比，分配的字节也显示为一个图形。内存抽样结果以对象的堆内存占用情况和线程分配内存情况展现。
+
+
+==== 堆柱状图
+ 
+堆柱状图展示了对象的内存占用情况。
+
+.堆柱状图
+image::/images/attachment/20180421/be46e7fcc5784a5783ada347759180c9.png[]
+
+字节和实例数列分别显示了当前对象占用的空间和实例数量，以及他们占总字节和总实例的比例。
+
+
+==== 每个线程分配
+ 
+
+展示了每个线程分配的内存以及占比。
+
+.每个线程分配情况
+image::/images/attachment/20180421/dfbe24fdc4dd4591a21996c75003e21d.png[]
+
+从内存抽样，可以分析出程序中占用内存高的对象和线程。
+ 
+
+== Profiler
+ 
+应用程序的Profiler选项卡使您能够启动和停止**本地应用程序**的概要分析会话。剖析结果显示在Profiler选项卡中。您可以使用工具栏来刷新分析结果，调用垃圾收集并保存分析数据。
+
+.Profiler主界面
+image::/images/attachment/20180421/e274608c78f34a8c8efecb1eb8e629aa.png[]
+
+默认情况下，分析工具不会运行，直到您准备好分析应用程序。您可以从以下的分析选项中选择:
+
+* CPU性能分析：分析应用程序CPU占用情况，对CPU性能的影响；
+* 内存分析：分析应用程序的内存使用情况。
+
+当您启动一个分析会话时，VisualVM附加到本地应用程序并开始收集分析数据。当分析结果可用时，它们会自动显示在Profiler选项卡中。
+
+Profiler功能与抽样器类似，他们的区别在于：
+
+抽样器只是对一段时间程序的CPU和内存进行抽样监测，看这一段时间CPU和内存的使用情况，而分析器则是从完全扫描程序，整体上检查程序的CPU和内存使用情况，分析程序性能。
+
+
+=== CPU分析
+ 
+分析应用程序CPU占用情况。
+
+.CPU性能分析情况
+image::/images/attachment/20180421/502596551c9d4bae90613d8b895f5a0d.png[]
+
+分析结果以方法为基准，显示了方法的CPU占用时间和比例，调用次数等。
+
+使用CPU性能分析时，可能遇到如下错误信息：
+
+----
+Redefinition failed with err 62.
+----
+
+image::/images/attachment/20180421/f71a41fdba9c47b0add20633bc424c11.png[]
+
+该问题貌似是一个bug，只有进行升级或者从官方下载最新版本了。具体信息见 https://netbeans.org/bugzilla/show_bug.cgi?id=191297[这里]。
+
+
+=== 内存分析
+
+分析应用程序内存使用情况。
+
+.内存性能分析情况
+image::/images/attachment/20180421/d19430a95fb94c1f81c612721667f660.png[]
+
+结果以对象实例为基准，显示了活动对象的活动字节、活动对象和年代数。
+
+* 活动字节：活动对象占用的内存大小
+* 活动对象：活动对象实例个数
+* 年代数：经过垃圾回收后还存活的回收次数
+
+可以使用下方的类名过滤器来筛选类的名称，来查看需要分析的类。
+
+同抽样器一样，可以勾选设置按钮，来进行CPU分析和内存分析设置。
+
+.性能分析设置
+image::/images/attachment/20180421/45696ad409974510afdda44995bd16de.png[]
+
+分析结果窗口上方还有一览工具栏，可以设置自动刷新结果、创建快照、导出结果、结果另存为图像等操作。
+
+需要注意的是，Profiler只能分析本地应用程序，远程应用无法看到这个功能。
+
+== 总结
+ 
+VisualVM的概述页详细展示了应用程序和运行环境的参数信息；而监视页以图形化的方式直观的展示了当前监控程序的CPU、内存、类和线程的整体情况；线程页用于详细分析程序的线程情况，比如CPU占用情况、是否死锁等；抽样器则可以用来对CPU或者内存一定一段时间的数据抽样检查，并分析抽样结果；Profiler可以用于从整体上分析本地应用程序的性能，功能类似抽样器。

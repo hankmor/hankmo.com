@@ -1,0 +1,106 @@
+---
+title: Docker开启监听TCP端口，解决修改docker配置文件无效
+slug: docker-tcp
+img: /images/thumbnail/attachment/20190807/e512b5d1ba6940dcab8e0454e693d6b4.png
+categories:
+  - 中间组件
+tags:
+  - docker
+  - 端口
+description: Jenkins配置了Docker插件，结果发现不能远程调用远端的docker，原来是tcp端口没有打开。
+date: 2020-02-18 16:16:45
+updated: 2020-02-18 16:16:45
+---
+
+= Docker开启监听TCP端口，解决修改docker配置文件无效
+:author: belonk.com
+:date: 2020-04-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器,镜像,容器基本操作,容器迁移,导出,导入
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: docker,容器,container,镜像
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+Jenkins配置了Docker插件，结果发现不能远程调用远端的docker，原来是tcp端口没有打开。
+
+ubuntu版本号：16.04
+
+----
+root@ubuntu:/etc/docker# cat /proc/version
+Linux version 4.4.0-62-generic (buildd@lcy01-30) (gcc version 5.4.0 20160609 (Ubuntu 5.4.0-6ubuntu1~16.04.4) ) #83-Ubuntu SMP Wed Jan 18 14:10:15 UTC 2017
+----
+
+ubuntu docker配置文件在 `/etc/default/docker`
+
+jenkins docker plugin链接远程docker时，需要docker开启tcp端口，编辑docker配置文件添加配置：
+
+----
+vi /etc/default/docker
+----
+
+添加内容：
+
+----
+DOCKER_OPTS="-H tcp://0.0.0.0:2376 -H unix:///var/run/docker.sock"
+----
+
+注意大小写，否则docker可能启动不起来。
+
+重启docker：
+
+----
+service docker restart
+----
+
+发现无效，查看docker进程，并未添加DOCKER_OPTS参数信息：
+
+----
+root@ubuntu:/etc/docker# ps -ef | grep docker
+root     22829     1  0 14:28 ?        00:00:00 /usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock
+----
+
+编辑文件：
+
+----
+vi /lib/systemd/system/docker.service
+----
+
+在[service]节点添加如下内容：
+
+----
+EnvironmentFile=/etc/default/docker
+----
+
+然后修改ExecStart为：
+
+----
+ExecStart=/usr/bin/dockerd -H fd:// $DOCKER_OPTS --containerd=/run/containerd/containerd.sock
+----
+
+image::/images/docker/image-2023-05-06-00-17-23-682.png[]
+
+然后，执行：
+
+----
+systemctl daemon-reload
+service docker restart
+----
+
+再查看docker进程，发现配置参数已经生效：
+
+----
+root@ubuntu:/etc/docker# ps -ef | grep docker
+root     25622     1  1 15:45 ?        00:00:00 /usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2376 --containerd=/run/containerd/containerd.sock
+----

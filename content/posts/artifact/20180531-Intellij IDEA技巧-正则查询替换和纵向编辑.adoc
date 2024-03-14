@@ -1,0 +1,320 @@
+---
+title: Intellij IDEA技巧-正则查询替换和纵向编辑
+slug: intellij-idea-powerful-regex-and-vertical-edit
+img: /images/thumbnail/attachment/20190615/db75a26c3a55478f8bba1dec59b88708.png
+categories:
+  - 工具软件
+tags:
+  - idea
+description: >-
+  IntelliJ IDEA是一款非常强大的Java IDE，当然现在也支持多种语言，由JetBrains公司开发。IntelliJ
+  IDEA在业界被公认为最好的java开发工具之一，尤其在智能代码助手、代码自动提示、重构、J2EE支持、各类版本工具(git、svn、github等)、JUnit、CVS整合、代码分析、
+  创新的GUI设计等方面的功能可以说是超常的。
+date: 2018-05-31 18:13:40
+updated: 2019-06-15 08:47:12
+---
+
+= Intellij IDEA技巧-正则查询替换和纵向编辑
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: IDEA,查找替换,正则,竖向编辑,纵向
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: idea
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+IntelliJ IDEA是一款非常强大的Java IDE，当然现在也支持多种语言，由JetBrains公司开发。IntelliJ IDEA在业界被公认为最好的java开发工具之一，尤其在智能代码助手、代码自动提示、重构、J2EE支持、各类版本工具(git、svn、github等)、JUnit、CVS整合、代码分析、 创新的GUI设计等方面的功能可以说是超常的。
+
+使用IDEA的感觉就是，一开始可能不习惯（与Eclipse的设计思想完全不同），但是越用就会发现越强大！这里介绍IDEA的正则查询替换和纵向编辑两个非常强大的功能。
+
+== 正则查找替换
+ 
+正则查找替换即：支持使用正则表达式来匹配或替换文本，并且可以通过<code>$n</code>来访问正则的分组。
+
+举个例子：我想要将Mapper取值表达式后边的``jdbcType=XXX``去掉，怎么做？没有正则，那么我们只能使用多次替换。使用正则，那么我们只需将``#{xxx,jdbctye=XXX}``部分查询出来，并且按分组替换即可，如下图所示：
+
+
+image::/images/attachment/20180531/be9dbdb286cb4ecb9322a343c81a88a8.png[]
+
+
+在IDEA按快捷键CTRL+R开启查找替换功能，输入正则``#{(w*),(w*=w*)}``，此时IDEA会自动高亮匹配的内容。然后再替换框中输入``#{}``，即替换后的内容保留匹配正则的第一个分组，此时，IDEA会有一个灰色的pop框来告诉你，该内容会被替换成什么内容（见图中的``#{rank}``）。然后，直接点击replace all替换全部替换即可，也可以使用exclude和replace一个个排除和替换。
+
+正则替换功能适用于需要在某些有规律的内容上进行编辑，只要正则能够匹配到这部分内容。
+
+
+== 纵向编辑
+ 
+纵向编辑是我个人非常喜欢的功能之一，其实很多编辑器（例如VIM、SUBLIME）都支持。在IDEA中，要开启纵向编辑，先按住ALT键不松开，然后按住鼠标竖向移动选择即可。
+
+同样举个简单的例子：将设我从某些地方拷贝了一串属性，现在想要将其定义到具体的``Class``属性中，如图所示：
+
+
+image::/images/attachment/20180531/169af26c2dbc4e3e89be5c83e118498e.png[]
+
+
+假设字段类型都是``String``，我们需要做以下几步：
+
+1、将首字母变为小写
+
+2、在属性前边添加private String
+
+3、在属性后边添加分号
+
+我们看看使用纵向编辑怎么做：
+
+
+image::/images/attachment/20180531/536f0470b890465ea2060352c564b9c3.gif[]
+
+
+如上图所示，先纵向选择过后，按HOME键，将光标跳转每一行首，然后SHIFT+→选择每一行首字母，再CTRL+SHIFT+U将选中部分转为大小写，然后在每一行前边添加内容，完成后按End键将光标跳转到每一行尾，输入分号，结束。整个过程中，光标始终处于纵向编辑状态。
+
+这里用到了几个小技巧：SHIFT+左右箭头，可以选择一个字符；CTRL+SHIFT+左右箭头，可以选择一个单词；HOME和END分别跳转到行首和行尾。
+
+接下来，我们看一个实际的综合使用这两个功能的例子。
+
+
+== 综合实例
+ 
+
+=== 需求
+ 
+我从API文档拷贝了请求API的内容片段，现在，我需要为这些字段建立Class，内容片段如下：
+
+[source,java]
+----
+"ParkOrder_ID": 131391,//订单ID
+"ParkOrder_OrderNo": "20170209150056708-B11110",//订单号码
+"Parking_ID": 1,//停车场ID
+"Parking_Enable": 1,//停车场状态
+"Parking_Key": "e0b3ca87caf3a415bb3b3f52ca8aa795",//停车场编码
+"Parking_Name": "城市明珠停车场1",//停车场名字
+"Parking_FreeTime": 2,//首次免费分钟
+"Parking_FreeTimeout": 2,//超时免费分钟
+"ParkOrder_CarNo": "粤B11110",//车牌号码
+"ParkOrder_CarType": "3651",//停车缴费类型
+"CarType_No": "3651",//车辆类型
+"CarType_Name": "临时车",//车辆类型名字
+"ParkOrder_EnterTime": "2017-02-09 15:00:56",//入场时间
+"ParkOrder_EnterGateName": "入口车道1",//入口车道名字
+"ParkOrder_EnterOperatorName": "管理员",//入场操作员
+"ParkOrder_EnterImgPath": "/OrderImg/e0b3ca87caf3a415bb3b3f52ca8aa795/20170209/20170209150056708-B11110-0.jpg",//图片URL
+"ParkOrder_OutTime": null,//出场时间
+"ParkOrder_OutGateName": null,//出口车道名字
+"ParkOrder_OutOperatorName": null,//出口操作员名字
+"ParkOrder_OutImgPath": null,//出口图片URL
+"ParkOrder_TotalAmount": null,//总金额
+"ParkOrderStatus_No": "200",//停车状态200为 车辆入场  201为车辆出场 202为自动关闭
+"ParkOrderStatus_Name": "已入场",//状态中文名字
+"ParkOrder_Lock": 0,//车辆是否锁定
+"WXUser_ID": null,//微信ID
+"WXUser_Openid": null,//微信openid
+"WXUser_Nickname": null,//微信nikename
+"WXUser_Headimg": null,//头像url
+"PayOrder_Status": "未支付",//支付状态
+"PayOrder_PayedMoney": 0.0//支付金额
+----
+ 
+这些字段有这样的特点：
+
+1、字段定义没有遵循驼峰规则，中间有下划线，不符合Java字段命名规范；
+
+2、每行字段都有注释，我们可以直接用其作为类字段的注释；
+
+3、字段都有值，这些值我们不需要
+
+综上，我们有两个需求：
+
+1、由于API返回结果为JSON格式字符串，所以我们定义的Class属性与JSON属性必须对应，这里我们需要使用Jackson的``@JSONProperty``注解来一一映射，即：为每个属性增加该注解，值来源于上边给定的API字段；
+
+2、为每个字段属性上增加注释内容
+
+简而言之，我们想要达到的最终目的是快速实现如下的结果代码，而不是手动一个个复制粘贴：
+
+[source,java]
+----
+// 订单ID
+@JsonProperty("ParkOrder_ID")
+private String orderId;
+// 订单号码
+@JsonProperty("ParkOrder_OrderNo")
+private String orderNo;
+// 停车场ID
+@JsonProperty("Parking_ID")
+private String parkId;
+// 停车场状态
+@JsonProperty("Parking_Enable")
+private String parkEnable;
+// 停车场编码
+@JsonProperty("Parking_Key")
+private String parkKey;
+// 停车场名字
+@JsonProperty("Parking_Name")
+private String parkName;
+// 首次免费分钟
+@JsonProperty("Parking_FreeTime")
+private String freeTime;
+// 超时免费分钟
+@JsonProperty("Parking_FreeTimeout")
+private String freeTimeout;
+// 车牌号码
+@JsonProperty("ParkOrder_CarNo")
+private String carNo;
+// 停车缴费类型
+@JsonProperty("ParkOrder_CarType")
+private String carType;
+// 车辆类型
+@JsonProperty("CarType_No")
+private String carTypeNo;
+// 车辆类型名字
+@JsonProperty("CarType_Name")
+private String carTypeName;
+// 入场时间
+@JsonProperty("ParkOrder_EnterTime")
+private String enterTime;
+// 入口车道名字
+@JsonProperty("ParkOrder_EnterGateName")
+private String enterGateName;
+// 入场操作员
+@JsonProperty("ParkOrder_EnterOperatorName")
+private String enterOperatorName;
+// 图片URL
+@JsonProperty("ParkOrder_EnterImgPath")
+private String enterImgPath;
+// 出场时间
+@JsonProperty("ParkOrder_OutTime")
+private String outTime;
+// 出口车道名字
+@JsonProperty("ParkOrder_OutGateName")
+private String outGateName;
+// 出口操作员名字
+@JsonProperty("ParkOrder_OutOperatorName")
+private String outOperatorName;
+// 出口图片URL
+@JsonProperty("ParkOrder_OutImgPath")
+private String outImgPath;
+// 总金额
+@JsonProperty("ParkOrder_TotalAmount")
+private String totalAmount;
+// 停车状态200为 车辆入场  201为车辆出场 202为自动关闭
+@JsonProperty("ParkOrderStatus_No")
+private String orderStatusNo;
+// 状态中文名字
+@JsonProperty("ParkOrderStatus_Name")
+private String orderStatusName;
+// 车辆是否锁定
+@JsonProperty("ParkOrder_Lock")
+private String lock;
+// 微信ID
+@JsonProperty("WXUser_ID")
+private String wxUserId;
+// 微信openid
+@JsonProperty("WXUser_Openid")
+private String wxUserOpenId;
+// 微信nikename
+@JsonProperty("WXUser_Nickname")
+private String wxUserNickname;
+// 头像url
+@JsonProperty("WXUser_Headimg")
+private String wxUserHeadImg;
+// 支付状态
+@JsonProperty("PayOrder_Status")
+private String payStatus;
+// 支付金额
+@JsonProperty("PayOrder_PayedMoney")
+private String payedMoney;
+----
+ 
+
+=== 实现
+ 
+由于字段不符合java命名规范，所以我们只有手动编码字段了，编码后内容如下：
+
+[source,java]
+----
+private String orderId;
+private String orderNo;
+private String parkId;
+private String parkEnable;
+private String parkKey;
+private String parkName;
+private String freeTime;
+private String freeTimeout;
+private String carNo;
+private String carType;
+private String carTypeNo;
+private String carTypeName;
+private String enterTime;
+private String enterGateName;
+private String enterOperatorName;
+private String enterImgPath;
+private String outTime;
+private String outGateName;
+private String outOperatorName;
+private String outImgPath;
+private String totalAmount;
+private String orderStatusNo;
+private String orderStatusName;
+private String lock;
+private String wxUserId;
+private String wxUserOpenId;
+private String wxUserNickname;
+private String wxUserHeadImg;
+private String payStatus;
+private String payedMoney;
+----
+ 
+好了，基本准备完成，现在我们来看看怎么快速将每个属性。
+
+第一步：使用正则查找替换功能，分离API内容片段中的字段和注释
+
+思路很简单，使用正则:``.*,``匹配到属性值部分的内容，然后将其替换为多个空格，为纵向选择做好准备。
+
+
+image::/images/attachment/20180531/3b90af5b374e423183645b03819b5656.png[]
+
+
+你可以 https://thumbnail0.baidupcs.com/thumbnail/85b9d9ebd3fa8953c340808917442783?fid=2416836086-250528-218525082062960&time=1527757200&rt=sh&sign=FDTAER-DCb740ccc5511e5e8fedcff06b081203-Wvh%2F%2F9AA9%2B3vpj6YC4JbFeLdpwk%3D&expires=8h&chkv=0&chkbd=0&chkpc=&dp-logid=3496125882548892839&dp-callid=0&size=c710_u400&quality=100&vuk=-&ft=video[点击这里查看动图]。
+
+第二步：使用纵向选择，选中字段，并添加到类属性上
+
+首先，纵向选择，将API字段内容剪切，然后，纵向选择类属性，为各个属性统一添加``@JSONProperty``注解，然后粘贴刚才剪切的内容
+
+
+image::/images/attachment/20180531/6ed7b5ef346243ab925d54cc1321dbb2.png[]
+
+
+
+image::/images/attachment/20180531/eeb07b5285da460c8cb1041599cbdfda.png[]
+
+
+你可以 https://thumbnail0.baidupcs.com/thumbnail/ae5903de60703e8a72aea1fdc20e225f?fid=2416836086-250528-793947148591881&time=1527757200&rt=sh&sign=FDTAER-DCb740ccc5511e5e8fedcff06b081203-RY1GkrvYGoTTUbgDYsP6cX08fGI%3D&expires=8h&chkv=0&chkbd=0&chkpc=&dp-logid=3496220287764398088&dp-callid=0&size=c710_u400&quality=100&vuk=-&ft=video[点击这里查看动图]。
+
+第三步：为每个类属性添加注释
+
+首先，同样竖向剪切注释内容，然后CTRL+Z撤销到光标处于纵向编辑状态，再粘贴，ok，完成。
+
+
+image::/images/attachment/20180531/f97ad667c3e14d3f8515ed2a1e6e1731.png[]
+
+
+
+image::/images/attachment/20180531/2ae3a0a2a85d4a68a6d939aca9dd20e6.png[]
+
+
+你可以 https://thumbnail0.baidupcs.com/thumbnail/06495c0cd36bdbbf79b4cbb06b96f80c?fid=2416836086-250528-544760442307408&time=1527760800&rt=sh&sign=FDTAER-DCb740ccc5511e5e8fedcff06b081203-U5f%2FRhks53%2Bb4rJK2ofBz%2F0Wwdo%3D&expires=8h&chkv=0&chkbd=0&chkpc=&dp-logid=3496333130193245214&dp-callid=0&size=c710_u400&quality=100&vuk=-&ft=video[点击这里查看动图]。
+
+最后，CTRL+ALT+L格式化代码，大功告成！
+
+在熟悉过后，纵向编辑能够让你非常快速地修改内容，大大提高效率。

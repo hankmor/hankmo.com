@@ -1,0 +1,212 @@
+---
+title: SpringBoot自定义日志配置
+slug: springboot-custom-log
+img: /images/thumbnail/attachment/20190615/0956f9795f554e6f94b43c7354deafeb.png
+categories:
+  - Spring
+description: >-
+  当系统出现问题时，先从表现分析问题远远不够，要快速、准确地分析并定位问题原因，日志就是一个非常重要且必不可少的手段。Java而言，日志框架有很多，常用的有Common-logging、Java自带的Logging、Log4J、Logback等。另外，还有一个Slf4J的框架，主要目的是将这些框架进行整合。
+date: 2019-09-06 18:41:26
+updated: 2019-09-08 22:00:34
+tags:
+---
+
+= SpringBoot自定义日志配置
+:author: belonk.com
+:date: 2019-09-08
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: springboot,logback,日志,自定义日志,文件,控制台
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+当系统出现问题时，先从表现分析问题远远不够，要快速、准确地分析并定位问题原因，日志就是一个非常重要且必不可少的手段。Java而言，日志框架有很多，常用的有Common-logging、Java自带的Logging、Log4J、Logback等。另外，还有一个Slf4J的框架，主要目的是将这些框架进行整合。本篇主要介绍的是SpringBoot中的日志支持，如何进行日志自定义。
+
+
+== 日志框架选择
+ 
+在SpringBoot内部，使用common-logging框架来记录日志，也支持自定义配置，支持的框架有：Java util logging(JDK自带)、Log4J和Logback等。
+
+如果使用了Springboot的starter，则springboot会使用Logback作为默认的日志框架，从maven的依赖关系可以看到，spring-boot-starter下依赖的spring-boot-starter-logging启动器使用了logback：
+
+[source,xml]
+----
+<dependencies>
+<dependency>
+<groupId>ch.qos.logback</groupId>
+<artifactId>logback-classic</artifactId>
+</dependency>
+<dependency>
+<groupId>org.slf4j</groupId>
+<artifactId>jcl-over-slf4j</artifactId>
+</dependency>
+<dependency>
+<groupId>org.slf4j</groupId>
+<artifactId>jul-to-slf4j</artifactId>
+</dependency>
+<dependency>
+<groupId>org.slf4j</groupId>
+<artifactId>log4j-over-slf4j</artifactId>
+</dependency>
+</dependencies>
+----
+ 
+如上所示，Spring boot内部使用Slf4J框架，作为日志抽象层，以便整合并支持各大主流的框架，具体日志实现还是使用logback。
+
+
+== 日志输出内容
+ 
+一个标准Spring boot日志如下图所示：
+
+
+image::/images/attachment/20190906/54e851f0138544cfa4e4156dc1b63156.png[]
+
+
+其实，Spring boot工程默认的日志级别为``INFO``，仅输出INFO级别的日志信息，由于我这里开启了``debug``模式(配置``debug=true``)，所以能打印出DEBUG级别的日志级别。
+
+一般而言，日志有几个重要的输出项：
+
+* 时间：记录日志时的时间，精确到毫秒，便于排序，缩小问题范围的重要指标，例如问题产生在某天10:20，那么就需要查找这段时间的所有日志以帮助分析问题
+* 线程：输入日志的执行线程名称
+* 日志级别：日志的输出级别，不同的日志框架级别定义不同，而且日志级别有层级之分，一般而言，日志级别从低到高都有调试(DEBUG)、信息(INFO)、警告(WARNING)、错误(ERROR)等，不同的框架可能名称不同，日志级别越高，输出的信息越少，反之则越多
+* 进程ID：记录输出日志的进程ID
+* 类名：输出日志的类名称，通常是简写的，例如：c.b.WebappViewStarter
+* 日志内容：具体的日志内容
+
+如果输出终端支持ANSI字符集，那么日志会彩色显示，可以通过配置``spring.output.ansi.enabled``的值来设置彩色显示的条件，包括``ALWAYS``、``DETECT``、``NEVER``。日志的颜色可以通过在日志输出格式时定义``%clr``来配置，支持的颜色有：blue、cyan、faint、green、magenta、red、yellow，例如：
+
+
+----
+``%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){yellow}``
+----
+
+输出的日志级别默认为INFO，可以通过在配置文件修改来自定义日志级别：
+
+[source,block]
+----
+logging.level.root=WARN
+logging.level.org.springframework.web=DEBUG
+logging.level.org.hibernate=ERROR
+----
+ 
+root配置整个日志输出的级别，没有特别配置均按照此级别输出，而下边两项则是配置具体某一个框架的日志级别。
+
+
+== 输出日志到文件
+ 
+默认情况下，SpringBoot仅将日志输出到控制台，但我们更希望将日志输出到单独的文件，此时我们需要在配置文件中添加``logging.file``或者``logging.path``配置项，他们的作用如下：
+
+* ``logging.file``：配置一个具体的日志文件的路径，可以是绝对或者相对路径，建议定义为绝对路径，避免不需要的路径问题，例如``logging.file=/data/logs/springboiot-demo.log``，
+* ``logging.path``：配置一个存储日志的目录，会在该目录下创建spring.log文件，并写入日志内容，如：``logging.path=/var/log``
+
+需要注意的是，二者不能同时使用，如若同时使用，则只有``logging.file``配置生效。默认情况下，日志文件的大小达到10MB时会重新创建新文件来写入日志，原日志文件会被顺序重新命名，例如:springboot-demo.log、springboot-demo.log1，默认输出的日志级别为：ERROR、WARN、INFO。
+
+
+== 自定义日志
+ 
+Springboot虽然可以成功将日志输出到自定义的文件中，但是通常，我们更希望按照日期来输出日志文件，例如每天一个日志文件，保留一定天数的日志文件。Springboot也支持此类特殊需求的自定义日志，只需要提供一个自定义日志配置文件即可，该配置文件可以通过``logging.config``配置项来定义，例如：``logging.config=classpath:logging-config.xml``，但是，一般不需要我们配置，只需要使用springboot能加载的日志配置文件名即可，springboot默认可以加载下表的这些配置文件：
+
+
+[cols="1,2"]
+|====
+|日志框架|自定义日志配置文件
+
+|Logback|``logback-spring.xml``,&nbsp;``logback-spring.groovy``,&nbsp;``logback.xml``&nbsp;或&nbsp;``logback.groovy``
+
+|Log4j2|``log4j2-spring.xml``&nbsp;or&nbsp;``log4j2.xml``
+
+|JDK (Java Util Logging)|``logging.properties``
+
+|====
+ 
+例如，我们要使用默认的logback日志框架，并且日志要按天输出，我们只需在resources目录下添加一个``logback-spring.xml``文件，加入如下内容：
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration debug="false">
+
+<property name="LOG_HOME" value="/data/logs/service-wechat"/>
+
+<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+</encoder>
+</appender>
+
+<appender name="infoFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+<level>info</level>
+</filter>
+<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+
+<FileNamePattern>${LOG_HOME}/info-%d{yyyy-MM-dd}.log</FileNamePattern>
+
+<MaxHistory>60</MaxHistory>
+</rollingPolicy>
+<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+</encoder>
+</appender>
+
+<appender name="errorFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+<level>error</level>
+</filter>
+<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+<fileNamePattern>${LOG_HOME}/error-%d{yyyy-MM-dd}.log</fileNamePattern>
+<maxHistory>60</maxHistory>
+</rollingPolicy>
+<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+</encoder>
+</appender>
+
+<root level="INFO">
+<appender-ref ref="STDOUT"/>
+<appender-ref ref="errorFile"/>
+<appender-ref ref="infoFile"/>
+</root>
+</configuration>
+----
+ 
+配置都是logback相关的内容，具体含义和配置可以参看logback官方文档。
+
+如果想不同环境输出不同的日志信息，只需要在日志的append外加上一层springProfile即可：
+
+[source,xml]
+----
+<springProfile name="pro">
+
+<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+<level>info</level>
+</filter>
+<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+</encoder>
+</appender>
+</springProfile>
+----
+ 
+name属性指向profile，多个profile用逗号分隔。
+
+
+== 总结
+ 
+Springboot默认的日志配置一般难以满足实际业务需求，但是其允许我们自定义日志配置，以满足不同的业务需要。除了默认使用logback外，我们还可以使用Log4j、Log4j2、common logging等日志框架。同时，Spring boot使用SLF4J抽象日志框架来整合不同的日志实现，使日志配置变得简单和方便。

@@ -1,0 +1,391 @@
+---
+title: (译)Go 中的字符串、字节、符文和字符
+slug: go-unicode
+categories:
+  - GoLang
+tags:
+  - go
+  - char
+  - rune
+  - string
+description: 这篇文章讨论了 Go 中的字符串。起初，字符串对于一篇博文来说似乎太简单了，但要很好地使用它们，不仅需要了解它们的工作原理，还需要了解字节、字符和符文之间的区别，Unicode 和 UTF- 8、字符串和字符串字面量的区别，以及其他更细微的区别。
+date: 2023/03/25
+updated: 2022/12/19
+---
+
+= (译)Go 中的字符串、字节、符文和字符
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+
+- 原文地址: https://go.dev/blog/slices
+- 作者: Rob Pike
+- 日期: 2013 年 9 月 26 日
+
+[[简介]]
+## 简介
+
+这篇文章讨论了 Go 中的字符串。起初，字符串对于一篇博文来说似乎太简单了，但要很好地使用它们，不仅需要了解它们的工作原理，还需要了解字节、字符和符文之间的区别，Unicode 和 UTF- 8、字符串和字符串字面量的区别，以及其他更细微的区别。
+
+处理该话题的一种方法首先是回答这个问题：“当我在位置 _n_ 检索 Go 字符串时，为什么我没有得到第 _n_ 个字符？” 正如您将看到的，这个问题引导我们了解有关文本在现代世界中如何工作的许多细节。
+
+## 什么是字符串？
+
+让我们从一些基础知识开始。
+
+在 Go 中，字符串实际上是只读的字节切片。如果您完全不确定字节切片是什么或它是如何工作的，请阅读 <</2023/02/09/go-slice, 数组、切片和字符串 - “append” 原理>>一文。
+
+重要的是首先要明确一个字符串包含_任意_多个字节，不论字符串是否包含 Unicode 文本、UTF-8 文本或任何其他预定义格式。就字符串的内容而言，它完全等价于一个字节切片([]byte)。
+
+下边是一个字符串(稍后详述)，它使用 `\xNN` 符号来定义一个字符串常量，其中包含一些特殊的字节值（字节的取值范围从十六进制值 00 到 FF）。
+
+----
+const sample = "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98"
+----
+
+[[打印字符串]]
+## 打印字符串
+
+由于上边我们的示例字符串 `sample` 中的某些字节不是有效的 ASCII，甚至不是有效的 UTF-8，所以直接打印字符串会产生奇怪的输出。简单的打印语句如下：
+
+[source,go]
+----
+fmt.Println(sample)
+----
+
+产生这种乱码（其确切外观因环境而异）输出：
+
+----
+��=� ⌘
+----
+
+为了找出 `sample` 字符串底层到底是什么，我们需要把它拆开检查一下。有几种方法可以做到这一点。最明显的是循环其内容并单独提取字节，如以下`for`循环所示：
+
+[source,go]
+----
+for i := 0; i < len(sample); i++ {
+	fmt.Printf("%x ", sample[i]) // 输出为十六进制格式
+}
+----
+
+正如前文所述，索引字符串访问的是单个字节，而不是单个字符，我们将在下面详细阐述该主题。现在，让我们只使用字节，这是逐字节循环的十六进制输出：
+
+----
+bd b2 3d bc 20 e2 8c 98
+----
+
+请注意各个字节如何与定义字符串的十六进制转义匹配。
+
+为凌乱的字符串生成可呈现输出的一种更简便的方法是使用`fmt.Printf`方法的`%x`（十六进制）格式，它只是将字符串的每两个连续字节转储为十六进制数字：
+
+[source,go]
+----
+fmt.Printf("%x\n", sample)
+----
+
+将其输出与上述输出进行比较：
+
+----
+bdb23dbc20e28c98
+----
+
+一个不错的技巧是使用该格式的“空格”标志，在`%`和之间放置一个空格`x`。将此处使用的格式字符串与上面的格式字符串进行比较，
+
+[source,go]
+----
+fmt.Printf("% x\n", sample)
+----
+
+注意字节之间的空格是如何出现的，从而使结果不那么令人印象深刻：
+
+----
+bd b2 3d bc 20 e2 8c 98
+----
+
+另外，使用 `%q` 动词将转义字符串中的任何不可打印的字节序列，因此输出是明确的。
+
+[source,go]
+----
+fmt.Printf("%q\n", sample)
+----
+
+当大部分字符串可以作为文本理解但有一些特殊性需要根除时，这种技术很方便；它产生：
+
+----
+"\xbd\xb2=\xbc ⌘"
+----
+
+如果我们仔细看，我们可以看到隐藏着一个 ASCII 等号和一个空格，最后出现了著名的瑞典“感兴趣的地方”符号。该符号具有 Unicode 值 U+2318，由空格后面的字节编码为 UTF-8（十六进制值`20`）：`e2` `8c` `98`。
+
+如果我们对字符串中的奇怪值不熟悉或感到困惑，我们可以在`%q`动词上使用“加号”标志: `%+q`。此标志导致输出不仅转义不可打印的序列，而且转义任何非 ASCII 字节，并解释 UTF-8 字符。结果是它输出了格式正确的 UTF-8 字符的 Unicode 值，这些值表示字符串中的非 ASCII 数据：
+
+[source,go]
+----
+fmt.Printf("%+q\n", sample)
+----
+
+使用这种格式，瑞典符号的 Unicode 值显示为 `\u`转义：
+
+----
+"\xbd\xb2=\xbc \u2318"
+----
+
+这些打印技术在调试字符串的内容时很容易了解，并且在接下来的讨论中会派上用场。值得指出的是，所有这些方法对字节切片的行为与对字符串的行为完全相同。
+
+这是我们列出的全套打印选项，作为一个完整的程序呈现，您可以直接运行和修改：
+
+[source,go]
+----
+package main
+
+import "fmt"
+
+func main() {
+    const sample = "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98"
+
+    fmt.Println("Println:")
+    fmt.Println(sample)
+
+    fmt.Println("Byte loop:")
+    for i := 0; i < len(sample); i++ {
+        fmt.Printf("%x ", sample[i])
+    }
+    fmt.Printf("\n")
+
+    fmt.Println("Printf with %x:")
+    fmt.Printf("%x\n", sample)
+
+    fmt.Println("Printf with % x:")
+    fmt.Printf("% x\n", sample)
+
+    fmt.Println("Printf with %q:")
+    fmt.Printf("%q\n", sample)
+
+    fmt.Println("Printf with %+q:")
+    fmt.Printf("%+q\n", sample)
+}
+----
+
+程序输出如下：
+
+----
+Println:
+��=� ⌘
+Byte loop:
+bd b2 3d bc 20 e2 8c 98
+Printf with %x:
+bdb23dbc20e28c98
+Printf with % x:
+bd b2 3d bc 20 e2 8c 98
+Printf with %q:
+"\xbd\xb2=\xbc ⌘"
+Printf with %+q:
+"\xbd\xb2=\xbc \u2318"
+Program exited.
+----
+
+[NOTE]
+====
+.**练习**
+1、修改上面的示例以使用字节切片而不是字符串。提示：使用类型转换来创建切片。 使用 `[]byte(sample)` 将字符串转为 byte 切片，然后再输出
+
+[source,go]
+----
+sample := []byte(s)
+fmt.Println("Println:")
+fmt.Println(sample)
+// 输出: [189 178 61 188 32 226 140 152]
+----
+
+可以看到，最终原样输出了 sample 字符串的每一个字节的十进制值，比如 十六进制的 `\xbd` 十进制为 189 (11 × 16 + 13)。
+
+2、循环字符串的每个字节，使用 `%q` 格式打印每一个字节。输出告诉你什么?
+
+[source,go]
+----
+for i := 0; i < len(sample); i++ {
+   fmt.Printf("%q", s[i])
+}
+// 输出：'½''²''=''¼'' ''â''\u008c''\u0098'
+----
+
+可以看到，sample 字符串的每一个字节都表示为 unicode 字符，比如，`\xbd` 的unicode `\u00bd` 在 unicode 码表中就表示字符 `½`， `\x3d` 的unicode 形式 `\u003d` 在 unicode 码表中为 `=` 字符，最后两个 `u008c` 和 `\u0098` 在unicode码表中存在但无法显示，所以原样输出 unicode 码。更多 unicode 字符可以查询 https://util.unicode.org/UnicodeJsps/character.jsp[这里]。
+====
+
+## UTF-8 和字符串
+
+正如我们所看到的，对字符串进行索引会依赖构成它的字节，而不是它的字符：字符串只是一堆字节。这意味着，我们在字符串中存储一个字符时，只是每次仅存储了它的字节表示。让我们看一个更受控制的例子，看看它是如何发生的。
+
+[NOTE]
+====
+.**译注**
+上边的意思就是，字符串中的一个字符，可能由多个字节构成。比如，"你好"这个字符串，由两个字符组成，但是由于一个中文占3个字节，所以底层存储时由6个字节组成，`len("你好")` 为6。
+====
+
+这是一个简单的程序，它以三种不同的方式打印带有单个字符的字符串常量，一次作为纯字符串，一次作为仅 ASCII 引用的字符串，一次作为十六进制的单个字节。为了避免混淆，我们创建了一个“原始字符串”，用反引号括起来，因此它只能包含文字文本（用双引号括起来的常规字符串可以包含转义符号，但反引号中不可以）。
+
+[source,go]
+----
+func main() {
+    const placeOfInterest = `⌘`
+
+    fmt.Printf("plain string: ")
+    fmt.Printf("%s", placeOfInterest)
+    fmt.Printf("\n")
+
+    fmt.Printf("quoted string: ")
+    fmt.Printf("%+q", placeOfInterest)
+    fmt.Printf("\n")
+
+    fmt.Printf("hex bytes: ")
+    for i := 0; i < len(placeOfInterest); i++ {
+        fmt.Printf("%x ", placeOfInterest[i])
+    }
+    fmt.Printf("\n")
+}
+----
+
+输出是：
+
+----
+plain string: ⌘
+quoted string: "\u2318"
+hex bytes: e2 8c 98
+----
+
+这提醒我们，Unicode 字符值 U+2318，就是“感兴趣的地方”符号 `⌘`，由字节表示是 `e2 8c 98`，而这些字节是十六进制值 2318 的 UTF-8 编码。
+
+这可能很明显，也可能很微妙，这取决于您对 UTF-8 的熟悉程度，但值得花一点时间来解释一下如何创建字符串的 UTF-8 表示。其实：它是在编写源代码时创建的。
+
+Go 中的源代码被_定义_为 UTF-8 编码，这意味着：上边我们在源代码文件中编写的文本
+
+----
+`⌘`
+----
+
+创建程序的文本编辑器会将符号 ⌘ 存储为 UTF-8 编码，不仅是这个符号，整个源文件都是 UTF-8 编码。当我们打印出十六进制字节时，我们只是取出编辑器放置在文件中的这些 UTF-8 编码的数据。
+
+简而言之，**Go 源代码是 UTF-8**，因此 _字符串字面量的源代码是 UTF-8 编码格式_。如果该字符串文字不包含原始字符串不能的转义序列，则构造的字符串将准确地保存引号之间的源文本。因此，原始字符串依据定义和构造，其内容会始终存储为 UTF-8。同样，除非它包含上一节中的那些破坏 UTF-8 的转义符，否则常规字符串文字也将始终包含有效的 UTF-8。
+
+有些人认为 Go 字符串总是 UTF-8，但事实上并不全是这样：只有字符串_字面量_是 UTF-8。正如我们在上一节中所展示的，字符串_值_可以包含任意字节；正如我们在本文中所展示的，字符串_字面量_总是包含 UTF-8 文本，只要它们没有字节级转义。
+
+[NOTE]
+====
+.**译注**
+上边这段话的意思就是，大多数情况下我们会从文本来构造字符串，此时是 UTF-8 编码，但是由于字符串由任意字节构成，如果我们用字节来构造字符串，这些字节的组合可能造成编码转义从而造成该字符串不是 UTF-8 编码，比如前边 <<打印字符串>>中的例子。并且，读取这些字节的方式决定了可能并不会得到想要的UTF-8编码结果。
+====
+
+总而言之，字符串可以包含任意字节，但是当从字符串文字构造时，这些字节（几乎总是）是 UTF-8。
+
+## 码点、字符和符文(rune)
+
+到目前为止，我们在使用“字节(byte)”和“字符(character)”这两个词时都非常小心。一部分是因为字符串包含字节，另一部分是因为“字符”的概念有点难以定义。Unicode 标准使用术语“码点”来指代由单个值表示的项目。码点 `U+2318`，十六进制值为 2318，代表符号⌘。（有关该码点的更多信息，请参阅 http://unicode.org/cldr/utility/character.jsp?a=2318[Unicode 页面]）
+
+举一个更平淡无奇的例子，Unicode 码点 U+0061 是小写拉丁字母 “a”：
+
+但是字母'A'的小写重音音标 à 又是什么呢？它一个字符，也是一个码点 (U+00E0)，但它还有其他表示形式。例如，我们可以使用“组合”重音符码点 U+0300，并将其附加到小写字母 a 的 码点 U+0061 后，以创建相同的字符 à。通常，一个字符可以由许多不同的码点序列来表示，因此也可以由不同的 UTF-8 字节序列来表示。
+
+因此，计算中字符的概念是模棱两可的，或者至少是令人困惑的，所以我们应该小心使用它。为了解决这个问题，有一些_规范化_技术可以保证给定的字符总是由相同的码点表示，但是这个主题超过了本文的讨论范围，稍后的博客文章将解释 Go 库如何解决规范化问题。
+
+“码点”有点拗口，所以 Go 为这个概念引入了一个较短的术语：_rune_，称之为**符文**。该术语出现在库和源代码中，其含义与“码点”完全相同，作为它的一个补充。
+
+Go 语言将 `rune` 定义为 `int32` 类型的别名，它们在功能上完全相同，但是语义不同，`rune` 可以更清楚地用整型值来表示码点。此外，您可能认为的字符常量(character constant)在 Go 中称为_符文_常量(rune constant)。下边这个表达式：
+
+----
+'⌘'
+----
+
+其类型是 `rune`，其值为整数值 `0x2318`。
+
+总而言之，以下是要点：
+
+- Go 源代码始终是 UTF-8。
+- 字符串包含任意字节。
+- 没有字节级转义的字符串文字始终包含有效的 UTF-8 序列。
+- 这些序列代表 Unicode 码点，称为符文。
+- Go 不保证字符串中的字符被规范化。
+
+## Range循环
+
+Go 源代码是 UTF-8 编码，此外，Go 实际上只有一种方式特别对待 UTF-8，那就是用`for` `range`循环遍历字符串时。
+
+我们已经看到了常规`for`循环会发生什么。相比之下，`for` `range` 循环在每次迭代中**解码一个 UTF-8 编码的符文**。每次循环，循环的索引是当前符文的起始位置，以字节为单位，码位是它的值。下边是一个使用`Printf`的另一中`%#U`格式输出的示例，它显示了码点的 Unicode 值及其打印输出：
+
+[source,go]
+----
+const nihongo = "日本語"
+for index, runeValue := range nihongo {
+	fmt.Printf("%#U starts at byte position %d\n", runeValue, index)
+}
+----
+
+输出显示每个码点如何占用多个字节：
+
+----
+U+65E5 '日' starts at byte position 0
+U+672C '本' starts at byte position 3
+U+8A9E '語' starts at byte position 6
+----
+
+[NOTE]
+====
+> 练习：将无效的 UTF-8 字节序列放入字符串中。（如何？）循环的迭代会发生什么？
+>
+.**译注**
+[source,go]
+----
+const nihongo1 = "日本\xbd語"
+fmt.Println(utf8.ValidString("\xbd")) // false
+fmt.Println(len(nihongo1)) // 10
+for index, runeValue := range nihongo1 {
+    fmt.Printf("%#U starts at byte position %d\n", runeValue, index)
+}
+----
+输出:
+----
+U+65E5 '日' starts at byte position 0
+U+672C '本' starts at byte position 3
+U+FFFD '�' starts at byte position 6
+U+8A9E '語' starts at byte position 7
+----
+输出结果可见：无效字符会无法正常输出（乱码）。
+====
+
+## 标准库
+
+Go 的标准库为解释 UTF-8 文本提供了强大的支持。如果 `for` `range` 循环不足以满足您的目的，那么您可能需要使用这些包。
+
+最重要的包是 https://go.dev/pkg/unicode/utf8/[`unicode/utf8`]，它包含用于验证、反汇编和重新组合 UTF-8 字符串的辅助工具。下边是一个与上面示例等效的程序，但使用了包中的 `DecodeRuneInString` 函数来完成工作。该函数的返回值是符文及其 UTF-8 编码字节的宽度。
+
+[source,go]
+----
+const nihongo = "日本語"
+for i, w := 0, 0; i < len(nihongo); i += w {
+	runeValue, width := utf8.DecodeRuneInString(nihongo[i:])
+	fmt.Printf("%#U starts at byte position %d\n", runeValue, i)
+	w = width
+}
+----
+
+`for` `range` 循环和 `DecodeRuneInString` 都产生完全相同的迭代序列。
+
+查看 `unicode/utf8` 包的 https://go.dev/pkg/unicode/utf8/[文档] 以了解它提供的其他功能。
+
+## 结论
+
+回答本文<<简介, 开头>>提出的问题：字符串是从字节构建的，因此对它们进行索引会产生字节，而不是字符，字符串甚至可能不包含字符。事实上，“字符”的定义是模棱两可的，定义字符串由字符组成来解决歧义是错误的。
+
+关于 Unicode、UTF-8 和多语言文本处理的世界还有很多内容，篇幅有限，我们将在另一篇文章来讨论它们。现在，我们希望您对 Go 字符串的行为有更好的了解，尽管它们可能包含任意字节，但 UTF-8 是其设计的核心部分。

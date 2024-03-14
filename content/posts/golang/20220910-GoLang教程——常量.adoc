@@ -1,0 +1,261 @@
+---
+title: GoLang教程——常量
+slug: go-const
+categories:
+  - GoLang
+tags:
+  - go
+description: golang 中常量设计摒弃了 C 语言中常量被诟病的问题，比如类型安全问题、定义和使用复杂、编译器替换字面值等，而是进行了简化。在 go 中，常量一旦声明则在编译期其值就已知且不可更改。
+date: 2022/09/10
+updated: 2022/09/10
+---
+
+= GoLang教程——常量
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+golang 中常量设计摒弃了 C 语言中常量被诟病的问题，比如类型安全问题、定义和使用复杂、编译器替换字面值等，而是进行了简化。在 go 中，常量一旦声明则在编译期其值就已知且不可更改。
+
+== 常量的定义
+
+常量的定义很简单，使用 `const` 关键字声明即可：
+
+[source,go]
+----
+// 单行声明常量
+const c1 = 1
+const c2 = -100
+const c3 = "hello"
+----
+
+与变量一样，同样可以组合以简化声明：
+
+[source,go]
+----
+const (
+	c4 = 3.14
+	c5 = 1.2 + 12i // 复数
+)
+----
+
+但是需要注意，组合声明时后续的常量如果没有赋值则会重复最近一个非空表达式的值，例如：
+
+[source,go]
+----
+const (
+    m = 1     // 1
+    n         // 1
+    k         // 1
+    l = m + 1 // 2
+    i         // 2
+)
+fmt.Println(m, n, k, l, i)
+----
+
+== 有类型常量和无类型常量
+
+上边的示例中声明常量时并没有指明具体类型，这是 go 可以的设计。go 中常量可以分为有类型常量和无类型常量，大多数情况下我们只需要使用无类型常量即可。
+
+=== 有类型常量的问题
+
+go 是一门强类型语言，即使变量的基础类型相同，也是不能直接运算的，看下边的例子：
+
+[source,go]
+----
+func add() {
+	var x int = 1
+	var y int32 = 2
+	// fmt.Println(x + y) // 编译失败：invalid operation: x + y (mismatched types int and int32)
+	fmt.Println(x + int(y)) // <1>
+}
+
+type MyInt int
+
+func add2() {
+	var x int = 1
+	var y MyInt = 2
+	// fmt.Println(x + y) // 编译失败
+	fmt.Println(MyInt(x) + y) // <2>
+}
+----
+
+<1> int 和 int32 是不同的类型，运算时需要类型转换
+<2> 即使 MyInt 的基础类型是 int，但是它们仍然是不同的类型，需要强制类型转换
+
+所以，go 对类型的要求非常严格，但是 go 设计了无类型常量，这使得编码更简单。
+
+=== 无类型常量简化代码
+
+go 在声明常量时可以不指定类型，而在赋值或运算时依据上下文自动类型转换，例如：
+
+[source,go]
+----
+const pi float32 = 3.1415926
+// 有类型常量
+const r int = 4
+// const area = PI * r * r // 编译失败: invalid operation: PI * r (mismatched types float32 and int)
+const area = pi * float32(r) * float32(r)
+fmt.Println("r = ", r, ", area = ", area)
+----
+
+由于 pi 和 r 的类型不同，所以必须做强制类型转换才能计算 area 的值，但是如果声明时不加上类型，则不需要考虑类型转换的问题：
+
+[source,go]
+----
+const pi = 3.1415926
+const r = 4
+const area = pi * r * r
+fmt.Printf("r type: %T, pi type: %T, area type: %T\n", r, pi, area)
+fmt.Println("r = ", r, ", area = ", area)
+----
+
+上边的代码输出：
+
+----
+3
+3
+r =  4 , area =  50.26548
+r type: int, pi type: float64, area type: float64
+r =  4 , area =  50.2654816
+----
+
+可以看到，虽然 r 是 `int` 类型，但是 pi 和 r 可以直接用于计算而无须类型转换，编译器会自动转换，省去了考虑类型问题的麻烦。
+
+== 枚举和iota
+
+go 中没有内置枚举类型，因此没有诸如 java 的 `enum` 关键字。通常，我们会使用 `const` 来定义枚举类型，比如这样：
+
+[source,go]
+----
+const (
+	Monday    = 0
+	Tuesday   = 1
+	Wednesday = 2
+	Thursday  = 3
+	Friday    = 4
+	Saturday  = 5
+	Sunday    = 6
+	weekDays  = 7
+)
+----
+
+这样的声明方式虽然比较清晰，但是依次递增的值都必须写在每一个常量后，这属于重复代码，go 通过 `iota` 来消除这些重复的代码，实现枚举常量。
+
+`iota` 表示一个数字，可以被编译器修改，每一个 `const` 关键字出现时被重置为0，而在下一个 `const` 出现之前其值会自动增1。并且，在 `const` 出现到下一次 `const` 之前，只要出现 `iota`，则从 `const` 后 **第一个非空表达式** 开始计算 `iota` 的值。例如：
+
+[source,go]
+----
+const (
+    x = -1   // -1, iota = 0
+    a = 1    // 1, iota = 1
+    b        // 1, iota = 2
+    c = iota // iota = 3，第一个表达是 x = -1 开始计算 iota 的值，故此时 iota 为 3
+    d        // iota = 4
+)
+fmt.Println(x, a, b, c, d)
+// 每次使用 const 时，iota 的值会重置为0
+const c1 = iota // <1>
+const c2 = iota // <2>
+fmt.Println(c1, c2) // 0 0
+----
+
+上边的代码输出：
+
+----
+-1 1 1 3 4
+0 0
+----
+
+`const` 后出现了 `iota`，但是它会从第一个表达式 `x = -1` 就已经具有值 0，因此到 `c = iota` 时其值递增为3，而后的常量 `d` 则会重复 `c = iota`，此时 `iota` 递增到4。随便的1、2两句都用 `const` 重新声明了常量，对应的 `iota` 都被重置为 0。
+
+需要注意的是，同一行声明的多个常量，`iota` 的值始终会相同：
+
+[source,go]
+----
+const (
+    e, f = iota, iota + 10 // 0, 10, 同一行，无论 iota 重复多少次，其值都是一样的
+    g, h                   // 1, 11
+)
+fmt.Println(e, f, g, h)
+----
+
+有了 `iota`，我们就可以改写前边星期的枚举了：
+
+[source,go]
+----
+const (
+	Monday = iota
+	Tuesday
+	Wednesday
+	Thursday
+	Friday
+	Saturday
+	Sunday
+	weekDays
+)
+----
+
+这样定义的常量就是 go 提供的定义枚举的方式，是不是比全部用数字定义要简单明了呢？
+
+== 保证枚举的类型安全
+
+接上边的例子，我们增加一个判断是否是工作日的方法：
+
+[source,go]
+----
+func checkWorkday(day int) {
+	if day == Saturday || day == Sunday {
+		fmt.Println("(〃'▽'〃), good weekend!")
+	} else {
+		fmt.Println("(灬ꈍ ꈍ灬)，it's workday!")
+	}
+}
+----
+
+该方法接受一个 `int` 参数，如果周六或周日则打印周末，否则是工作日。传递 `int` 参数过于宽泛，我们不能限制调用者传递的是否是合法的我们定义的枚举常量 0 到 6 的值。此时，可以定义有类型的枚举常量来保证类型安全。
+
+[source,go]
+----
+type WeekDay int
+
+const (
+	Monday WeekDay = iota
+	Tuesday
+	Wednesday
+	Thursday
+	Friday
+	Saturday
+	Sunday
+	weekDays
+)
+----
+
+我们自定义了一个 `WeekDay` 类型，常量被声明这种类型，这样方法参数就可以限定为 `WeekDay` 类型，使得调用者知道需要传入的参数类型，一定程度保证了类型安全：
+
+[source,go]
+----
+func checkWorkday(day WeekDay) {
+	if day == Saturday || day == Sunday {
+		fmt.Println("(〃'▽'〃), good weekend!")
+	} else {
+		fmt.Println("(灬ꈍ ꈍ灬)，it's workday!")
+	}
+}
+----
+
+== 总结
+
+常量在编译期就知道其值，一旦定义，就不可能更改。虽然可以定义有类型的常量，但通常情况下可以无需指明常量的类型，这样编译器会运算时自动处理。go 虽然没有提供枚举类型，但提供 `iota` 内置常量来简化枚举的定义。除了 `iota` 外，内置的常量还包括 `true` 和 `false`。

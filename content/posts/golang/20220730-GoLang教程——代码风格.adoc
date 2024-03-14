@@ -1,0 +1,356 @@
+---
+title: GoLang教程——代码风格
+slug: go-style
+categories:
+  - GoLang
+tags:
+  - go
+description: Go作为编程语言中的后起之秀，在语言规范上吸收了诸多语言的优点，并形成了自身独特的语言风格。本文探讨一下Go语言的代码风格，并与后端语言中的老大哥Java做一些风格方面的比较。
+date: 2022/07/30
+updated: 2022/07/30
+---
+
+= GoLang教程——代码风格
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+Go作为编程语言中的后起之秀，在语言规范上吸收了诸多语言的优点，并形成了自身独特的语言风格。本文探讨一下Go语言的代码风格。
+
+== main方法
+
+`main` 方法同样是go程序的入门函数，但是其定义非常简单，比如上一篇中的：
+
+[source,go]
+----
+func main() {
+	fmt.Println("Hello, world!")
+}
+----
+
+直接用 `func` 关键字定义一个名为 `main` 的方法即可，没有任何参数。
+
+那么，如何获取传递给 `main` 的参数呢，可以使用 `os.Args`：
+
+[source,go]
+----
+func main() {
+	fmt.Println("hello go!")
+	for i, arg := range os.Args {
+		fmt.Println(i, "=", arg)
+	}
+}
+----
+
+`os.Args` 获取命令行传递的参数，第一个始终为执行程序的名称，一个示例执行结果如下:
+
+[source,shell]
+----
+$ go run main_func.go a b
+hello go!
+0 = /var/folders/8b/y3pklwbs1wj_cq7hm_yjwgpr0000gn/T/go-build3458283994/b001/exe/main_func
+1 = a
+2 = b
+----
+
+当然，通常情况不会使用 `os.Args` 来解析命令行参数，而是使用 go 标准库的 `flag` 包。
+
+== go的关键字
+
+go的内置关键字有25个：
+
+[source,text]
+----
+break        default      func         interface    select
+case         defer        go           map          struct
+chan         else         goto         package      switch
+const        fallthrough  if           range        type
+continue     for          import       return       var
+----
+
+这25个关键字不能作为标识符使用。
+
+== 标识符命名
+
+Go中的标识符同java一样，必须由字母、数字和下划线"_"组成，而且第一个不能为数字：
+
+[source,go]
+----
+func main() {
+	_a := 1
+	fmt.Println(_a)
+	b := 2
+	fmt.Println(b)
+	// 3c := 3 // 不能编译
+	你好 := 5
+	println(你好)
+}
+----
+
+有意思的是，除了25个关键字之外的合法标识符，只要不存在冲突，都可以作为标识符，比如包名也可以作为标识符：
+
+[source,go]
+----
+fmt := 4
+println(fmt)
+// fmt.println("a") // 不能编译
+----
+
+上边的代码定义了名为 `fmt` 的变量标识符，这是合法的，但是后续代码就不能只用 `fmt` 包了，而标识符声明之前的代码不受影响。
+
+== 注释
+
+go中有两种注释，比java少一种：
+
+* 单行注释: 使用 `//` 开头，注释一行
+* 多行注释：使用 `/* ... */` 形式，可以用在行内注释
+
+这两种注释与java相同，但是go中没有文档注释 `/** ... */`，而文档注释可以通过上边两种即可，而且注释中的关键信息如方法名称、类型名称等 `go doc` 工具会自动识别(goland中会高亮并可链接)：
+
+[source,go]
+----
+// sayHello is a function to say hello with the giving name.
+func sayHello(name string) {
+	fmt.Println("hello, ", name)
+}
+----
+
+[[unused_var]]
+== 未使用的变量和包
+
+go是不允许导入了包不使用，或者声明了变量而未使用的，这些都会造成编译失败。
+
+[source,go]
+----
+func main() {
+	name, err := getName() // <1>
+	fmt.Println(name)
+}
+
+func getName() (string, error) {
+	return "huzhou", nil
+}
+----
+
+<1> 声明了变量err却不使用，编译错误
+
+如果不需要使用变量，可以使用下划线 `_` 来忽略这个标识符，这被称为 <</2022/08/02/go-var#a_var, 匿名变量>>，上边的错误代码修改为即可编译：
+
+[source,go]
+----
+name, _ := getName()
+----
+
+同样的，如果导入了包却不使用，也无法通过编译。有时候，我们需要导入包来做一些初始化，比如注册MySQL驱动，但是代码中又不使用，这时就需要使用 `_` 让包导入却可以通过编译。比如，gorm框架中的导入mysql包的代码如下：
+
+[source,go]
+----
+_ "github.com/go-sql-driver/mysql"
+----
+
+这样成功导入了mysql驱动包，并可以执行 `init` 代码来注册驱动了：
+
+.https://github.com/go-sql-driver/mysql/blob/master/driver.go[driver.go]
+[source,go]
+----
+func init() {
+	sql.Register("mysql", &MySQLDriver{})
+}
+----
+
+== 方法和变量的可见性
+
+Go是通过标识符首字母大小写来控制可见性的，这点与java不同(`public`、`private`、`protected`、包访问权限default等)。标识符首字母大写的变量、常量、类型、方法等可以被外部其他模块访问，而首字母小写则意味着这些标识符只能内部私有，外部不可见。
+
+比如，我定义了一个 `user` 模块：
+
+[source,go]
+----
+var Name = "huzhou"
+
+func getName() string {
+	return Name
+}
+
+func SayHello(name string) {
+	fmt.Println("hello, ", name)
+}
+----
+
+其中，`Name` 变量、`SayHello` 方法由于首字母大写，所以可以被外部其他模块访问，而 `getName` 只能在 `user` 模块内部访问：
+
+[source,go]
+----
+func main() {
+	name := user.Name
+	fmt.Println(name)
+
+    // 不能访问，因为是包内部可见性
+	// name = user.getName()
+	// fmt.Println(name)
+
+	user.SayHello("huzhou")
+}
+----
+
+== 不支持方法重载
+
+Go中没有方法重载，重名的方法名称会编译失败。比如下边的代码：
+
+[source,go]
+----
+var data = make(map[int64]string)
+
+func init() {
+	data[1] = "zhangsan"
+	data[2] = "lisi"
+	data[3] = "huzhou"
+}
+
+func GetName(id int64) string {
+	return data[id]
+}
+----
+
+原有的 `GetName` 方法工作正常，现在如果想要增加一个 `age` 参数，或者返回值增加一个 `error`，我们肯定不希望在原来的方法上直接修改，这样会导致素有调用的代码都需要修改。我们希望重载两个方法，结果编译失败：
+
+[source,go]
+----
+func GetName(id int64) (string, error) {
+}
+
+func GetName(id int64, age int8) {
+}
+----
+
+新增的这两个方法都会由于方法重名了而导致编译失败，正确的做法是换一个方法名称。
+
+== Go中没有三元运算符
+
+可能让初学者一开始很不习惯的是，Go中没有三元运算符，尤其是对已有其他语言经验的开发者而言。究其原因，Go官方认为，三元运算符会给开发者带来阅读障碍，他们认为许多开发者都存在三元运算符乱用的问题，比如在三元运算符中进行逻辑计算、三元运算符嵌套，甚至偷懒使用非常复杂的三元运算符替代 `if...else...` 语句，比如下边这样：
+
+[source,javascript]
+----
+isOdd(a) ? a + b : a * b
+isOdd(a) ? (a > 10 ? (a < 20 ? a * 2 : a * a) : a) : a / 2
+----
+
+尽管三元运算符可以减少代码量，但却让代码难以阅读，所以 Go 推荐使用 `if` 语句，而不提供三元运算符。
+
+[source,go]
+----
+func main() {
+    ...
+	// 编译错误：go中没有三元运算符
+	// user.Age = validAge(age) ? age: -1
+	// 使用if语句代替三元运算符
+	if validAge(age) {
+		user.Age = age
+	} else {
+		user.Age = -1
+	}
+    ...
+}
+----
+
+当然，我们可以定义一个工具方法来实现三元运算效果：
+
+[source,go]
+----
+func Choose(b bool, v1 any, v2 any) any {
+	if b {
+		return v1
+	}
+	return v2
+}
+----
+
+使用时使用类型断言即可：
+
+[source,go]
+----
+ret := Choose(validAge(age), age, -1)
+user.Age = ret.(int) // 类型断言
+fmt.Printf("%v\n", user)
+----
+
+Go 1.18提供了泛型特性，我们也可以定义一个泛型方法来实现，这样就不需要断言了：
+
+[source,go]
+----
+func Choose1[T any](b bool, v1 T, v2 T) T {
+	if b {
+		return v1
+	}
+	return v2
+}
+----
+
+== 其他代码约束
+
+=== 分号的使用
+
+Go中一行代码的末尾不需要分号 `;`，写上分号尽管编译通过，但是显得多余。但是如果一行代码中有多个执行语句，此时需要分号隔开：
+
+[source,go]
+----
+func main() {
+	fmt.Println("Redundant semicolon"); // <1>
+	defer func() {
+		if err := recover(); err != nil { // <2>
+			fmt.Println("recovered")
+		}
+	}()
+}
+----
+
+<1> 分号是多余的
+<2> `if` 中包括两个语句，需要 `;` 隔开
+
+=== 条件判断不需要括号
+
+`if` 语句判断条件是，不需要 `()`：
+
+[source,go]
+----
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	a := rand.Intn(100)
+	 if (a%2 == 0) { // <1>
+		fmt.Println(a, " is an even number")
+	} else {
+		fmt.Println(a, " is an odd number")
+	}
+}
+----
+
+<1> 多余的小括号
+
+=== 大括号不能换行
+
+Go中，大括号是不能另起一行的，这会造成编译失败。比如下边的代码会编译失败：
+
+[source,go]
+----
+func main()
+{
+}
+----
+
+== 总结
+
+本文列举了一些 Go 的编码规范和代码风格，欢迎留言补充。
+
+文本示例代码见 https://github.com/huzhouv/go-guide/tree/main/02-code-style[github]。

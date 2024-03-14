@@ -1,0 +1,250 @@
+---
+title: WEBP格式的图片导致ImageIO.read方法return null
+slug: webp-image-cannot-read
+img: /images/thumbnail/attachment/20180228/68e9074929724d1497c87fe2aa7bcaa0.jpg
+categories:
+  - 高新技术
+tags:
+  - image
+  - webp
+description: >-
+  最近开发一个图片服务，主要是维护项目图片，支持JPG、BMP、PNG、JPEG等常规格式。开发的时候没问题，但是上到生产的时候，客户在维护图片的时候，发现有的JPG格式的图片能上传，有的不能。
+date: 2017-11-03 10:56:35
+updated: 2018-08-16 14:35:38
+---
+
+= WEBP格式的图片导致ImageIO.read方法return null
+:author: belonk.com
+:date: 2018-08-16
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: WEBP,ImageIO,null
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: image,webp
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+== 问题背景
+
+最近开发一个图片服务，主要是维护项目图片，支持JPG、BMP、PNG、JPEG等常规格式。开发的时候没问题，但是上到生产的时候，客户在维护图片的时候，发现有的JPG格式的图片能上传，有的不能。
+
+拿到正常上传和不能上传的图片，对比发现，不能上传的图片，在windows上根本无法打开，图片如下(用chrome打开可以看见，右键另存图片，或者 http://www.belonk.com/attachment/20171103/391be652aaee48a8a8a2aaa1ea22a063.jpg[点击这里下载])：
+
+image::/images/attachment/20171103/391be652aaee48a8a8a2aaa1ea22a063.jpg[]
+
+但是奇怪的是，该图片可以在chrome浏览器显示，也可以在安卓APP上显示，但是其他浏览器和iOS无法正常显示。
+
+== 问题分析
+
+首先debug代码，发现图片都会使用ImageIO来读取，以便获取图片宽高从而进行等比例压缩，代码如下：
+
+[source,java]
+----
+BufferedImage bi = ImageIO.read(inputStream);
+    Map rtnMap = new HashMap();
+    if (bi == null) {
+        rtnMap.put("status", "1");   //上传不成功
+        rtnMap.put("msg", "该图片本身不是图片格式");
+        return rtnMap;
+    }
+----
+
+非正常图片，上边的bi会返回null，而不会抛出任何异常信息。
+
+首先怀疑图片是损坏的，因为windows上根本无法打开，显示如下：
+
+image::/images/attachment/20171103/c42beafdc04a4d798e9b631e48372b93.png[]
+
+但是该图片可以在chrome上正常显示，这表明图片不会是损坏了，应该是跟平台有关，那么会不会是图片格式根本不是JPG，仅仅后缀显示为JPG呢？
+
+然后我用记事本打开正常的和非正常的图片文件进行比对，想获取一些有用的信息，结果发现：
+
+image::/images/attachment/20171103/71e59c6f316c47c7a30e2dd10b99d1ba.png[]
+
+非正常JPG图片
+
+image::/images/attachment/20171103/d38533e8cee44fca8b68b0d686d33d0d.png[]
+
+正常JPG图片
+
+如上所示，正常JPG里边，显示格式为JFIF，而非正常图片显示为WEBPVP8，明显不同。看来，不能正常上传的图片是平台不支持的图片格式，到底WEBPVP8是什么格式？
+
+== WEBP格式
+
+通过谷歌搜索，查询半天发现，这种格式名为WEBP，由谷歌开发，官方地址（记得翻墙）： https://developers.google.com/speed/webp/?hl=zh-CN[https://developers.google.com/speed/webp/?hl=zh-CN]，也是图片格式的一种， https://baike.baidu.com/item/webp%E6%A0%BC%E5%BC%8F/4077671[百度百科]原文如下：
+
+[blockquote]
+____
+WebP格式，谷歌（google）开发的一种旨在加快图片加载速度的图片格式。图片压缩体积大约只有JPEG的2/3，并能节省大量的服务器带宽资源和数据空间。Facebook Ebay等知名网站已经开始测试并使用WebP格式。     但WebP是一种有损压缩。相较编码JPEG文件，编码同样质量的WebP文件需要占用更多的计算资源。桌面版Chrome可打开WebP格式。
+____ 
+
+恍然大悟，原来是一种新型图片格式，很明显windows和iOS还不支持，但是谷歌旗下产品可以支持，这就解释了为什么chrome、安卓能够打开。
+
+在JAVA中，还不支持这种格式，可以用如下代码检查当前支持的图片格式：
+
+[source,java]
+----
+String[] ss = ImageIO.getReaderFormatNames();
+System.out.println(Arrays.asList(ss));
+----
+
+返回结果：[JPG, jpg, bmp, BMP, gif, GIF, WBMP, png, PNG, jpeg, wbmp, JPEG]
+
+在查找问题时，我还尝试使用twelvemonkeys扩展包来扩展所支持的图片类型：
+
+[source,xml]
+----
+<dependency>
+	<group>com.twelvemonkeys.imageio</group>
+	<artifact>imageio-jpeg</artifact>
+	<version>3.3.2</version>
+</dependency>
+<dependency>
+	<group>com.twelvemonkeys.imageio</group>
+	<artifact>imageio-tiff</artifact>
+	<version>3.3.2</version>
+</dependency>
+<dependency>
+	<group>com.twelvemonkeys.imageio</group>
+	<artifact>imageio-pnm</artifact>
+	<version>3.3.2</version>
+</dependency>
+----
+
+增加扩展包后，可以支持更多的图片类型：[JPG, tiff, bmp, gif, WBMP, PNG, JPEG, PPM, PNM, tif, TIFF, PFM, pgm, jpeg, wbmp, PBM, pam, jpg, BMP, GIF, png, ppm, pnm, TIF, pfm, PGM, pbm, PAM]
+
+结果还是不能解决问题，说明twelvemonkeys也不支持WEBP格式。
+
+看来，WEBP格式的普及还需要一定的时间。
+
+那么， 怎么来解决这个问题呢？
+
+== 问题解决办法
+
+解决办法有两种，第一种就是使用工具将这类图片（windows无法识别）转换为JPG格式，然后在上传。
+
+=== XnConvert工具
+
+该工具能够有效读取WEBP格式图片，并将其转换为多种格式，官方网站如下： https://www.xnview.com/en/xnconvert/[https://www.xnview.com/en/xnconvert/]
+
+主界面如下：
+
+image::/images/attachment/20171103/56ffc5a6d73946748ea0593cf6644434.png[]
+
+可以进行批量转换，能够识别文件夹和子文件夹，且转换过后的文件相对目录可以保持不变，非常好的工具，用法就不详细说明了
+
+=== 程序解码
+
+还有一种比较麻烦的办法，就是在程序中来处理，将WEBP格式解码，转换为常规的JPG格式。由于该方法比较麻烦，我就没有实际尝试了，谷歌应该提供了相关解码器，具体可以阅读官方文档。这里贴出网上的转换方法：
+
+[blockquote]
+____
+windows下安装 WebpCodecSetup.exe (才能查看WEBP格式图片) 以及 libwebp-0.3.0-windows
+
+下载安装 https://code.google.com/p/webp/[]
+
+解压libwebp后，cd到解压文件夹后输入转换命令，命令的结构
+
+----
+cwebp [options] input_file -o output_file.webp
+----
+
+----
+jpg cwebp input_file -o output_file.webp
+----
+
+（jpg是有损压缩的，options可以选 -q 设置质量，默认为75）
+----
+png cwebp -lossless input_file -o output_file.webp
+----
+____ 
+
+由于项目中图片非常多，一共有20个G左右，其中少部分是WEBP格式的图片，我写了一个工具处理类，将不是WEBP格式的图片删掉，剩下的都是WEBP格式，然后使用XnConvert转换为JPG图片，修复这部分图片：
+
+.WebpImgFileVisitor.java
+[source,java]
+----
+class WebpImgFileVisitor extends SimpleFileVisitor {
+    private int deleteFileCount;
+    private int deleteDirCount;
+
+    @Override
+    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+        return super.preVisitDirectory(dir, attrs);
+    }
+
+    @Override
+    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+        File f = file.toFile();
+        FileInputStream in = new FileInputStream(f);
+        byte[] bytes = new byte[30];
+        in.read(bytes);
+        if ("WEBP".equals(new String(bytes, 8, 4, "utf-8"))) {
+            System.out.println("WEBP格式图片：" + file);
+        } else {
+            System.out.println("正常图片，删除：" + file);
+            in.close(); // 删除前需要关闭流
+            Files.deleteIfExists(file);
+            deleteFileCount++;
+        }
+//        if (ImageIO.read(f) == null ) { // 不能读取，说明是WEBP格式，这种方式不准确
+//            System.out.println("Can not read file : " + file);
+//        }
+        return FileVisitResult.CONTINUE;
+    }
+
+    @Override
+    public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+        System.out.println("文件访问失败 : " + file);
+        return super.visitFileFailed(file, exc);
+    }
+
+    @Override
+    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+        File file = dir.toFile();
+        if (file.listFiles() == null || file.listFiles().length == 0) {
+            System.out.println("空文件夹，删除 : " + dir);
+            Files.deleteIfExists(dir);
+            deleteDirCount++;
+        }
+        return super.postVisitDirectory(dir, exc);
+    }
+
+    public int deleteDirCount() {
+        return deleteDirCount;
+    }
+
+    public int deleteFileCount() {
+        return deleteFileCount;
+    }
+}
+----
+
+.FindWebpImageUtil.java
+[source,java]
+----
+public class FindWebpImageUtil extends SimpleFileVisitor {
+    public static int[] filterWebpImage(String rootPath) throws IOException {
+        Path fileDir = Paths.get(rootPath);
+        WebpImgFileVisitor visitor = new WebpImgFileVisitor();
+        Files.walkFileTree(fileDir, visitor);
+        return new int[]{visitor.deleteFileCount(), visitor.deleteDirCount()};
+    }
+
+    public static void main(String[] args) throws IOException {
+        int[] res = FindWebpImageUtil.filterWebpImage("D:\\work\\roomPics\\roomPics");
+//        int[] res = FindWebpImageUtil.filterWebpImage("D:\\work\\roomPics\\roomPics\\9235");
+        System.out.println("删除文件：" + res[0] + "，删除目录：" + res[1]);
+    }
+}
+----

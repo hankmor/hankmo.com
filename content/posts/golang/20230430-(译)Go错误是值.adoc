@@ -1,0 +1,216 @@
+---
+title: (译)Go错误是值
+slug: go-err-handle
+categories:
+  - GoLang
+tags:
+  - go
+  - module
+description: 一直以来，人们觉得一定有什么地方出了问题，而明显的目标就是 Go 本身。这是不幸的、误导性的，而且很容易纠正。也许刚接触 Go 的程序员会问，“我该如何处理错误？”，然后学习这种模式，最后就此打住。在其他语言中，可能会使用 try-catch 块或其他类似机制来处理错误。因此，程序员认为，我在我的旧语言中可以使用 try-catch 时，但在 go 中我只能输入 `if` `err` `!=` `nil` 来处理错误。随着时间的推移，Go 代码收集了许多这样的片段，结果感觉很笨拙。
+date: 2023/04/30
+updated: 2022/12/19
+---
+
+= (译)Go错误是值
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+Rob Pike，2015 年 1 月 12 日 ，原文地址: https://go.dev/blog/errors-are-values
+
+Go 程序员（尤其是刚接触该语言的程序员）讨论的一个共同点是如何处理错误，这些讨论最终往往都将回归于无数次出现的代码片段：
+
+[source, go]
+----
+if err != nil {
+    return err
+}
+----
+
+如上所示，但我们最近扫描了所有我们能找到的开源项目，发现这个片段每页或每两页只出现一次，比某些人认为的要少。尽管如此，许多程序员仍然认为必须键入如下代码来处理错误：
+
+[source, go]
+----
+if err != nil
+----
+
+一直以来，人们觉得一定有什么地方出了问题，而明显的目标就是 Go 本身。
+
+这是不幸的、误导性的，而且很容易纠正。也许刚接触 Go 的程序员会问，“我该如何处理错误？”，然后学习这种模式，最后就此打住。在其他语言中，可能会使用 try-catch 块或其他类似机制来处理错误。因此，程序员认为，我在我的旧语言中可以使用 try-catch 时，但在 go 中我只能输入 `if` `err` `!=` `nil` 来处理错误。随着时间的推移，Go 代码收集了许多这样的片段，结果感觉很笨拙。
+
+不管这种解释是否成立，很明显这些 Go 程序员忽略了关于错误的一个基本观点： _错误是值。_
+
+可以对值进行编程，并且由于错误是值，因此可以对错误进行编程。
+
+当然，涉及错误值的常见语句是测试它是否为 nil，但是错误值可以做无数其他事情，应用其中一些其他事情可以使您的程序更好，从而消除大部分样板代码，避免多次使用 if 语句检查每个错误。
+
+一个简单示例是 `bufio` 包中的 https://go.dev/pkg/bufio/#Scanner[`Scanner`]。它的 https://go.dev/pkg/bufio/#Scanner.Scan[`Scan`] 方法执行底层 I/O，这当然可能导致错误。然而，该 `Scan` 方法根本不会暴露错误。相反，它返回一个布尔值和一个单独的方法，在扫描结束时运行，报告是否发生错误。客户端代码如下所示：
+
+[source, go]
+----
+scanner := bufio.NewScanner(input)
+for scanner.Scan() {
+    token := scanner.Text()
+    // process token
+}
+if err := scanner.Err(); err != nil {
+    // process the error
+}
+----
+
+当然，有一个 nil 检查错误，但它只出现并执行一次。假设将该 `Scan` 方法改为：
+
+[source, go]
+----
+func (s *Scanner) Scan() (token []byte, error)
+----
+
+然后示例用户代码可能是（取决于令牌的检索方式），
+
+[source, go]
+----
+scanner := bufio.NewScanner(input)
+for {
+    token, err := scanner.Scan()
+    if err != nil {
+        return err // or maybe break
+    }
+    // process token
+}
+----
+
+这看起来并没有太大区别，但实际上一个重要的区别是，在这段代码中，客户端必须在每次迭代时检查错误。在原始 `Scanner` API 中，错误处理是从关键 API 元素中抽象出来的，而无须在迭代中处理错误，迭代中只负责处理 `token`。使用真正的 API，客户端的代码因此感觉更自然：循环直到完成，然后担心存在错误并处理它，错误处理逻辑并不会混淆控制流。
+
+当然，在幕后发生的事情是，一旦 `Scan` 遇到 I/O 错误，它就会记录下来并返回 `false`。一个单独的 https://go.dev/pkg/bufio/#Scanner.Err[`Err`] 方法会在客户端调用时报告错误值。这与使用 `if` 语句判断错误明显不同：
+
+[source, go]
+----
+if err != nil
+----
+
+到处或要求客户在每个令牌后检查错误，这是使用错误值进行编程。
+
+值得强调的是，无论设计如何，程序检查错误是至关重要的，无论它们是如何暴露的。这里的讨论不是关于如何避免检查错误，而是关于使用语言优雅地处理错误。
+
+当我参加在东京举行的 2014 年秋季 GoCon 时，出现了重复错误检查代码的话题。一位热情的 gopher Twitter 名为 https://twitter.com/jxck_[`@jxck_`] 和我一起讨论了人们熟悉的关于错误检查的困惑。他有一些代码看起来像这样：
+
+[source, go]
+----
+_, err = fd.Write(p0[a:b])
+if err != nil {
+    return err
+}
+_, err = fd.Write(p1[c:d])
+if err != nil {
+    return err
+}
+_, err = fd.Write(p2[e:f])
+if err != nil {
+    return err
+}
+// and so on
+----
+
+这是非常重复的。在更长的实际代码中，发生的事情更多，因此仅使用辅助函数重构它并不容易，但在这种理想化的形式中，申明一个关闭错误的函数变量会有所帮助：
+
+[source, go]
+----
+var err error
+write := func(buf []byte) {
+    if err != nil {
+        return
+    }
+    _, err = w.Write(buf)
+}
+write(p0[a:b])
+write(p1[c:d])
+write(p2[e:f])
+// and so on
+if err != nil {
+    return err
+}
+----
+
+这种模式运行良好，但需要在每个执行写入的函数中使用闭包函数；一个单独的辅助函数使用起来比较笨拙，因为 `err` 需要在调用之间维护变量（试试看）。
+
+通过借鉴上述 `Scan` 方法的思想，我们可以使它更清晰、更通用和可重用。我在我们的讨论中提到了这项技术，但 `@jxck_` 没有看到如何应用它。经过长时间的交流后，由于语言障碍有些受阻，我问我是否可以借他的笔记本电脑并通过输入一些代码给他看。
+
+我定义了一个名为 `errWriter` 的对象，如下所示：
+
+[source, go]
+----
+type errWriter struct {
+    w   io.Writer
+    err error
+}
+----
+
+并为它定义了一个 `write` 方法，它不需要有标准的 `Write` 签名，并且部分小写以突出区别。该 `write` 方法调用底层 `Writer` 的 `write` 方法，并记录第一个错误以供日后参考：
+
+[source, go]
+----
+func (ew *errWriter) write(buf []byte) {
+    if ew.err != nil {
+        return
+    }
+    _, ew.err = ew.w.Write(buf)
+}
+----
+
+一旦发生错误，该`write`方法将变为空操作，但会保存错误值。
+
+给定`errWriter`类型及其`write`方法，可以重构上面的代码：
+
+[source, go]
+----
+ew := &errWriter{w: fd}
+ew.write(p0[a:b])
+ew.write(p1[c:d])
+ew.write(p2[e:f])
+// and so on
+if ew.err != nil {
+    return ew.err
+}
+----
+
+这更简洁，甚至与使用闭包相比也是如此，并且还使实际的写入顺序更容易在页面上看到，代码更清晰。使用错误值（和接口）编程使代码更好。
+
+同一个包中的其他一些代码可能会基于这个想法构建，甚至 `errWriter` 直接使用。
+
+此外，一旦 `errWriter` 存在，它可以提供更多帮助，尤其是在人为较少的示例中。它可以累积字节数。它可以将写入合并到一个缓冲区中，然后以原子方式传输，以及更多。
+
+事实上，这种模式经常出现在标准库中，如包 https://go.dev/pkg/archive/zip/[`archive/zip`] 和 https://go.dev/pkg/net/http/[`net/http`] 。对于这个讨论来说更重要的是， [`bufio`]() 包 `Writer`] 实际上是这个 `errWriter` 想法的一个实现。尽管 `bufio.Writer.Write` 返回错误，但这主要是关于遵守 https://go.dev/pkg/io/#Writer[`io.Writer`] 接口。`bufio.Writer` 的 `Write` 方法的行为就像上边的 `errWriter.write` 方法一样。如果 `Flush` 报错，所以我们的例子可以这样写：
+
+[source, go]
+----
+b := bufio.NewWriter(fd)
+b.Write(p0[a:b])
+b.Write(p1[c:d])
+b.Write(p2[e:f])
+// and so on
+if b.Flush() != nil {
+    return b.Flush()
+}
+----
+
+这种方法有一个明显的缺点，至少对于某些应用程序而言是这样：无法知道在错误发生之前完成了多少处理。如果该信息很重要，则需要更细粒度的方法。不过，通常最后进行全有或全无检查就足够了。
+
+我们只研究了一种避免重复错误处理代码的技术。请记住，使用 `errWriter` 或者 `bufio.Writer` 并不是简化错误处理的唯一方法，并且这种方法并不适用于所有情况。然而，关键的教训是错误是值，Go 编程语言的全部功能可用于处理它们。
+
+使用该语言来简化您的错误处理。
+
+但请记住：无论你做什么，都要检查你的错误！
+
+最后，要了解我与 @jxck_ 互动的完整故事，包括他录制的一段小视频，请访问 http://jxck.hatenablog.com/entry/golang-error-handling-lesson-by-rob-pike[他的博客]。

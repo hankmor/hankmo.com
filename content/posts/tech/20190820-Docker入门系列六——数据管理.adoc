@@ -1,0 +1,379 @@
+---
+title: Docker入门系列六——数据管理
+slug: docker-volumn
+img: /images/thumbnail/attachment/20190807/e512b5d1ba6940dcab8e0454e693d6b4.png
+categories:
+  - 中间组件
+tags:
+  - docker
+  - 数据
+description: 容器的数据管理有两种方式：数据卷（Data Volumes）：容器内数据直接映射到本地主机环境; 数据卷容器（Data Volume Containers）：使用特定容器维护数据卷。数据卷是一个可供容器使用的特殊目录，将主机的目录映射进容器，类似于Linux中的mount行为。
+date: 2019-08-20 16:16:45
+updated: 2019-08-20 14:48:45
+---
+
+= Docker入门系列六——数据管理
+:author: belonk.com
+:date: 2020-04-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器,镜像,容器基本操作,容器迁移,导出,导入
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: docker,容器,container,镜像
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+容器的数据管理有两种方式：
+
+* 数据卷（Data Volumes）：容器内数据直接映射到本地主机环境
+* 数据卷容器（Data Volume Containers）：使用特定容器维护数据卷
+
+## 数据卷
+
+数据卷是一个可供容器使用的特殊目录，将主机的目录映射进容器，类似于Linux中的mount行为。
+
+特点：
+
+* 可在容器间共享和重用，容器间传输数据变得高效
+* 对数据卷内数据的修改会立即生效，容器和本地操作都可以
+* 数据卷的更新不会影响镜像，应用和数据解耦
+* 卷会一直存在，直到没有容器使用，就可以安全地卸载它
+
+### 数据卷管理
+
+volume命令：
+
+----
+root@ubuntu:~# docker volume --help
+
+Usage:  docker volume COMMAND
+
+Manage volumes
+
+Commands:
+create      Create a volume
+inspect     Display detailed information on one or more volumes
+ls          List volumes
+prune       Remove all unused local volumes
+rm          Remove one or more volumes
+----
+
+#### 创建数据卷
+
+----
+docker volume create -d local test
+----
+
+数据卷创建后存放在/var/lib/docker/volumes下。e.g.
+
+----
+root@ubuntu:~# docker volume create -d local test
+test
+root@ubuntu:~# cd /var/lib/docker
+root@ubuntu:/var/lib/docker# ls
+builder  buildkit  containers  image  network  overlay2  plugins  runtimes  swarm  tmp  trust  volumes
+root@ubuntu:/var/lib/docker# cd volumes/
+root@ubuntu:/var/lib/docker/volumes# ls
+metadata.db  test
+root@ubuntu:/var/lib/docker/volumes# cd test/
+root@ubuntu:/var/lib/docker/volumes/test# ls
+_data
+root@ubuntu:/var/lib/docker/volumes/test#
+----
+
+#### 列出已有数据卷
+
+----
+docker volume ls
+----
+
+e.g.
+
+----
+root@ubuntu:~# docker volume ls
+DRIVER              VOLUME NAME
+local               test
+local               test1
+----
+
+#### 显示volume详细信息
+
+----
+docker volume inspect [OPTIONS] VOLUME [VOLUME...]
+----
+
+e.g.
+
+----
+root@ubuntu:~# docker volume inspect test
+[
+    {
+        "CreatedAt": "2019-08-06T10:59:51+08:00",
+        "Driver": "local",
+        "Labels": {},
+        "Mountpoint": "/var/lib/docker/volumes/test/_data",
+        "Name": "test",
+        "Options": {},
+        "Scope": "local"
+    }
+]
+----
+
+#### 清理volume
+
+----
+docker volume prune [OPTIONS]
+----
+
+参数：
+
+* -f: 强制删除，不确认
+* --filter: 设置过滤条件，例如'label=<label>'
+
+#### 删除volume
+
+----
+docker volume rm [OPTIONS] VOLUME [VOLUME...]
+----
+
+### 绑定数据卷
+
+绑定数据卷即是在创建容器时将主机本地的任意路径挂载到容器内作为数据卷。
+
+在使用 `docker [container] run` 命令运行容器时，使用 `--mount` 选项来挂载目录。支持三种类型的数据卷：
+
+* volume：普通数据卷，映射到主机/var/lib/docker/volumes路径下
+* bind：绑定数据卷，映射到宿主机指定路径下
+* tmpfs：临时数据卷，只存在于内存中
+
+#### bind类型
+
+示例：挂载本地目录到容器：
+
+1、创建本地目录dbdata和两个文件，内容如下：
+
+----
+root@ubuntu:~# ls dbdata/
+haha.txt  xixi.txt
+root@ubuntu:~#
+----
+
+2、使用--mount来绑定：
+
+----
+root@ubuntu:~# docker run -it --name mounttest1  --mount type=bind,source=$(pwd)/dbdata,destination=/dbdata ubuntu /bin/bash
+----
+
+命令说明：
+
+* --name mounttest1，给容器命名
+* --mount type=bind,source=$(pwd)/dbdata,destination=/dbdata: 挂载类型为bind，source为被挂载目录，这里指向宿主机当前目录的dbdata目录，destination为挂载到的容器目标目录，这里指向容器内的/dbdata目录
+
+3、容器启动后，可以看到dbdata目录和文件都存在于容器中
+
+----
+root@3c97a2d9a575:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@3c97a2d9a575:/# cd dbdata/
+root@3c97a2d9a575:/dbdata# ls
+haha.txt  xixi.txt
+root@3c97a2d9a575:/dbdata# pwd
+/dbdata
+root@3c97a2d9a575:/dbdata#
+----
+
+上边的命令等同于使用 `-v` 来指定挂载目录：
+
+* -v，挂载宿主机目录到容器内目录，格式为：宿主机目录:容器目录，例如$(pwd):/backup，即是将宿主记得昂前目录挂载到容器的/backup目录下
+
+----
+root@ubuntu:~# docker run -it --name mounttest2 -v $(pwd)/dbdata:/dbdata ubuntu /bin/bash
+root@e8d0b79991e3:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@e8d0b79991e3:/# ls dbdata/
+haha.txt  xixi.txt
+root@e8d0b79991e3:/#
+----
+
+#### 使用volume类型
+
+挂载volume类型的数据卷：
+
+----
+root@ubuntu:~# docker run -it --name mounttest3 --mount type=volume,destination=/dbdata ubuntu /bin/bash
+----
+
+此命令会先创建一个数据卷，存储于 `/var/lib/docker/volumes` 下，然后容器再挂载该数据卷。
+
+容器启动后自动进入容器，可以看到dbdata目录挂载成功：
+
+----
+root@5bee307c8a38:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@5bee307c8a38:/# cd dbdata/
+root@5bee307c8a38:/dbdata# ls
+root@5bee307c8a38:/dbdata# exit
+----
+
+#### 使用tmpfs类型
+
+tmpfs只是临时的数据卷，仅存在于内存汇总，挂载后并不会在宿主机创建数据卷
+
+----
+root@ubuntu:~# docker run -it --name mountest5 --mount type=tmpfs,destination=/dbdata
+----
+
+## 数据卷容器
+
+适用于在多个容器之间共享持续更新的数据，数据卷容器也是一个容器，目的是提供数据卷给其他容器挂载。
+
+创建数据卷容器并挂载到/dbdata
+
+----
+docker run it -v /dbdata --name dbdata ubuntu
+----
+
+启动后会自动进入终端，查看目录，可以看到dbdata目录：
+
+----
+root@db3ac83e2531:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@db3ac83e2531:/# cd dbdata/
+----
+
+然后，其他容器可以使用 `--volumes-from` 来挂载dbdata容器中的数据卷，例如，创建db1、db2两个容器，均从dbdata容器挂在数据卷：
+
+----
+docker run -itd --volumes-from dbdata --name db1 ubuntu
+docker run -itd --volumes-from dbdata --name db2 ubuntu
+----
+
+此时已有三个容器启动，任何一个容器对dbdata文件夹的内容进行修改，其他两个容器都能同步修改：
+
+----
+root@ubuntu:~/dockertest# docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+d428c1240bc8        ubuntu              "/bin/bash"         5 seconds ago       Up 4 seconds                            db2
+2442cb173404        ubuntu              "/bin/bash"         54 seconds ago      Up 24 seconds                           db1
+db3ac83e2531        ubuntu              "/bin/bash"         36 minutes ago      Up 30 minutes                           dbdata
+----
+
+创建一个文件：
+
+----
+root@ubuntu:~/dockertest# docker exec -it d4  /bin/bash
+root@d428c1240bc8:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@d428c1240bc8:/# cd dbdata/
+root@d428c1240bc8:/dbdata# touch haha.txt
+----
+
+其他两个容器也能看到文件：
+
+----
+root@ubuntu:~/dockertest# docker exec -it 244 /bin/bash
+root@2442cb173404:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@2442cb173404:/# cd dbdata/
+root@2442cb173404:/dbdata# ls
+haha.txt
+root@2442cb173404:/dbdata# exit
+exit
+root@ubuntu:~/dockertest# docker exec -it db3 /bin/bash
+root@db3ac83e2531:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@db3ac83e2531:/# cd dbdata/
+root@db3ac83e2531:/dbdata# ls
+haha.txt
+----
+
+使用 `--volumes-from` 挂载数据卷的容器不需要运行。
+
+可以多次使用 `--volumes-from` 参数来从多个容器挂在多个数据卷，还可以从其他已经挂载了容器卷的容器来挂载数据卷。
+
+删除了挂载了数据卷的容器，数据卷不会删除，必须在删除挂载该数据卷的最后一个容器时，再使用docker rm -v命令来制定同时删除关联的容器。
+
+## 利用数据卷容器来迁移数据
+
+### 备份
+
+----
+docker run --volumes-from dbdata -v $(pwd):/backup --name worker ubuntu tar cvf /backup/backup.tar /dbdata
+----
+
+* docker run:先创建一个容器worker
+* --volumes-from dbdata: 挂载dbdata容器数据卷
+* -v $(pwd):/backup: 挂载本地的当前目录到work容器的/backup目录下
+* tar cvf /backup/backup.tar /dbdata: 容器启动后在使用tar命令进行打包，将/dbdata下的内容备份到容器内的/backup/backup.tar，也即宿主机当前目录下的backup.tar
+
+执行结果：
+
+----
+root@ubuntu:~/dockertest# docker run --volumes-from dbdata -v $(pwd):/backup --name worker ubuntu tar cvf /backup/backup.tar /dbdata
+/dbdata/
+/dbdata/haha.txt
+tar: Removing leading `/' from member names
+root@ubuntu:~/dockertest# ls
+backup.tar  dockerfile  mynginxfile
+root@ubuntu:~/dockertest# tar -xvf backup.tar
+dbdata/
+dbdata/haha.txt
+root@ubuntu:~/dockertest# ls
+backup.tar  dbdata  dockerfile  mynginxfile
+root@ubuntu:~/dockertest# cd dbdata/
+root@ubuntu:~/dockertest/dbdata# ls
+haha.txt
+root@ubuntu:~/dockertest/dbdata#
+----
+
+### 恢复
+
+现在，当前目录有一个backup.tar的目录，我们将其恢复到新的dbdata2的容器中。
+
+1、创建带有数据卷的容器dbdata2
+
+----
+docker run -v /dbdata --name dbdata2 ubuntu /bin/bash
+----
+
+2、创建一个新容器，挂载dbdata2容器，并使用tar解压到挂载的容器卷中：
+
+----
+docker run --volumes-from dbdata2 -v $(pwd):/backup ubuntu tar xvf /backup/backup.tar
+----
+
+命令的含义：
+
+* 使用--volumes-from dbdata2挂载dbdata2容器卷
+* 使用-v $(pwd):/backup，将宿主机目录挂载到容器的/backup目录
+* 在容器启动后执行tar xvf /backup/backup.tar解压
+
+结果：
+
+----
+root@ubuntu:~# docker run --volumes-from dbdata2 -v $(pwd):/backup ubuntu tar xvf /backup/backup.tar
+dbdata/
+dbdata/haha.txt
+----
+
+然后进入dbdata2容器，可以看到文件已经恢复：
+
+----
+root@ubuntu:~# docker exec -it dbdata2 /bin/bash
+root@1dd6cb8df75d:/# ls
+bin  boot  dbdata  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+root@1dd6cb8df75d:/# cd dbdata/
+root@1dd6cb8df75d:/dbdata# ls
+haha.txt
+root@1dd6cb8df75d:/dbdata#
+----

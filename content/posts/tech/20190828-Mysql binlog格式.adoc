@@ -1,0 +1,336 @@
+---
+title: Mysql binlog格式
+slug: mysql-binlog-format
+img: /images/thumbnail/attachment/20190828/e75afe5b36d548b9beb7f133f2341fa6.png
+categories:
+  - 中间组件
+tags:
+  - mysql
+  - binlog
+description: >-
+  Binlog有STATEMENT、ROW、MIXED三种格式，它们各有优缺点，需要根据自身业务需求来进行选择，从5.7.22版本开始，Mysql默认的格式由STATEMENT改为了ROW。
+date: 2019-08-28 17:09:51
+updated: 2019-08-28 17:23:54
+---
+
+= Mysql binlog格式
+:author: belonk.com
+:date: 2019-08-28
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: mysql,binlog,mysqlbinlog,statement,format,row,mixed
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: mysql,binlog
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在前一篇，我们开启了Mysql的binlog，当Mysql在进行数据更改操作时会自动记录binlog日志，以便进行主从服务，或者恢复丢失的数据。Binlog的日志内容可以设置不同的格式，以满足不同的需求。
+
+== Binlog格式
+
+Binlog有三种格式(format)，包括STATEMENT、ROW和MIXED，根据Mysql版本的不同，有着不同的默认值，它们的设置方式和默认值见下表：
+
+|====
+|属性|值
+
+|命令行格式|--binlog-format=format
+
+|系统变量|binlog_format
+
+|范围|GLOBAL, SESSION
+
+|动态|是
+
+|类型|列举
+
+|默认值（>= 5.7.7）|ROW
+
+|默认值（<= 5.7.6）|STATEMENT
+
+|有效值|ROWS TATEMENT MIXED
+
+|====
+
+=== STATEMENT
+ 
+基于SQL语句的日志记录，每一条修改数据的sql语句都会被记录在binlog中，但是不会记录数据前后的变化。
+
+优点:: 只需要记录执行语句的细节和上下文环境，避免了记录每一行的变化，在一些修改记录较多的情况下相比ROW level能大大减少binlog日志量，节约IO，提高性能；还可以用于实时的还原；同时主从版本可以不一样，从服务器版本可以比主服务器版本高
+
+缺点:: 为了保证sql语句能在slave上正确执行，必须记录上下文信息，以保证所有语句能在slave得到和在master端执行时候相同的结果；另外，主从复制时，存在部分函数（如sleep）及存储过程(procedure、function、及trigger)在slave上会出现与master结果不一致的情况，而相比Row level记录每一行的变化细节，绝不会发生这种不一致的情况
+
+
+=== ROW
+ 
+基于行的日志记录，不记录SQL语句，仅记录被修改的行的数据信息。
+
+优点:: 能非常清晰的记录下每行数据的修改细节，不需要记录上下文相关信息，因此不会发生某些特定情况下的``procedure``、``function``、及``trigger``的调用触发无法被正确复制的问题，任何情况都可以被复制，且能加快从库重放日志的效率，保证从库数据的一致性
+
+缺点:: 由于所有的执行的语句在日志中都将以每行记录的修改细节来记录，因此，可能会产生大量的日志内容，干扰内容也较多；比如一条update语句，如修改多条记录，则binlog中每一条修改都会有记录，这样造成binlog日志量会很大，特别是当执行``alter table``之类的语句的时候，由于表结构修改，每条记录都发生改变，那么该表每一条记录都会记录到日志中，实际等于重建了表。
+
+row模式生成的sql编码需要解码，不能用常规的办法去生成，需要加上相应的参数(``--base64-output=decode-rows -v``)才能显示出sql语句; 新版本(5.7.7以后)binlog默认为ROW，且5.6新增了一个参数：``binlog_row_image``；把binlog_row_image设置为``minimal``以后，binlog记录的就只是影响的列，大大减少了日志内容
+
+
+=== MIXED
+ 
+STATEMENT和ROW格式的混合，默认使用STATEMENT来记录binlog，当其无法实现主从复制的操作(例如函数操作)时，会切换到ROW格式来记录binlog。
+
+
+== 对比
+ 
+接下来，我们使用mysql5.7.22版本来对比一下三种格式下的日志输出情况。
+
+1、首先开启binlog，登录mysql，查看当前设置的格式
+
+----
+mysql> show variables like '%format%';
++---------------------------+-------------------+
+| Variable_name             | Value             |
++---------------------------+-------------------+
+| binlog_format             | ROW         |
+| date_format               | %Y-%m-%d          |
+| datetime_format           | %Y-%m-%d %H:%i:%s |
+| default_week_format       | 0                 |
+| innodb_default_row_format | dynamic           |
+| innodb_file_format        | Barracuda         |
+| innodb_file_format_check  | ON                |
+| innodb_file_format_max    | Barracuda         |
+| time_format               | %H:%i:%s          |
++---------------------------+-------------------+
+9 rows in set (0.01 sec)
+----
+ 
+2、可以看到现在的格式是ROW，也是默认的格式。现在来插入一条新数据，看看binlog记录了什么内容
+
+----
+mysql> use test;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> show tables;
++----------------+
+| Tables_in_test |
++----------------+
+| user           |
++----------------+
+1 row in set (0.00 sec)
+
+mysql> desc user;
++-------+-------------+------+-----+---------+----------------+
+| Field | Type        | Null | Key | Default | Extra          |
++-------+-------------+------+-----+---------+----------------+
+| id    | bigint(20)  | NO   | PRI | NULL    | auto_increment |
+| name  | varchar(50) | YES  |     | NULL    |                |
++-------+-------------+------+-----+---------+----------------+
+2 rows in set (0.01 sec)
+
+mysql> select * from user;
+Empty set (0.00 sec)
+----
+ 
+刷新一下binlog，使其新开文件来记录日志，然后插入一条新数据：
+
+----
+mysql> flush logs;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> insert into user values(null, 'zhansan');
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from user;
++----+---------+
+| id | name    |
++----+---------+
+|  1 | zhansan |
++----+---------+
+1 row in set (0.00 sec)
+----
+ 
+现在看看binlog的内容：
+
+----
+mysql> show master logs;
++------------------+-----------+
+| Log_name         | File_size |
++------------------+-----------+
+| mysql-bin.000001 |       578 |
+| mysql-bin.000002 |       424 |
++------------------+-----------+
+2 rows in set (0.00 sec)
+----
+ 
+很明显，刚才的insert日志记录在第二个日志文件中，查看它：
+
+----
+root@ubuntu:~# mysqlbinlog -v /var/log/mysql/mysql-bin.000002 
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+# at 4
+#190827 16:27:18 server id 1  end_log_pos 123 CRC32 0x1bbe1d23  Start: binlog v 4, server v 5.7.27-0ubuntu0.16.04.1-log created 190827 16:27:18
+# Warning: this binlog is either in use or was not closed properly.
+BINLOG '
+ZulkXQ8BAAAAdwAAAHsAAAABAAQANS43LjI3LTB1YnVudHUwLjE2LjA0LjEtbG9nAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAEzgNAAgAEgAEBAQEEgAAXwAEGggAAAAICAgCAAAACgoKKioAEjQA
+ASMdvhs=
+'/*!*/;
+# at 123
+#190827 16:27:18 server id 1  end_log_pos 154 CRC32 0xeab712e4  Previous-GTIDs
+# [empty]
+# at 154
+#190827 16:28:26 server id 1  end_log_pos 219 CRC32 0x5bfe24dc  Anonymous_GTID  last_committed=0        sequence_number=1       rbr_only=yes
+/*!50718 SET TRANSACTION ISOLATION LEVEL READ COMMITTED*//*!*/;
+SET @@SESSION.GTID_NEXT= 'ANONYMOUS'/*!*/;
+# at 219
+#190827 16:28:26 server id 1  end_log_pos 291 CRC32 0xfc3cf1c9  Query   thread_id=3     exec_time=0     error_code=0
+SET TIMESTAMP=1566894506/*!*/;
+SET @@session.pseudo_thread_id=3/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=1436549152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C utf8 *//*!*/;
+SET @@session.character_set_client=33,@@session.collation_connection=33,@@session.collation_server=8/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+# at 291
+#190827 16:28:26 server id 1  end_log_pos 341 CRC32 0xc87b2a61  Table_map: `test`.`user` mapped to number 108
+# at 341
+#190827 16:28:26 server id 1  end_log_pos 393 CRC32 0x4d0c5d5a  Write_rows: table id 108 flags: STMT_END_F
+
+BINLOG '
+qulkXRMBAAAAMgAAAFUBAAAAAGwAAAAAAAEABHRlc3QABHVzZXIAAggPAjIAAmEqe8g=
+qulkXR4BAAAANAAAAIkBAAAAAGwAAAAAAAEAAgAC//wBAAAAAAAAAAd6aGFuc2FuWl0MTQ==
+'/*!*/;
+### INSERT INTO `test`.`user`
+### SET
+###   @1=1
+###   @2='zhansan'
+# at 393
+#190827 16:28:26 server id 1  end_log_pos 424 CRC32 0x124c9d21  Xid = 25
+COMMIT/*!*/;
+SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+----
+ 
+这里的日志内容存在着BASE64的编码格式记录，可以使用``--base64-output=decode-rows``参数来对其进行解码。
+
+3、更改binlog格式为 `STATEMENT`：
+注意：这里直接修改了会话级别的格式，而不是全局，重新登录Mysql客户端后会还原成默认的ROW格式。
+
+----
+mysql> set binlog_format='STATEMENT';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> show variables like 'binlog%';
++--------------------------------------------+--------------+
+| Variable_name                              | Value        |
++--------------------------------------------+--------------+
+| binlog_cache_size                          | 32768        |
+| binlog_checksum                            | CRC32        |
+| binlog_direct_non_transactional_updates    | OFF          |
+| binlog_error_action                        | ABORT_SERVER |
+| binlog_format                              | STATEMENT    |
+| binlog_group_commit_sync_delay             | 0            |
+| binlog_group_commit_sync_no_delay_count    | 0            |
+| binlog_gtid_simple_recovery                | ON           |
+| binlog_max_flush_queue_time                | 0            |
+| binlog_order_commits                       | ON           |
+| binlog_row_image                           | FULL         |
+| binlog_rows_query_log_events               | OFF          |
+| binlog_stmt_cache_size                     | 32768        |
+| binlog_transaction_dependency_history_size | 25000        |
+| binlog_transaction_dependency_tracking     | COMMIT_ORDER |
++--------------------------------------------+--------------+
+15 rows in set (0.00 sec)
+----
+ 
+刷新日志，修改原来的数据：
+
+----
+mysql> flush logs;
+Query OK, 0 rows affected (0.00 sec)
+mysql> update user set name = 'lisi' where id=1;
+Query OK, 1 row affected (0.01 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+mysql> select * from user;
++----+------+
+| id | name |
++----+------+
+|  1 | lisi |
++----+------+
+1 row in set (0.00 sec)
+----
+ 
+再次查看日志：
+
+----
+root@ubuntu:~# mysqlbinlog -v /var/log/mysql/mysql-bin.000003
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+# at 4
+#190827 16:39:15 server id 1  end_log_pos 123 CRC32 0x2734f7e2  Start: binlog v 4, server v 5.7.27-0ubuntu0.16.04.1-log created 190827 16:39:15
+# Warning: this binlog is either in use or was not closed properly.
+BINLOG '
+M+xkXQ8BAAAAdwAAAHsAAAABAAQANS43LjI3LTB1YnVudHUwLjE2LjA0LjEtbG9nAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAEzgNAAgAEgAEBAQEEgAAXwAEGggAAAAICAgCAAAACgoKKioAEjQA
+AeL3NCc=
+'/*!*/;
+# at 123
+#190827 16:39:15 server id 1  end_log_pos 154 CRC32 0xd42452e9  Previous-GTIDs
+# [empty]
+# at 154
+#190827 16:39:44 server id 1  end_log_pos 219 CRC32 0x27ebdb2e  Anonymous_GTID  last_committed=0        sequence_number=1       rbr_only=no
+SET @@SESSION.GTID_NEXT= 'ANONYMOUS'/*!*/;
+# at 219
+#190827 16:39:44 server id 1  end_log_pos 298 CRC32 0xcd8aef24  Query   thread_id=3     exec_time=0     error_code=0
+SET TIMESTAMP=1566895184/*!*/;
+SET @@session.pseudo_thread_id=3/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=1436549152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C utf8 *//*!*/;
+SET @@session.character_set_client=33,@@session.collation_connection=33,@@session.collation_server=8/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+# at 298
+#190827 16:39:44 server id 1  end_log_pos 412 CRC32 0x72fa70d8  Query   thread_id=3     exec_time=0     error_code=0
+use `test`/*!*/;
+SET TIMESTAMP=1566895184/*!*/;
+update user set name = 'lisi' where id=1
+/*!*/;
+# at 412
+#190827 16:39:44 server id 1  end_log_pos 443 CRC32 0xdc231d7d  Xid = 34
+COMMIT/*!*/;
+SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+----
+ 
+可以看到，STATEMENT的日志记录了SQL语句，但是ROW的没有记录SQL，而是使用编码规则记录了修改后的数据。
+
+4、同样的，将binlog_format改为MIXED，再刷新日志，更新数据，得到跟STATEMENT相同的日志，说明数据的INSERT、UPDATE、DELETE等操作还是使用STATEMENT来操作，这里没有编写存储过程和函数，就不测试MIXED时使用ROW来记录的情况了。
+
+== 总结
+ 
+Binlog有STATEMENT、ROW、MIXED三种格式，它们各有优缺点，需要根据自身业务需求来进行选择，从5.7.22版本开始，Mysql默认的格式由STATEMENT改为了ROW。

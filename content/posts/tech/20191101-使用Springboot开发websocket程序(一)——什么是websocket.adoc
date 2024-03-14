@@ -1,0 +1,132 @@
+---
+title: 使用Springboot开发websocket程序(一)——什么是websocket
+slug: springboot-websocket-intro
+img: /images/thumbnail/attachment/20191101/ee60860e2fcd409b9b0c246eba0f26a7.png
+categories:
+  - Spring
+tags:
+  - websocket
+description: >-
+  在互联网飞速发展的当代，浏览器和服务器之间的实时通信已经越来越重要，传统的HTTP协议难以解决实时通信的需求。因此，由HTML5定义的websocket协议应运而生。WebSocket是HTML5定义的浏览器与服务器实时通信的协议，它基于HTTP协议来完成与服务器的握手。目前，主流浏览器都已经支持websocket，如果浏览器不支持，也可以使用SocketJS来模拟websocket的API。WebSocket已经被广泛应用在网页游戏、视频直播、电商等等场景。
+date: 2019-11-01 11:51:49
+updated: 2019-12-14 20:34:27
+---
+
+= 使用Springboot开发websocket程序(一)——什么是websocket
+:author: belonk.com
+:date: 2019-12-14
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: websocket,html5,socketjs,spring boot,spring,http,握手
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: websocket
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在互联网飞速发展的当代，浏览器和服务器之间的实时通信已经越来越重要，传统的HTTP协议难以解决实时通信的需求。因此，由HTML5定义的websocket协议应运而生。这里我将用三篇文章来介绍websocket，并使用Springboot开发一个web聊天室的程序，其中会使用原生websocket协议开发，也会单独来介绍使用STOMP协议来开发。
+
+在本篇，我们先看看什么是websocket。
+
+
+== 诞生背景
+ 
+由于HTTP是无状态的协议，采用请求响应模型，服务端是不能主动推送信息给客户端的，只能由客户端发起请求，然后再由服务端进行响应。如果服务端数据有变化，必须通过客户端来获取，服务端是不能主动推送的。要解决实时交换数据的需求，一般的做法是通过轮询（还有http long pull和streaming两种方案，参见这篇 https://spring.io/blog/2012/05/08/spring-mvc-3-2-preview-techniques-for-real-time-updates/[博文]）来获得服务端最新信息，即：客户端（浏览器）每隔一段时间（比如1秒）向服务端发起请求，以获取最新的数据。
+
+我们知道，HTTP是一种无状态协议，客户端请求然后服务端响应，则会断开TCP连接。因此，使用轮询的弊端是，客户端不断与服务端建立连接、断开连接，效率非常低下，且非常消耗服务器资源，并且也不是真正意义上的实时。
+
+因此，我们需要一种技术，能够让服务端主动推送数据给客户端，而且消耗资源很少，效率更高。
+
+
+== 什么是websocket
+ 
+WebSocket是一种在 单个TCP连接上进行全双工通信的协议，2008诞生，在2011年被IETF定为标准  https://tools.ietf.org/html/rfc6455[RFC6455]，并由&nbsp; https://tools.ietf.org/html/rfc7936[RFC7936]补充规范。WebSocket API也被W3C定为标准，目前各大主流浏览器都已经支持WebSocket。
+
+WebSocket使得客户端和服务器之间的数据交换变得更加简单，允许服务端主动向客户端推送数据，这些数据通常包括两种：**文本和二进制**。在WebSocket API中，浏览器和服务器只需要完成一次握手，两者之间就直接可以创建持久性的连接，并进行双向数据传输。
+
+
+== 客户端与服务器的握手
+ 
+WebSocket基于Http协议来完成握手(Handshake)阶段，在该阶段，客户端需要将服务端请求协议升级，由原来的HTTP协议升级为WebSocket协议，如果服务端能够支持WebSocket，则会告诉客户端升级成功。之后，双方就建立了一条快速通道，可以互相进行数据交互，后续通信就采用WebSocket协议来完成。
+
+.websocket与http的区别（图片来源于网络
+image::/images/attachment/20191101/7d1e882ce7ba43678082c346353a78f8.png[]
+
+
+我们来简单看一下websocket与服务端的握手过程。WebSocket请求头跟HTTP请求头类似，只是添加了一些特殊的头标签，一个握手请求的头信息如下：
+
+ 
+[source,block]
+----
+GET /chat HTTP/1.1 
+Host: server.example.com 
+Upgrade: websocket 
+Connection: Upgrade 
+Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw== 
+Sec-WebSocket-Protocol: chat, superchat 
+Sec-WebSocket-Version: 13 
+Origin: http://example.com
+----
+ 
+可以看到，websocket在握手阶段，采用的仍然是HTTP协议，但是请求添加了一些websocket特有的信息：
+
+* Upgrade: websocket：就是在请求服务端升级通信协议为WebSocket
+* Sec-WebSocket-Key：浏览器随机生成的一个base64的加密字符串，服务器用它来进行校验请求是来自websocket客户端
+* Sec-WebSocket-Protocol: 告诉服务器不直接使用websocket，而是使用websocket协议的子协议，例如后文将要介绍的STOMP就是websocket协议的子协议来通信
+* Sec-WebSocket-Version:&nbsp;使用websocket协议的版本号
+
+请求发送到服务器，如果服务器也支持websocket则升级成功，并响应如下头信息：
+
+[source,block]
+----
+HTTP/1.1 101 Switching Protocols 
+Upgrade: websocket 
+Connection: Upgrade 
+Sec-WebSocket-Accept: HSmrc0sMlYUkAGmm5OPpG2HaGWk= 
+Sec-WebSocket-Protocol: chat
+----
+ 
+这里，websocket握手完成服务器则会响应101状态码，至此，HTTP协议服务就已经结束，后续通信就采用websocket了。
+
+
+== websocket的应用场景
+ 
+浏览器需要与服务端进行实时数据交换时，都可以使用websocket协议。最常见的如视频直播网站，都有聊天室和弹幕功能，巨大的数据量，如果使用HTTP，交过可想而知。另外，网页游戏开发、也包括一些电商类网站的秒杀、团购等等场景，都会用到websocket。
+
+
+== websocket备选方案
+ 
+
+目前，各大浏览器都已经支持websocket，如果仍要兼容老版本的浏览器，或者某些代理服务对websocket协议有一些限制，又或者由于连接保持打开时间过长而被浏览器强制断开，导致出现问题，该怎么办呢？
+
+这时，我们可以使用一些备选方案，比如通过js库来模拟浏览器的websocket api，Spring就提供了对 https://github.com/sockjs/sockjs-protocol[SocketJS]协议的支持。
+
+
+=== SocketJS
+ 
+websocket诞生后，解决浏览器和服务端实时数据交换就有三种方案：websocket、streaming、long polling，如果浏览器支持websocket，我们完全没必要使用后两者了。SocketJS主在解决浏览器不支持websocket时，自动切换其他两种方案来尽可能的模拟websocket的效果，而不需要更改任何代码。相当于做了一个适配层，在不同的浏览器之间都可以使用类似websocket的效果。
+
+SocketJS的组成：
+
+* 定义的 https://github.com/sockjs/sockjs-protocol[SockJS protocol]
+* https://github.com/sockjs/sockjs-client/[SockJS JavaScript client]：SocketJS客户端
+* SockJS服务端实现，例如Spring的spring-websocket模块已经支持socketjs
+* 此外，spring-websocket也提供了SocketJS Java Client
+
+SocketJS与服务器的连接时，SocketJS客户端先向服务端发送``GET /info``的HTTP请求，来获取服务端信息，然后决定使用哪种数据传输方案(transport)，如果支持websocket，则首选websocket，否则，使用streaming，如果还不支持则选择long polling。
+
+关于SocketJS协议，可以看官方文档： https://github.com/sockjs/sockjs-protocol[https://github.com/sockjs/sockjs-protocol]。
+
+
+== 总结
+ 
+WebSocket是HTML5定义的浏览器与服务器实时通信的协议，它基于HTTP协议来完成与服务器的握手。目前，主流浏览器都已经支持websocket，如果浏览器不支持，也可以使用SocketJS来模拟websocket的API。WebSocket已经被广泛应用在网页游戏、视频直播、电商等等场景。

@@ -1,0 +1,218 @@
+---
+title: Spring Boot之基础入门
+slug: spring-boot-intro
+img: /images/thumbnail/attachment/20190615/0956f9795f554e6f94b43c7354deafeb.png
+categories:
+  - Spring
+tags:
+  - springboot
+description: >-
+  Spring
+  Boot是Spring的开源项目，其目的是让开发者可以简单、快速地使用Spring框架创建生产级的应用，其目的不是为了替换Spring，而是简化Spring的使用。Spring
+  Boot可以看做是对Spring框架的二次封装，不过，在封装的同时也还提供了许多高级功能。
+date: 2018-05-22 18:56:09
+updated: 2019-06-15 08:49:29
+---
+
+= Spring Boot之基础入门
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring,spring boot,starter,微服务,maven
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: springboot
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+最近在了解微服务和Spring Cloud相关的东西，Spring Cloud的微服务体系基于Spring&nbsp;boot，所以了解Spring Boot是前提和基础。本文将介绍Spring Boot基础内容，包括简介、环境搭建、示例代码等，所使用JDK版本为JDK8，构建工具为Maven3.5。
+
+== 简介
+ 
+Spring Boot是Spring的开源项目，其目的是让开发者可以简单、快速地使用Spring框架创建生产级的应用，其目的不是为了替换Spring，而是简化Spring的使用。Spring Boot可以看做是对Spring框架的二次封装，不过，在封装的同时也还提供了许多高级功能。
+
+Spring Boot特性如下：
+
+* 创建独立的Spring应用程序
+* 直接嵌入Tomcat、Jetty或Undertow(无需部署WAR文件)
+* 为项目构建提供了许多的“starter”，适用于整合不同的框架，从而简化您的构建工具（Maven）配置
+* 尽可能自动配置Spring
+* 提供可生产的特性，如度量指标、健康检查和集中配置
+* 绝对没有代码生成，也不需要XML配置
+
+ 
+
+== 系统需求
+ 
+Spring Boot需要JDK8或以上版本，嵌入的tomcat8.5所支持的Servlet版本为3.1，如下表所示：
+
+
+|====
+|依赖|&nbsp;版本
+
+|JDK|8或以上版本
+
+|Maven|3.2或以上版本
+
+|Servlet|3.1+
+
+|====
+ 
+
+== 构建应用
+ 
+现在，我们来一步步构建一个Hello&nbsp;world应用。
+
+
+=== 构建
+ 
+Spring Boot项目是基于Maven构建，完全遵循Maven的项目构建规则和目录规范。所以，你可以直接使用开发工具或者maven命令行来创建Spring Boot项目。需要注意的饿是，如果是Web项目，而且打包的格式为jar，那么与标准Maven项目不同的是不能使用src/main/webapp目录。
+
+也可以访问 https://start.spring.io/[https://start.spring.io/]来快速构建应用，选择对应的构建工具、语言和版本信息，填写开发信息并加入依赖下载，然后导入开发工具即可：
+
+
+image::/images/attachment/20180522/95642f23a3a64c059cd53cb10a142506.png[]
+
+
+
+=== 配置Pom.xml
+ 
+应用创建好了，我们来配置pom.xml，引入Spring&nbsp;boot相关的依赖。
+
+**1、继承parent节点**
+
+Spring为我们提供了顶层的parent节点，用来定义Spring Boot使用的版本，配置如下：
+
+[source,xml]
+----
+<parent>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-parent</artifactId>
+<version>1.5.10.RELEASE</version>
+<relativePath/> 
+</parent>
+----
+ 
+配置过后，pom.xml就继承了Spring Boot对应版本的maven配置，包括Spring的版本，配置文件引入位置，以及Maven插件相关的配置。
+
+**2、配置JDK版本**
+
+然后，配置我们使用的JDK版本：
+
+[source,xml]
+----
+<properties>
+<java.version>1.8</java.version>
+</properties>
+----
+ 
+这个配置告诉Spring Boot，工程使用的JDK版本是1.8，使用该版本来编译代码。
+
+**3、引入starter**
+
+前边说过，Spring Boot提供了一系列的start，来简化依赖配置和框架整合。这里，我们写一个简单的web请求，所以需要引入web相关的start，具体如下：
+
+[source,xml]
+----
+<dependencies>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-devtools</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+</dependencies>
+----
+ 
+* spring-boot-devtools：Spring Boot提供的开发工具，包括设置开发适用的默认属性值、热加载等简化开发的功能；
+* spring-boot-starter：核心的starter，包括自动配置支持、日志记录和YAML配置文件支持等。
+* spring-boot-starter-web：web所需的starter，包括RESTful，Spring MVC相关支持等，默认使用Tomcat作为的嵌入式容器
+
+ 
+
+=== 编写代码
+ 
+首先，我们编写一个rest的``HelloWorldController``：
+
+[source,java]
+----
+@RestController
+public class HelloWorldController {
+    private static Logger log = LoggerFactory.getLogger(HelloWorldController.class);
+
+    @GetMapping("/")
+    public String helloworld() {
+        return "hello world!";
+    }
+}
+----
+ 
+然后，编写SpringBoot启用类HelloWorld：
+
+[source,java]
+----
+@SpringBootApplication
+public class HelloWorld {
+    public static void main(String[] args) {
+        SpringApplication.run(HelloWorld.class, args);
+    }
+}
+----
+ 
+可以看到，启动类包含一个main方法，并且使用了``SpringBootApplication``注解，该注解启用自动配置和组件扫描机制，是一个简化注解，相当于声明``@Configuration``、``@EnableAutoConfiguration``和``@ComponentScan``。
+
+
+=== 运行程序
+ 
+现在运行HelloWorld的main方法，启动Spring Boot，可以看到如下的启动信息：
+
+[source,java]
+----
+19:59:49.398 [main] DEBUG org.springframework.boot.devtools.settings.DevToolsSettings - Included patterns for restart : []
+19:59:49.402 [main] DEBUG org.springframework.boot.devtools.settings.DevToolsSettings - Excluded patterns for restart : [/spring-boot-starter/target/classes/, /spring-boot-autoconfigure/target/classes/, /spring-boot-starter-[\w-]+/, /spring-boot/target/classes/, /spring-boot-actuator/target/classes/, /spring-boot-devtools/target/classes/]
+19:59:49.404 [main] DEBUG org.springframework.boot.devtools.restart.ChangeableUrls - Matching URLs for reloading : [file:/D:/work/03-%e7%bc%96%e7%a0%81/springboot-demo/01-helloworld/target/classes/]
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::       (v1.5.10.RELEASE)
+
+2018-05-22 19:59:50.336  INFO 13280 --- [  restartedMain] com.belonk.HelloWorld                    : Starting HelloWorld on DESKTOP-SUN with PID 13280 (started by belonk in D:\work\03-编码\springboot-demo)
+2018-05-22 19:59:50.337  INFO 13280 --- [  restartedMain] com.belonk.HelloWorld                    : No active profile set, falling back to default profiles: default
+2018-05-22 19:59:50.468  INFO 13280 --- [  restartedMain] ationConfigEmbeddedWebApplicationContext : Refreshing org.springframework.boot.context.embedded.AnnotationConfigEmbeddedWebApplicationContext@431dc203: startup date [Tue May 22 19:59:50 CST 2018]; root of context hierarchy
+2018-05-22 19:59:54.223  INFO 13280 --- [  restartedMain] s.b.c.e.t.TomcatEmbeddedServletContainer : Tomcat initialized with port(s): 8080 (http)
+…………………………
+----
+ 
+现在浏览器访问：http://localhost:8080/，可以按到正确返回了hello&nbsp;world。
+
+其实，我们只是在pom.xml简单配置了一些信息，然后写了两个类：一个controller，一个启动类，并在启动类上使用了SpringBootApplication注解，仅此而已，但是应用能够正确的工作。可以，Spring Boot为我们做了大量的自动化处理，我们不需要Spring配置文件，不需要配置bean，甚至不需要web.xml，一切都有Spring Boot自动完成。
+
+
+== 总结
+ 
+我们构建了一个最简单的Spring Boot应用，整体了解了Spring Boot应用的开发流程。尽管Spring Boot为我们极大的屏蔽了细节，但是这也带来了很多困惑，接下来我们将慢慢深入学习。
+
+
+== 参考文档
+ 
+* https://docs.spring.io/spring-boot/docs/current-SNAPSHOT/reference/htmlsingle/[https://docs.spring.io/spring-boot/docs/current-SNAPSHOT/reference/htmlsingle/]

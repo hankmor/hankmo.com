@@ -1,0 +1,103 @@
+---
+title: ubuntu下ssh关闭密码登陆，采用公钥认证登陆
+slug: auth-with-public-key-by-ssh-on-ubuntu
+img: /images/thumbnail/attachment/20180228/19c76a7d2e6348d3ba2c1a2b1311102b.png
+categories: 开发运维
+tags:
+  - ssh
+  - 公钥
+  - 安全
+  - git
+description: ubuntu下如何关闭密码登陆，采用ssh公钥认证登陆？
+date: 2017-08-14 13:08:20
+updated: 2018-05-29 18:43:29
+---
+
+= ubuntu下ssh关闭密码登陆，采用公钥认证登陆
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: ssh,公钥,安全,sshd_config,git
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: ssh,公钥,安全,git
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+
+image::/images/attachment/20170814/ba8f01cf12d14f349ee6d7c17e3a3511.png[]
+
+
+前段时间，公司内网的机器被黑客入侵，最后分析原因，在于我们希望通过外网访问公司的git仓库，然后开放了22端口，而此前git所在机器上被病毒感染过……
+
+由于git是单独的服务器，所以我们希望只有公钥认证的用户可以授权访问该服务器，否则拒绝访问。因此，我们决定采用以下方案：
+
+禁止用户通过ssh的账号密码登陆，而是用公钥私钥认证登陆。具体做法如下：
+
+
+== 修改SSH配置文件sshd_config
+ 
+
+注意是sshd_config，修改ssh_config无效
+
+编辑sshd_config文件:
+
+----
+$ vi /etc/ssh/sshd_config
+----
+
+禁用密码验证，默认是yes
+
+----
+$ vi /etc/ssh/sshd_config
+----
+
+启用密钥验证
+
+----
+$ vi /etc/ssh/sshd_config
+----
+ 
+指定公钥数据库文件
+
+----
+$ vi /etc/ssh/sshd_config
+----
+
+== 重启ssh服务
+ 
+----
+$ vi /etc/ssh/sshd_config
+----
+
+由于服务器有两个用户：root管理员用户和git用户，而所有访问代码的必须通过git用户访问，git本身已经通过公钥私钥登陆，所以对原来访问代码仓库的客户端没有影响。而目前root用户禁止了密码登陆，如果进行授权呢？
+
+很简单，将授权以root用户登录服务器的客户端公钥加入到/root/.ssh/authorized_keys文件中，客户端登陆时，带上客户端的私钥信息，就可以完成认真并成功以root用户登录，我用的mobXterm工具，其他工具类似，链接选择私钥如下：
+
+image::/images/attachment/20170814/010fb01f998c4519b37d71f56e11cce3.png[]
+
+这样，就完成了只能公钥认证通过的用户才能登陆服务器的功能。
+
+== 注意事项
+
+=== 保留会话窗口
+ 
+在修改sshd_config文件并重启ssh之前，先保留一个链接到服务器的会话，否则如果ssh配置出现错误，将导致不能链接到服务器。
+
+=== ssh配置文件
+ 
+修改sshd_config而非ssh_config。
+
+=== 为何不修改ssh默认的22端口
+ 
+因为链接git仓库客户端较多，如果修改了22端口，每一个客户端都要重新设置代码仓库的remote地址，处理起来较为麻烦，如果如何处理请自行百度。当然为了更为安全，建议还是修改ssh默认的22端口。

@@ -1,0 +1,226 @@
+---
+title: Java设计模式(13)-外观模式
+slug: java-facade-pattern
+date: 2020/12/8
+img: /images/thumbnail/ice-snow.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 外观模式
+description: >-
+  外观模式（Facade
+  Pattern），也叫门面模式，是一种经常被使用的结构性设计模式。DP对其定义如下：通过为多个复杂的子系统提供一个一致的接口，而使这些子系统更加容易被访问。
+updated:
+---
+
+= Java设计模式(13)-外观模式
+:key_word: 外观模式,门面模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2020/12/8
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+在现实生活中有很多这样的例子，比如，炒股，散户股民大多对股票金融知识缺乏，所以他们想要炒股赚钱往往看运气，但是散户想要保证低风险的投资和拿到稳定回报，怎么办呢？大多数人会选择购买基金，相对于股票，散户们不需要专业知识，只需要将自己交给基金会，由专业人士替他们购买股票，赚到钱后再按资金比例分给他们，这样就大大降低了投资风险。
+
+.股票与基金示意图
+image::/images/attachment/designpattern/facade-stock.png[]
+
+基金作为一个中间对象，它解决了股民专业知识匮乏却也能投资股票赚钱的需求。其实，这就是外观模式。
+
+== 外观模式简介
+
+外观模式（Facade Pattern），也叫门面模式，是一种经常被使用的结构性设计模式。DP对其定义如下：通过为多个复杂的子系统提供一个一致的接口，而使这些子系统更加容易被访问。
+
+还记得 <</2020/05/27/seven-principles-for-software-design.html#lkp, 迪米特法则>> 吗？
+
+[NOTE]
+====
+迪米特法则（Law of Demeter，LoD），又叫作最少知识原则（Least Knowledge Principle，LKP)，描述了如何设计对象之间的依赖关系，它的定义如下：一个对象对自己所依赖的对象知道的越少越好。更进一步的意思，即：只与你的直接朋友交谈，不跟“陌生人”说话（Talk only to your immediate friends and not to strangers）。
+====
+
+外观模式严格体现了迪米特法则，它降低了系统之间的耦合性和复杂度，提高了系统的可维护性。
+
+外观模式有三种角色：::
+. 外观(Facade)角色：整合多个子系统，为其提供统一的接口实以现业务需求；
+. 子系统(SubSystem)角色: 实现某方面的业务功能，供外观角色调用，但是并不知道外观角色的存在；
+. 客户端(Client)角色：调用外观角色访问各个子系统实现不同的业务功能。
+
+其类结构如下图所示：
+
+.外观模式类图
+image::/images/attachment/designpattern/facade-class.png[]
+
+我们在软件开发中，经常会有意无意的使用外观模式。比如，MVC模式业务开发中，Service层会屏蔽Dao层的实现细节，对外只暴露一个方法，该方法内部可能会需要使用多个Dao来完成数据库操作。又比如现在流行的微服务架构，API网关就承担着外观角色，客户端直接访问网关，而不会直接去请求各个具体的服务。
+
+.API网关示意图
+image::/images/attachment/designpattern/facade-gateway.png[]
+
+再举一个现在比较专注的例子：智能家居。当你装上了智能家居系统，那么你就可以一键控制家用电器的开关，是不是很舒服？比如，你早上起床，控制器会一键为你打开电动窗帘、播放闹钟、关闭空调等等，再也不用一个一个去操控了。我们看看怎么使用外观模式解决这个问题。
+
+== 应用案例：智能家居
+
+假设我家安装了一些智能设备：智能空调、智能音响、自动窗帘、智能电灯等，现在我可不想一个个去控制它们。是时候请出超级管家了，它来负责一键操作这些设备。设计类图如下:
+
+.智能家居简易设计类图
+image::/images/attachment/designpattern/facade-demo.png[]
+
+智能管家作为指挥中心，它具有问好、叫醒起床、上班前告别、下班回家欢迎等功能，当然，假设我们可以通过语音和App操控它。这些功能，智能管家自己不会实现，而是通过调用下边的各个智能设备共同完成。我们看看代码如何实现。
+
+1、智能设备，多个子系统，提供了自身的功能方法。
+
+[source,java]
+----
+// 窗帘
+class SmartCurtain {
+	public void open() {
+		System.out.println("打开窗帘");
+	}
+
+	public void close() {
+		System.out.println("关闭窗帘");
+	}
+}
+
+// 灯光
+class SmartLight {
+	public void open() {
+		System.out.println("打开灯光");
+	}
+
+	public void close() {
+		System.out.println("关闭灯光");
+	}
+}
+
+// 空调
+class AirConditioner {
+	public void open() {
+		System.out.println("打开空调");
+	}
+
+	public void close() {
+		System.out.println("关闭空调");
+	}
+}
+
+// 智能音响
+class SmartSoundBox {
+	public void play() {
+		System.out.println("播放音乐");
+	}
+
+	public void stop() {
+		System.out.println("停止播放音乐");
+	}
+}
+----
+
+2、外观类：智能管家，它需要去调用各个设备提供的方法，来完成自己的功能
+
+[source,java]
+----
+// Facade类，管家
+class SmartHouseKeeper {
+	private final String name;
+	private final SmartCurtain smartCurtain = new SmartCurtain();
+	private final SmartLight smartLight = new SmartLight();
+	private final AirConditioner airConditioner = new AirConditioner();
+	private final SmartSoundBox smartSoundBox = new SmartSoundBox();
+
+	public SmartHouseKeeper(String name) {
+		this.name = name;
+		this.sayHello();
+	}
+
+	public void sayHello() {
+		System.out.println("你好，小主，我是你的智能语音机器人管家" + this.name + ", 你可以直接跟我语音交流哦！");
+	}
+
+	// 叫醒起床
+	public void wakingUp() {
+		System.out.println("小主，起床时间到了，一天之计在于晨，不要贪睡哦...");
+		smartSoundBox.play();
+		smartLight.open();
+		smartCurtain.open();
+	}
+
+	// 出去工作
+	public void goodbyeForGoingToWork() {
+		System.out.println("小主，距离梦想又近了一步，加油...");
+		smartSoundBox.stop();
+		airConditioner.close();
+		smartLight.close();
+	}
+
+	// 回家
+	public void welcomeBackHome() {
+		System.out.println("小主，工作一天辛苦了，欢迎回家...");
+		smartLight.open();
+		airConditioner.open();
+		smartSoundBox.play();
+	}
+
+	// 睡觉
+	public void goodNightToSleep() {
+		System.out.println("小主，夜深了，早点休息哦...");
+		smartCurtain.close();
+		smartSoundBox.stop();
+		smartLight.close();
+	}
+}
+----
+
+智能管家聚合了各个智能设备，以便调用其方法。
+
+3、客户端：使用智能管家的类，直接调用其方法完成功能
+
+[source,java]
+----
+public class FacadePatternDemo {
+	public static void main(String[] args) {
+		// 案例：智能家居
+		SmartHouseKeeper smartHouseKeeper = new SmartHouseKeeper("samy");
+		smartHouseKeeper.wakingUp();
+		smartHouseKeeper.goodbyeForGoingToWork();
+		smartHouseKeeper.welcomeBackHome();
+		smartHouseKeeper.goodNightToSleep();
+	}
+}
+----
+
+运行客户端代码，输出：
+
+----
+你好，小主，我是你的智能语音机器人管家samy, 你可以直接跟我语音交流哦！
+小主，起床时间到了，一天之计在于晨，不要贪睡哦...
+播放音乐
+打开灯光
+打开窗帘
+小主，距离梦想又近了一步，加油...
+停止播放音乐
+关闭空调
+关闭灯光
+小主，工作一天辛苦了，欢迎回家...
+打开灯光
+打开空调
+播放音乐
+小主，夜深了，早点休息哦...
+关闭窗帘
+停止播放音乐
+关闭灯光
+----
+
+== 总结
+
+外观模式相对而言比较简单，它体现了设计模式的迪米特法则，减少了系统的耦合性，降低复杂性的同事提升了系统的可维护性。但是，也有一些缺点，比如增加子系统时，外观角色需要改变，客户端代码也可能修改，违背了开闭原则。但是，其优点远高于其缺点，外观模式使用很普遍，在开发工程中都会有意无意的使用到它。

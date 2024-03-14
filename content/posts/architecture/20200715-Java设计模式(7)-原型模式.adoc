@@ -1,0 +1,382 @@
+---
+title: Java设计模式(7)-原型模式
+slug: java-prototype-pattern
+date: 2020/07/15
+img: /images/thumbnail/green-land.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 原型模式
+description: >-
+  某些情况下，我们需要重复的创建多个对象，但是这些对象仅仅只有某几个属性不一致，大部分的信息都是相同的，如果使用传统的构造函数来创建对象，我们需要不断的实例化对象，并且反复调用属性的set方法来设置值，而这些值大多都是相同的。有没有一种模式，能够快速而高效的创建这些差别不大的对象呢？这就需要使用到原型模式。
+---
+
+[[designpattern-prototype]]
+= Java设计模式(7)-原型模式
+:key_word: 
+:Author: belonk.com belonk@126.com
+:Date: 2020/07/15
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+某些情况下，我们需要重复的创建多个对象，但是这些对象仅仅只有某几个属性不一致，大部分的信息都是相同的，如果使用传统的构造函数来创建对象，我们需要不断的实例化对象，并且反复调用属性的set方法来设置值，而这些值大多都是相同的。有没有一种模式，能够快速而高效的创建这些差别不大的对象呢？这就需要使用到原型模式。
+
+== 什么是原型模式
+
+原型模式（Prototype Pattern），它的基本思想是：创建一个对象实例作为原型，然后不断的**复制**（或者叫克隆）这个原型对象来创建该对象的新实例，而不是反复的使用构造函数来实例化对象。
+
+原型模式创建对象，调用者无需关心对象创建细节，只需要调用复制方法，即可得到与原型对象属性相同的新实例，方便而且高效。
+
+举一个最常见的例子，猴王孙悟空本领大，拔下猴毛一吹，就可以得到很多个与自己一模一样的猴子猴孙。这里就可以使用到原型模式，来复制孙悟空。另外，再举个生活中的例子，刚毕业找工作的同学们，都需要填写病打印纸质的简历，但是这些简历信息只有你想要投递的公司信息不一样，其他的信息如个人基本信息、教育经历、工作经验等都是相同的，我们就可以使用原型模式复制简历，然后修改公司信息即可，而无需重复创建多个简历，在一遍遍填写。
+
+== 原型模式结构
+
+原型模式的结构如下图所示：
+
+.原型模式结构图
+image::/images/attachment/designpattern/prototype-struacture.png[]
+`
+结构分为三个部分：
+
+* Prototype: 原型抽象接口，提供复制（`clone`）方法，以便实现类实现该方法来复制自己
+* ConcretePrototype: 具体原型对象，实现 `Prototype` 接口的复制方法来复制自己，从而创建新实例。
+* Client: 负责调用原型对象的复制方法获得原型对象新实例，并按需修改新实例
+
+== Java中的Cloneable接口
+
+Java语言提供了一个 `Cloneable` 接口，这是一个标记型接口，用来表示实现了该接口的对象可以进行克隆，其定义如下：
+
+[source,java]
+----
+public interface Cloneable {
+}
+----
+
+真正的实现克隆的逻辑其实是在 `Object` 类上：
+
+[source,java]
+----
+public class Object {
+	protected native Object clone() throws CloneNotSupportedException;
+    // ……
+}
+----
+
+因此，Java实现原型模式比较方便,只需要实现 `Cloneable` 接口即可，克隆时调用对象自己的 `clone` 方法即可。但是，`clone` 方法是一个native实现，其实它仅仅实现了浅拷贝，稍后再细说。
+
+== 基础示例
+
+接下来，我们编码实现前边所举的猴王孙悟空分身的例子，首先看看常规方式是如何实现的。
+
+=== 常规的实现方式
+
+先来编写一个 `MonkeyKing` 类，它有名称、居住地、技能强度、寿命等属性：
+
+[source,java]
+----
+class MonkeyKing {
+	// 高强度
+	static int HIGH_SKILL_STRENGTH   = 10;
+	// 普通强度
+	static int NORMAL_SKILL_STRENGTH = 5;
+
+	// 姓名
+	private String name;
+	// 地址
+	private String address;
+	// 能力强度
+	private int    skillStrength;
+	// 寿命
+	private int    lifetime;
+
+	// 省略getter、setter
+}
+----
+
+现在猴王拔一根猴毛、吹出猴万个，代码如下：
+
+[source,java]
+----
+public class NoPrototypePatternDemo {
+	public static void main(String[] args) {
+		// 猴王能够分身成多个猴子
+		// 实例化猴王本体
+		MonkeyKing wukong = new MonkeyKing();
+		wukong.setName("孙悟空");
+		wukong.setAddress("花果山");
+		wukong.setSkillStrength(MonkeyKing.HIGH_SKILL_STRENGTH);
+		wukong.setLifetime(Integer.MAX_VALUE);
+		System.out.println("大圣归来：" + wukong);
+		System.out.println("====================");
+
+		// 现在要分身，创建10个，假设除了技能强度不一致，其他属性完全一致
+		for (int i = 0; i < 10; i++) {
+			MonkeyKing replicaMonkey = new MonkeyKing();
+			replicaMonkey.setName("孙悟空");
+			replicaMonkey.setAddress("花果山");
+			replicaMonkey.setSkillStrength(MonkeyKing.NORMAL_SKILL_STRENGTH);
+			replicaMonkey.setLifetime(Integer.MAX_VALUE);
+			System.out.println("分身创建了第 " + i + " 只猴子猴孙：" + replicaMonkey);
+		}
+	}
+}
+----
+
+这种常规的方式，有点是很好理解，缺点也很明显：
+
+1. 相同的属性，都需要调用``set``方法设置一次值
+2. 需要重新创建和初始化对象，效率较低
+3. 本体对象创建后，运行时的状态无法获取
+4. 原型对象改动某个属性，所有新创建的复制对象都需要更改
+
+=== 使用原型模式实现
+
+现在，我们将上边的基础示例改为原型模式实现。
+
+对应前边所说的结构，`Cloneable` 接口就是Prototype接口，只是 `clone` 方法在 `Object` 对象中。
+
+原型对象(ConcretePrototype)的定义如下：
+
+[source,java]
+----
+class MonkeyKing implements Cloneable { // <1>
+	// 高强度
+	static int HIGH_SKILL_STRENGTH   = 10;
+	// 普通强度
+	static int NORMAL_SKILL_STRENGTH = 5;
+
+	// 姓名
+	private String name;
+	// 地址
+	private String address;
+	// 能力强度
+	private int    skillStrength;
+	// 寿命
+	private int    lifetime;
+
+	@Override
+	protected MonkeyKing clone() throws CloneNotSupportedException { // <2>
+		return (MonkeyKing) super.clone();
+	}
+}
+----
+<1> 原型对象必须实现 `Cloneable` 接口，表示自己可以进行克隆
+<2> 按照约定，子类应该重写 `Object` 的 `clone` 方法，当前如果不需要自己实现克隆逻辑，不重写也没什么问题
+
+客户端代码：
+
+[source,java]
+----
+public class BasicPrototypeDemo {
+	public static void main(String[] args) throws CloneNotSupportedException {
+		// 猴王能够分身成多个猴子
+		// 实例化猴王本体，即原型对象，基于该原型对象来创建复制对象
+		MonkeyKing wukong = new MonkeyKing();
+		wukong.setName("孙悟空");
+		wukong.setAddress("花果山");
+		wukong.setSkillStrength(MonkeyKing.HIGH_SKILL_STRENGTH);
+		wukong.setLifetime(Integer.MAX_VALUE);
+		System.out.println("大圣归来：" + wukong);
+		System.out.println("====================");
+
+		// 现在要分身，创建10个，假设除了技能强度不一致，其他属性完全一致
+		for (int i = 0; i < 10; i++) {
+			// 调用原型对象的clone方法实现对象复制
+			MonkeyKing replicaMonkey = wukong.clone(); // <1>
+			replicaMonkey.setSkillStrength(MonkeyKing.NORMAL_SKILL_STRENGTH); // <2>
+			System.out.println("分身创建了第 " + i + " 只猴子猴孙：" + replicaMonkey);
+		}
+	}
+}
+----
+<1> 调用原型对象的 `clone` 方法来实现对象克隆
+<2> 修改克隆后对象的差异属性
+
+可以看到，客户端克隆对象时只需要调用原型对象的 `clone` 方法就可以完成对象克隆，而无需关心对象创建的细节。
+
+== 浅拷贝与深拷贝
+
+现在，我们已经搞定了原型模式，那么，问题已经解决了吗？并没有！
+
+前边提过，`Object` 提供的native实现的 `clone` 方法仅仅实现了对象的浅拷贝。什么是浅拷贝、深拷贝？
+
+* 浅拷贝: 仅仅将原型对象的基本数据类型的成员变量拷贝一份，复制给克隆后的对象，而对于引用类型的成员变量，仅仅复制其引用（都指向同一个对象）。简单说，基本类型的属性进行值传递，而引用类型的属性进行引用传递，更改引用类型对象的属性值会影响所有的原型和克隆对象。
+* 深拷贝: 克隆时，不仅将基本类型的成员变量拷贝一份，而且也将引用类型的成员变量进行**递归复制**，直到全部完成。也就是说，原型对象引用的其他对象也进行复制，而不是仅复制引用，而且是递归复制，也就是引用对象下的其他引用对象同样进行复制，直到可达的所有引用对象。
+
+看一个例子，现在本体对象改造了，扩展了一个武器对象 `Weapon`：
+
+[source,java]
+----
+// 武器对象
+class Weapon1 {
+	// 名称
+	private String name;
+	// 重量
+	private int    weight;
+	// 省略getter、setter
+}
+
+class MonkeyKing1 implements Cloneable {
+	// 高强度
+	static int HIGH_SKILL_STRENGTH   = 10;
+	// 普通强度
+	static int NORMAL_SKILL_STRENGTH = 5;
+
+	// 姓名
+	private String  name;
+	// 地址
+	private String  address;
+	// 能力强度
+	private int     skillStrength;
+	// 寿命
+	private int     lifetime;
+	// 武器
+	private Weapon1 weapon;
+	// 省略getter、setter
+}
+----
+
+这里的 `weapon` 就是引用类型的成员变量，`Object` 的 `clone` 方法，仅将原型对象引用地址传递给克隆对象，其实他们都指向同一个 `Weapon` 对象实例，更改其属性，那么所有引用他的对象都会发生变化。这不是我们想要的结果。
+
+那么，如果实现深拷贝？
+
+深拷贝通常有两种方式实现：
+
+. 重写 `clone` 方法自己编码实现
+. 通过序列化的方式实现（推荐）
+
+第一种方式，每个对象都需要重写 `clone` 方法，然后克隆引用对象并设置给自己，就想下边这样：
+
+[source,java]
+----
+@Override
+protected MonkeyKing2 clone() throws CloneNotSupportedException {
+	MonkeyKing2 monkeyKing = (MonkeyKing2) super.clone();
+	// 调用Weapon2对象的clone方法，拷贝一个新对象
+	Weapon2 weapon       = monkeyKing.getWeapon();
+	Weapon2 clonedWeapon = (Weapon2) weapon.clone();
+	// 将新的Weapon2对象设置给复制的monkeyKing
+	monkeyKing.setWeapon(clonedWeapon);
+	return monkeyKing;
+}
+----
+
+这种方式缺点很明显：编码工作量大，而且非常容易出错。详细代码就不贴了，有兴趣可以看文末的源码。
+
+推荐的方式是使用序列化进行对象深拷贝。
+
+=== 使用序列化实现深拷贝
+
+利用对象序列化机制，先将对象序列化为流，然后反序列化为对象，这样，原型对象本身以及其下所有引用对象都能够重新实例化。
+
+Java对象能够序列化，需要满足两个条件：
+
+1. 对象必须实现 `Serializable` 接口
+2. 对象的每个成员属性都能够序列化，如果成员变了不需要序列化，则可以用 `transient` 关键字标记
+
+`Serializable` 也是一个标记接口，必须实现该接口对象才能序列化：
+
+.Serializable接口定义
+[source,java]
+----
+public interface Serializable {
+}
+----
+
+先看看原型对象的定义：
+
+[source,java]
+----
+// 武器对象，也实现克隆
+class Weapon3 implements Serializable {
+	// 名称
+	private String name;
+	// 重量
+	private int    weight;
+}
+
+class MonkeyKing3 implements Serializable, Cloneable {
+	// 高强度
+	static int HIGH_SKILL_STRENGTH   = 10;
+	// 普通强度
+	static int NORMAL_SKILL_STRENGTH = 5;
+
+	// 姓名
+	private String  name;
+	// 地址
+	private String  address;
+	// 能力强度
+	private int     skillStrength;
+	// 寿命
+	private int     lifetime;
+	// 武器
+	private Weapon3 weapon;
+
+	/**
+	 * 通过序列化实现对象的深拷贝。
+	 *
+	 * @return 复制的对象
+	 */
+	@Override
+	protected MonkeyKing3 clone() { // <1>
+		ByteArrayInputStream  bis = null;
+		ByteArrayOutputStream bos = null;
+		ObjectOutputStream    oos = null;
+		ObjectInputStream     ois = null;
+		try {
+			// 序列化当前对象
+			bos = new ByteArrayOutputStream();
+			oos = new ObjectOutputStream(bos); // <2>
+			oos.writeObject(this);
+
+			// 反序列化对象，此时的对象已经是深拷贝对象了
+			bis = new ByteArrayInputStream(bos.toByteArray());
+			ois = new ObjectInputStream(bis);
+			return (MonkeyKing3) ois.readObject(); // <3>
+		} catch (IOException | ClassNotFoundException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				if (bos != null) {
+					bos.close();
+				}
+				if (oos != null) {
+					oos.close();
+				}
+				if (bis != null) {
+					bis.close();
+				}
+				if (ois != null) {
+					ois.close();
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		return null;
+	}
+}
+----
+<1> 重写 `clone` 方法，利用序列化实现深拷贝
+<2> 将对象写入到而字节流中
+<3> 反序列化，从字节流中读取对象，此时得到的就是一个新实例对象
+
+需要注意的是，`MonkeyKing3` 和 `Weapon3` 对象都必须实现 `Serializable` 接口。
+
+客户端代码类型，就不贴出来了。
+
+== 总结
+
+原型模式，适用于需要大量创建相同或相似对象的场景，它屏蔽了对象实例化细节。在使用原型模式克隆对象时，需要避免浅拷贝的问题，推荐使用序列化实现对象的深拷贝。
+
+本文示例代码见: https://github.com/belonk/java-designpattern[Github]

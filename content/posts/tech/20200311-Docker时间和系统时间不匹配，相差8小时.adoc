@@ -1,0 +1,53 @@
+---
+title: Docker时间和系统时间不匹配，相差8小时
+slug: docker-time
+img: /images/thumbnail/attachment/20190807/e512b5d1ba6940dcab8e0454e693d6b4.png
+categories:
+  - 中间组件
+tags:
+  - docker
+  - 端口
+description: 使用 maven docker 插件部署时，发现docker容器时间与本地时间相差8小时。因为docker的时区与系统时区不同，docker容器默认的时区采用的UTC，而中国时区为CTS，与之差8小时（东8区），可以进入容器使用date命令查看时区：
+date: 2020-03-11 16:16:45
+updated: 2020-03-11 16:16:45
+---
+
+= Docker时间和系统时间不匹配，相差8小时
+:author: belonk.com
+:date: 2020-04-03
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,容器,镜像,容器基本操作,容器迁移,导出,导入
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: docker,容器,container,镜像
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+使用 maven docker 插件部署时，发现docker容器时间与本地时间相差8小时。
+
+因为docker的时区与系统时区不同，docker容器默认的时区采用的UTC，
+而中国时区为CTS，与之差8小时（东8区），可以进入容器使用date命令查看时区：
+
+----
+root@pro-server-3:~/trainer# date
+Fri Mar 12 12:56:40 CST 2021
+----
+
+* CST： China Standard Time，UTC+8:00 中国沿海时间（北京时间）
+* UTC： Universal Time Coordinated 世界协调时间
+
+所以设置一下Docker容器时区即可，我采用的docker maven插件，所以增加如下命令：
+
+image::/images/docker/image-2023-05-06-00-22-20-154.png[]
+
+意思就是容器构建时执行 `RUN` 命令修改系统时间 `/etc/timezone`，将其设置为上海时间，问题解决。

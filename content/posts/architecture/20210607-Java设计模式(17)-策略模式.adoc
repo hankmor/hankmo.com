@@ -1,0 +1,302 @@
+---
+title: Java设计模式(17)-策略模式
+slug: java-strategy-pattern
+date: 2021/06/07
+img: /images/attachment/designpattern/strategy.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 策略模式
+description: 策略模式(Strategy Pattern)，定义了一系列算法，并将他们封装起来，让他们之间可以相互替换，并且不影响使用这些算法的客户。
+updated:
+---
+
+= Java设计模式(17)-策略模式
+:key_word: 设计模式,策略模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2021/06/07
+:revision: 1.0
+:website: http://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+image::/images/attachment/designpattern/strategy.png[]
+策略（Strategy），表示实现某种目标的方案集合。这里的方案，在计算机软件中，就是算法。比如，要实现商场打折的目标，那么可能的方案有多种：商品折扣、商品满减、商品积分等等，这些在软件系统里边都代表了不同的算法实现。再举一个简单的例子：假如从公司回家，你可能有几种方式，如乘坐地铁、乘坐公交，又或者是打网约车、自己开车，等等，这些方案都是为了达到回家这一目标，但是他们都是可以相互替换的，你可以今天坐地铁，明天坐公交，后天懒了不想走路，那么直接打网约车也可以。这样的系统怎么来设计呢？
+
+== 不使用策略模式
+
+如果我们要实现前边"回家方式"的例子，最普通的方式就是通过条件判断来实现。代码如下：
+
+[source,java]
+----
+class BackhomeService {
+	public static final int RAILWAY = 1;
+	public static final int BUS = 2;
+	public static final int ONLINE_CAR = 3;
+	public static final int DRIVE = 4;
+
+	void backHome(int type) {
+		if (type == RAILWAY) {
+			System.out.println("乘坐地铁回家");
+		} else if (type == BUS) {
+			System.out.println("乘坐公交回家");
+		} else if (type == ONLINE_CAR) {
+			System.out.println("乘坐网约车回家");
+		} else if (type == DRIVE) {
+			System.out.println("开车回家");
+		}
+	}
+}
+----
+
+客户端调用：
+
+[source,java]
+----
+public static void main(String[] args) {
+	BackhomeService backhomeService = new BackhomeService();
+	backhomeService.backHome(BackhomeService.BUS);
+}
+----
+
+上述代码中，``backHome``方法需要一个``type``参数，表示回家的方式，这种方式由客户端传递，如果添加回家方式，那么还需要添加``if``语句。众所周知，大量的``if..else..``或者是``switch``语句非常难以维护，可见，这种方式并不能很好的提高系统的扩展性和可维护性。
+
+使用策略模式，可以有效解决上述问题。
+
+== 什么是策略模式
+
+[IMPORTANT]
+====
+策略模式(Strategy Pattern)，定义了一系列算法，并将他们封装起来，让他们之间可以相互替换，并且不影响使用这些算法的客户。
+====
+
+从这个概念中，我们可以提取一下几点：
+
+. 策略模式定义了一个算法族
+. 算法族中每一种算法要完成的事情都是相同的(即实现相同的目标)，只是实现的方式不同，因此他们可以相互替换
+. 策略模式封装了这些算法，使得替换算法对使用者无影响，符合开闭原则
+
+== 策略模式结构
+
+策略模式是如何封装这些算法的呢？我们先来看看其类结构，如下图所示：
+
+.策略模式类图
+image::/images/attachment/designpattern/strategy-class.png[]
+
+策略模式的结构主要包括三个部分：
+
+* 抽象策略类(Strategy)，定义了所有支持算法的公共接口，可以是接口或抽象类
+* 具体策略类(Concrete Strategy)，封装了各种算法的具体实现，实现或者继承抽象策略类(Strategy)
+* 环境类(Context)，内部持有具体策略类的引用，并将本身执行方法委托给具体策略类实现
+
+如上所述，抽象策略类对算法进行抽象，形成公共接口，然后再由具体策略类封装各种不同的算法，屏蔽其实现细节；最后，再由环境类持有策略引用，并执行具体策略。客户端创建环境类，为其设置所选择的策略，然后调用环境类的方法来实现业务逻辑。可见，策略模式**强调如何组织一系列算法的逻辑结构，通过将算法的抽象和具体实现分开，以达到低耦合、可扩展的目的**。
+
+策略模式的优点：
+
+. 策略模式可以避免使用多重条件语句，如``if..else``、``switch..case``语句
+. 策略模式提供了一系列的可供重用的算法族，恰当使用继承可以把算法族的公共代码转移到父类里面，从而避免重复的代码
+. 策略模式可以提供相同行为的不同实现，客户可以自行选择
+. 策略模式提供了对开闭原则的完美支持，可以在不修改原代码的情况下，灵活增加新算法
+. 策略模式把算法的使用放到环境类中，而算法的实现移到具体策略类中，实现了二者的分离
+
+其主要缺点如下：
+
+. 客户端必须理解所有策略算法的区别，以便适时选择恰当的算法类，提高了使用难度
+. 策略模式每一种算法都对应一个具体策略类，造成类过多，增加维护难度
+
+== 使用策略模式实现缓存
+
+了解了策略模式，我们用它来实现一个缓存服务。
+
+系统缓存，通常有多种方式，假设我们支持的缓存方式有：本地内存缓存、Redis缓存和EhCache缓存，并且都是基于``KV``键值对的方式存储缓存；现在，我们使用策略模式来实现缓存。
+
+1、先实现缓存策略接口(Strategy)，代码如下：
+
+.缓存Strategy接口
+[source,java]
+----
+// 缓存策略接口
+interface CacheStrategy<K, V> {
+	// 添加缓存
+	void add(K key, V value);
+
+	// 删除缓存
+	void remove(K key);
+
+	// 查询缓存
+	V get(K key);
+}
+----
+
+策略接口定义缓存公共的方式，包括缓存的添加、删除和查询。
+
+2、具体的策略实现类(Concrete Strategy)
+
+.本地内存缓存的策略实现
+[source,java]
+----
+class LocalCacheStrategy<K, V> implements CacheStrategy<K, V> {
+	private final Map<K, V> cacheMap = new ConcurrentHashMap<>();
+
+	@Override
+	public void add(K key, V value) {
+		cacheMap.put(key, value);
+	}
+
+	@Override
+	public void remove(K key) {
+		cacheMap.remove(key);
+	}
+
+	@Override
+	public V get(K key) {
+		return cacheMap.get(key);
+	}
+}
+----
+
+代码很简单，使用``ConcurrentHashMap``来作为缓存存储对象。
+
+.基于Redis的缓存策略
+[source,java]
+----
+class RedisCacheStrategy<K, V> implements CacheStrategy<K, V> {
+	private final RedisClient<K, V> redisClient = new RedisClient<>("127.0.0.1", "6379", null);
+
+	@Override
+	public void add(K key, V value) {
+		redisClient.set(key, value);
+	}
+
+	@Override
+	public void remove(K key) {
+		redisClient.del(key);
+	}
+
+	@Override
+	public V get(K key) {
+		return redisClient.get(key);
+	}
+
+	// 模拟的redis客户端，内部什么都没实现
+	private static class RedisClient<K, V> {
+		public RedisClient() {
+		}
+
+		public RedisClient(String host, String port, String pwd) {
+			// contect ...
+		}
+
+		public void set(K key, V value) {
+
+		}
+
+		public V get(K key) {
+			return null;
+		}
+
+		public void del(K key) {
+
+		}
+	}
+}
+----
+
+.基于EHCache的缓存策略
+[source,java]
+----
+class EhCacheStrategy<K, V> implements CacheStrategy<K, V> {
+	@Override
+	public void add(K key, V value) {
+
+	}
+
+	@Override
+	public void remove(K key) {
+
+	}
+
+	@Override
+	public V get(K key) {
+		return null;
+	}
+}
+----
+
+[NOTE]
+====
+这里虽然列举了三种，但是Redis和EhCache的缓存都没有真正实现，只是说明思路。
+====
+
+3、环境类代码实现：
+
+[source,java]
+----
+class CacheService<K, V> {
+	private CacheStrategy<K, V> cacheStrategy; // <1>
+
+	public CacheService() {
+	}
+
+	public CacheService(CacheStrategy<K, V> cacheStrategy) { // <2>
+		this.cacheStrategy = cacheStrategy;
+	}
+
+	public void setCacheStrategy(CacheStrategy<K, V> cacheStrategy) { // <3>
+		this.cacheStrategy = cacheStrategy;
+	}
+
+	public void add(K key, V value) {
+		cacheStrategy.add(key, value);
+	}
+
+	public void remove(K key) {
+		cacheStrategy.remove(key);
+	}
+
+	public V get(K key) {
+		return cacheStrategy.get(key);
+	}
+}
+----
+<1> 环境类持有策略接口引用
+<2> 通过构造器设置具体策略实现类
+<3> 通过``setter``设置具体策略实现类
+
+``CacheService``作为环境类``Context``，自己定义了缓存的操作方法(`add`，`remove`, `get`)，并委托给策略类执行。
+
+4、最后，编写客户端调用代码
+
+[source,java]
+----
+public class StrategyPatternDemo {
+	public static void main(String[] args) {
+		// 创建具体策略
+		CacheStrategy<String, Object> cacheStrategy = new LocalCacheStrategy<>(); // <1>
+		// 创建环境类
+		CacheService<String, Object> cacheService = new CacheService<>(cacheStrategy);
+		cacheService.add("name", "张三");
+		cacheService.add("age", 20);
+		Object name = cacheService.get("name");
+		Object age = cacheService.get("age");
+		System.out.println(name);
+		System.out.println(age);
+	}
+}
+----
+<1> 这里缓存策略是硬编码的，其实，客户端可以通过配置，动态的创建缓存策略(例如使用反射)，这样只需要修改配置就可以更改缓存策略，而不需要更改原有代码
+
+== 总结
+
+总结一下：策略模式，是一种行为模式，它组织代码的类结构，将策略的公共方法和具体实现分开，并将策略的使用放到环境类，将具体实现放到具体策略实现类，客户端通过灵活配置策略算法，可以达到不修改任何代码即可更换策略的目的，而且扩展策略也很方便，原有代码不需要更改，完全符合开闭原则。
+
+如果目标相同，而具体实现有多种不同的方式，那么可以考虑使用策略模式。

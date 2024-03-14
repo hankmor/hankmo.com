@@ -1,0 +1,247 @@
+---
+title: Java反射之创建泛型数组
+slug: reflect-generic-array
+img: /images/thumbnail/tree1.png
+categories:
+  - Java
+tags:
+  - reflect
+  - 反射
+  - java
+  - 泛型数组
+description: 泛型是编译期特性，我们能否创建泛型数组呢？通过 `Array` 类，除了可以动态的获取和设置数组的元素，还可以动态创建类型安全的数组。
+date: 2021-11-10 00:00:00
+updated: 2021-11-10 00:00:00
+---
+
+= Java反射之创建泛型数组
+:key_word: Java,反射,Type,AnnotatedElement,Class,Field,Method,Parameter,Constructor,Annotation,Array,泛型数组
+:author: belonk.com
+:date: 2021-11-09
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: java,反射,reflect
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+前边介绍了Java泛型类设计体系中的一些常用类，本篇将着重介绍 `Array` 类和如何创建泛型数组。
+
+== Java能创建泛型数组吗？
+
+=== 泛型类型擦除
+
+首先，我们知道，泛型是JDK1.5推出的**编译期特性**，什么是编译期？即是说在编译的时候有效，编译代码时编译器能够对泛型进行检查和校验。但是如果在运行时，泛型其实已经无效了，泛型类型被**擦除**了。比如下面的代码：
+
+.代码清单1
+[source,java]
+----
+List<String> stringList = new ArrayList<>();
+List<Integer> integerList = new ArrayList<>();
+System.out.println(stringList.getClass() == integerList.getClass());
+----
+
+结果输出为 `true`。`stringList` 只能添加 `String` 类型的数据，而 `integerList` 也只能添加 `Integer`，不能加入别的类型的数据。为什么？因为它们申明了泛型类型，编译器就会对类型兼容性进行检查，类型不符则会抛出异常。但是，他们的 `Class` 确是相同的，即是说，在运行时它们是相同的类型，都是 `ArrayList`，而泛型类型被擦除了。
+
+=== 尝试创建泛型数组
+
+那么，我们申明泛型数组会怎么样呢？看下边的代码：
+
+.代码清单2
+[source,java]
+----
+class GenericArray1<T> {
+	private final T[] array; // <1>
+	private int index;
+
+	public GenericArray1(int size) {
+		this.array = (T[]) new Object[size]; // <2>
+	}
+
+	public void add(T item) { // <3>
+		array[index++] = item;
+	}
+
+	public T[] array() {
+		return array;
+	}
+}
+----
+<1> 申明泛型数组成员域
+<2> 构造函数中创建Object数组，然后强转为泛型类型
+<3> 数组中只能添加特定类型的元素
+
+上边的代码，试图创建一个泛型数组，它只能添加某一种类型的数据，然后通过 `array()` 方法返回这个数组。然而，标记3的 `add` 方法虽然得益于泛型实现了限制了数组中只能添加特定的某一类型元素，看似没有问题，实际上运行时标记2的这行代码会抛出 `ClassCastException`，告诉你Object数组不能转为特定类型的数组。创建了 `Object` 数组, 它可以容纳任何元素，但是如果强制转型为特定类型的数组，可容纳的元素类型范围变窄了，这不是向下转型吗？jvm不允许这么做。
+
+那么，换个思路，成员域改为 `Object[]`, 是否可以行呢？
+
+.代码清单3
+[source,java]
+----
+class GenericArray2<T> {
+	private final Object[] array; // <1>
+	private int index;
+
+	public GenericArray2(int size) {
+		assert size >= 0;
+		this.array = new Object[size]; // <2>
+	}
+
+	public void add(T item) {
+		array[index++] = item;
+	}
+
+	@SuppressWarnings("unchecked")
+	public T get(int idx) {
+		return (T) this.array[idx]; // <3>
+	}
+
+	public Object[] array() { // <4>
+		return array;
+	}
+}
+----
+<1> 现在将成员域申明为 `Object[]`
+<2> 创建Object数组，现在没有问题了
+<3> 获取数组中的元素
+<4> 如果返回类型改为 `T[]`，同样出抛出 `ClassCastException`
+
+上边的代码，虽然标记1处创建数组没有问题，获取元素也能得到泛型类型T所指定类型的元素，但是标记4处返回的依然不是我们想要的泛型数组，而是返回了 `Object` 数组。而我们想要的是能够拿到泛型指定类型的数组。
+
+看起来，我们确实不能按照泛型申明的类型来得到泛型数组。此时，需要反射包中的 `Array` 类出场了。
+
+== Array类
+
+https://docs.oracle.com/javase/8/docs/api/java/lang/reflect/Array.html[Array] 类提供了静态的系列方法，允许在运行时动态创建和访问数组。它位于 `java.lang.reflect` 包中，其申明如下：
+
+.代码清单4
+[source,java]
+----
+public final class Array {
+	// ...
+}
+----
+
+`Array` 类提供的方法几乎都是 `static` 和 `native` 的，包括三类：
+
+. `getXxx(Object array, int index)`: 按照基本类型获取__**同基本类型**__数组中的元素，如果是 `Object` 数组，则使用 `get(Object array, int index)`
+. `getLength(Object array)`: 获取指定数组的长度
+. `setXxx(Object array, int index, X item)`：将__**同基本类型**__数组的下标 `index` 的元素设置为基本类型 `item`，如果是 `Object` 数组，则使用 `set(Object array, int index, Object value)` 方法
+. `newInstance(Class<?> componentType, int length)`：动态创建指定类型和指定长度的数组，这就是创建泛型数组的关键方法
+. `newInstance(Class<?> componentType, int... dimensions)`：动态创建指定类型和指定维度长度的数组，即创建多维数组
+
+[IMPORTANT]
+====
+.如何理解 *同基本类型*？
+`Array` 中对应的基本类型的get和set方法，对应的数组都只能是与基本类型相同类型的数组，比如：`getInt(Object object, int index)` 方法中，`object` 参数只能是 `int[]`，否则会抛出 `IllegalArgumentException`。如果操作的是对象数组，即 `Object[]`，那么应该使用 `get(...)` 和 `set(...)` 方法。
+
+看下边的例子：
+
+.代码清单5
+[source,java]
+----
+Object[] objects = new Object[4];
+objects[0] = 1;
+objects[1] = "a";
+objects[2] = 2L;
+objects[3] = 0.1f;
+
+// ok
+Object o = Array.get(objects, 1);
+// 运行错误：IllegalArgumentException: Argument is not an array
+int anInt = Array.getInt(objects, 0);
+----
+
+**因此**：`Array` 提供的 `getXxx(..)` 方法，并不是获取到数组的元素然后在解析为指定的基本类型，而是只能获取同基本类型的数组中的元素！
+====
+
+`newInstance(..)` 方法可以用来动态创建数组，非常有用，看一个例子：
+
+.代码清单6
+[source,java]
+----
+Item[] items = (Item[]) Array.newInstance(Item.class, 1); // <1>
+items[0] = new Item();
+Object o = Array.get(items, 0);
+
+int[] intArray = (int[]) Array.newInstance(int.class, 1); // <2>
+intArray[0] = -1;
+int anInt = Array.getInt(intArray, 0);
+
+int[][] ints = (int[][]) Array.newInstance(int.class, 2, 2); // <3>
+ints[0][0] = 0;
+ints[0][1] = 1;
+ints[1][0] = 2;
+ints[1][1] = 3;
+System.out.println(Arrays.deepToString(ints));
+----
+<1> 创建 `Item` 数组，长度为1，然后可以安全的类型转换
+<2> 创建 `int` 数组，长度为1
+<3> 创建 2×2的 `int` 型二维数组
+
+== 正确地创建泛型数组
+
+有了 `Array` 类，现在我们可以真正的实现泛型数组的创建了，看下边的代码：
+
+.代码清单7
+[source,java]
+----
+class GenericArray3<T> {
+	private final T[] array; // <1>
+	private int index;
+
+	@SuppressWarnings("unchecked")
+	public GenericArray3(Class<T> type, int index) {
+		this.array = (T[]) Array.newInstance(type, index); // <2>
+	}
+
+	public void add(T item) { // <3>
+		array[index++] = item;
+	}
+
+	public T get(int idx) { // <4>
+		return this.array[idx];
+	}
+
+	public T[] array() { // <5>
+		return array;
+	}
+}
+----
+<1> 泛型数组域
+<2> 使用 `Array` 类动态创建数组，可以安全转型为 `T[]`
+<3> 添加指定泛型类型的元素
+<4> 获取元素
+<5> 返回泛型数组
+
+我们使用 `GenericArray3` 类持有一个泛型数组，并实现了元素的添加和获取，通过 `array()` 方法可以获取到泛型数组。现在，我们可以利用它获得不同类型的数组：
+
+.代码清单8
+[source,java]
+----
+GenericArray3<String> stringArray = new GenericArray3<>(String.class, 10);
+stringArray.add("item1");
+stringArray.add("item2");
+String item = stringArray.get(0);
+String[] strArray = stringArray.array();
+
+GenericArray3<Integer> intArray = new GenericArray3<>(Integer.class, 10);
+intArray.add(1);
+intArray.add(2);
+int i = intArray.get(0);
+Integer[] ints = intArray.array();
+----
+
+== 总结
+
+通过 `Array` 类，除了可以动态的获取和设置数组的元素，还可以动态创建类型安全的数组。

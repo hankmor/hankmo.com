@@ -1,0 +1,426 @@
+---
+title: (译)Go模块：管理依赖项
+slug: go-mod
+categories:
+  - GoLang
+tags:
+  - go
+  - module
+description: 当您的代码使用外部包时，这些包（作为模块分发）成为依赖项。随着时间的推移，您可能需要升级或更换它们。Go 提供了依赖管理工具，可帮助您在合并外部依赖项时确保 Go 应用程序的安全。本文介绍如何执行一些任务来管理您代码中的依赖项，您可以使用 Go tools 执行其中的大部分操作。本主题还介绍了如何执行其他一些您可能会觉得有用的依赖相关任务。
+date: 2023/04/19
+updated: 2022/12/19
+---
+
+= (译)Go模块：管理依赖项
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+原文地址: https://go.dev/doc/modules/managing-dependencies
+
+当您的代码使用外部包时，这些包（作为模块分发）成为依赖项。随着时间的推移，您可能需要升级或更换它们。Go 提供了依赖管理工具，可帮助您在合并外部依赖项时确保 Go 应用程序的安全。
+
+本文介绍如何执行一些任务来管理您代码中的依赖项，您可以使用 Go tools 执行其中的大部分操作。本主题还介绍了如何执行其他一些您可能会觉得有用的依赖相关任务。
+
+// TODO 翻译后修改连接
+相关阅读::
+- 如果您不熟悉模块和依赖，请查看 https://go.dev/doc/tutorial/getting-started[入门教程] 以获得简要介绍。
+- 使用该 `go` 命令管理依赖项有助于确保您的需求保持一致，并且您的 `go.mod` 文件的内容是有效的。有关命令的参考，请参阅 https://go.dev/cmd/go/[go命令文档]。您还可以通过键入 `go help` 命令名称` 从命令行获取帮助，如 `go help mod tidy`.
+- 使用 Go 命令更改依赖项时会编辑 go.mod 文件。有关文件内容的更多信息，请参阅 https://go.dev/doc/modules/gomod-ref[go.mod 文件参考文档]。
+- 让您的编辑器或 IDE 能够感知 Go 模块可以让您更轻松地管理它们。有关支持 Go 的编辑器的更多信息，请参阅 https://go.dev/doc/editors.html[编辑器插件和 IDE]。
+- 本主题不描述如何开发、发布和版本模块以供其他人使用。有关更多信息，请参阅 https://go.dev/doc/modules/[开发和发布模块]。
+
+## 使用和管理依赖项的工作流程
+
+您可以通过 Go tools 获取和使用有用的包。在 https://pkg.go.dev/[pkg.go.dev] 上，您可以搜索您觉得有用的包，然后使用 `go` 命令将这些包导入您自己的代码中以调用它们的功能。
+
+下面列出了最常见的依赖管理步骤：
+
+1. 在 https://pkg.go.dev/[pkg.go.dev]上 <<查找和导入包, 查找有用的包>>。
+2. <<查找和导入包, 在代码中导入所需的包>>。
+3. 将您的代码添加到模块以进行依赖跟踪（如果它不在模块中）。请参阅 <<代码中启用依赖项跟踪, 启用依赖项跟踪>>
+4. [<<添加依赖项, 添加外部包作为依赖项>>，以便您可以管理它们。
+5. 随着时间的推移，根据需要 <<升级或降级依赖项, 升级或降级依赖版本>>。
+
+## 依赖项作为模块管理
+
+在 Go 中，依赖项作为包含导入包的模块来管理。此过程由以下功能支持：
+
+- **用于发布和检索模块的去中心化系统**。这使得开发人员定义模块版本号并发布模块，其他开发人员就可以在自己的存储库中使用这些模块了。
+- **包搜索引擎**和文档浏览器 (pkg.go.dev)，您可以在其中搜索模块。请参阅 <<查找和导入包, 查找和导入有用的包>>。
+// TODO 翻译后修改连接
+- 模块**版本编号约定**可帮助您了解模块的稳定性和向后兼容性保证。请参阅 https://go.dev/doc/modules/version-numbers[Go模块版本编号]。
+- **Go tools** 可以让您更轻松地管理依赖项，包括获取模块的源代码、升级等。有关更多信息，请参阅本文相关部分。
+
+[[查找和导入包]]
+## 查找和导入包
+
+您可以在 https://pkg.go.dev/[pkg.go.dev] 上搜索以查找您所需要的软件包。
+
+找到需要的包后，在页面顶部找到包路径，然后单击复制路径按钮将路径复制到剪贴板。然后在您的代码中，将路径粘贴到导入语句中，如下例所示：
+
+[source, go]
+----
+import "rsc.io/quote"
+----
+
+导入包后，启用依赖项跟踪并获取包的代码进行编译。有关更多信息，请参阅 <<代码中启用依赖项跟踪>>和<<添加依赖项>>。
+
+[[代码中启用依赖项跟踪]]
+## 代码中启用依赖项跟踪
+
+要跟踪和管理您添加的依赖项，首先要将代码放入其自己的模块中。这会在源代码树的根目录创建一个 `go.mod` 文件，您添加的依赖项将列在该文件中。
+
+// TODO 翻译后修改连接
+要将您的代码添加到它自己的模块中，请使用  https://go.dev/ref/mod#go-mod-init[go mod init] 命令。例如，从命令行切换到代码的根目录，然后按照以下示例运行命令：
+
+----
+$ go mod init example/mymodule
+----
+
+该 `go mod init` 命令的参数是您的模块路径。一般而言，模块路径应该是源代码的存储库位置。
+
+如果一开始您不知道模块的最终存储库位置，请使用可控的名称替代。可以是您的域名或您控制的另一个名称（例如公司的名称）。有关更多信息，请参阅<<命名模块>>。
+
+当您使用 Go tools 管理依赖项时，这些工具会更新 `go.mod` 文件，以便维护当前依赖列表。
+
+添加依赖项时，Go tools 还会创建一个 `go.sum` 文件，其中包含您所依赖的模块的校验和。Go 使用它来验证下载的模块文件的完整性，特别是对于在您的项目上工作的其他开发人员。
+
+在代码中包含存储库中的 go.mod 和 go.sum 文件。
+
+// TODO 翻译后修改连接
+有关更多信息，请参阅 https://go.dev/ref/mod[Go模块参考手册]。
+
+[[命名模块]]
+## 命名模块
+
+当您运行 `go mod init` 创建用于跟踪依赖项的模块时，需要指定一个模块路径作为模块的名称。模块路径成为模块中包的导入路径前缀，模块路径不能与其他模块路径冲突。
+
+一个模块路径至少需要表明它的来源，例如公司、作者或所有者名称。模块路径也可以更能描述模块的功能和用途。
+
+模块路径通常采用以下形式：
+
+[source, go]
+----
+<prefix>/<descriptive-text>
+----
+
+- `prefix` 通常是描述模块的字符串，例如描述其来源。这可能是：
+- Go tools 可以在其中找到模块源代码的存储库位置（当您要发布模块时需要）。例如，`github.com/<project-name>/`。
+
+如果您可能会发布模块供其他人使用，请使用此最佳实践。有关发布的更多信息，请参阅 https://go.dev/doc/modules/[开发和发布模块]。
+
+- 一个你控制的名字
+
+如果您不使用存储库名称，请务必选择一个您确信不会被其他人使用的前缀。一个不错的选择是您公司的名称。避免使用常用术语，例如 `widgets`、`utilities` 或 `app`。
+
+- 对于 `descriptive-text`，一个不错的选择是项目名称。请记住，包名称主要负责描述功能，而模块路径则为这些包名称创建了一个命名空间。
+
+[NOTE]
+====
+.保留的模块路径前缀
+不能在包名称中使用以下字符串，这是 go 内部保留的：
+
+- test : 当某一模块专门设计用于本地测试其他模块时，您可以将 `test` 用作其包名。
+
+使用 `test` 作为模块路径时，该模块本身将作为测试的一部分。例如，您的测试本身可能会运行 `go mod init test`，然后以某种特定方式设置该模块，以便使用 Go 源代码分析工具进行测试。
+
+- `example`: 在某些 Go 文档中用作模块路径前缀，例如在创建模块以跟踪依赖关系的教程中。
+
+请注意，Go 文档还用 `example.com` 模块路径前缀以说明该示例可能是已发布的模块。
+====
+
+[[添加依赖项]]
+## 添加依赖项
+
+从已发布的模块中导入包后，您可以使用 https://go.dev/cmd/go/#hdr-Add_dependencies_to_current_module_and_install_them[go get] 命令将该模块添加为依赖项进行管理。
+
+该命令执行以下操作：
+
+// TODO 更改连接
+- 如果需要，它会将 `require` 指令添加到您的 go. mod 文件中，以获取包所需的依赖模块。`require` 指令跟踪模块所依赖模块的最低版本。有关更多信息，请参阅 https://go.dev/doc/modules/gomod-ref[go.mod参考手册]。
+
+- 如果需要，它会下载模块源代码，以便您可以编译依赖它们的包。它可以从像 `proxy.golang.org` 这样的模块代理或直接从版本控制存储库下载模块源代码，源代码缓存在本地。
+
+您可以设置 Go tools 下载模块的位置。有关更多信息，请参阅 <<指定模块代理服务器>>。
+
+下面介绍几个例子。
+
+- 要为模块中的包添加所有依赖项，请运行如下命令（`.` 指当前目录中的包）：
+
+----
+$ go get .
+----
+
+- 要添加特定的依赖项，请将其模块路径指定为命令参数。
+
+----
+$ go get example.com/theirmodule
+----
+
+该命令还会验证它下载的每个模块，确保从模块发布时起没有变化。如果模块在发布后发生了更改——例如，开发人员更改了提交的内容——Go tools 将出现安全错误。此身份验证检查可保护您免受可能已被篡改的模块的侵害。
+
+[[获取特定的依赖版本]]
+## 获取特定的依赖版本
+
+`go get` 您可以通过在命令中指定依赖模块的版本来获取特定版本的依赖模块。该命令会更新 go. mod 文件中的 `require` 指令（您也可以手动更新）。
+
+有以下情况时，您可能需要获得特定的版本：
+
+- 您想获得一个特定的预发布版本模块来试用。
+- 您发现当前需要的版本不适合您，您想获得一个您信任的其他版本。
+- 您想要升级或降级您已经加入的模块。
+
+以下是使用 https://go.dev/ref/mod#go-get[go get] 命令的示例：
+
+- 要获得特定编号的版本，请在模块路径后面加上 `@` 符号，后跟所需的版本：
+
+----
+$ go get example.com/theirmodule@v1.3.4
+----
+
+- 要获取最新版本，请在模块路径后面附加 `@latest` :
+
+----
+$ go get example.com/theirmodule@latest
+----
+
+// TODO 更新连接
+以下是 go. mod 文件中使用 `require` 指令的示例（有关更多信息，请参见 https://go.dev/doc/modules/gomod-ref[go.mod参考手册]）说明了如何要求特定版本号：
+
+[source, go]
+----
+require example.com/theirmodule v1.3.4
+----
+
+[[发现可用更新]]
+## 发现可用更新
+
+您可以检查当前模块中是否已经使用了较新版本的依赖项。使用该 `go list` 命令显示模块的依赖项列表，以及该模块可用的最新版本。一旦你发现了可用的升级，你可以编码尝试它们来决定是否升级到新版本。
+
+有关该 `go list` 命令的更多信息，请参阅 https://go.dev/ref/mod#go-list-m[go list -m]。
+
+这里有几个例子。
+
+- 列出当前模块的所有依赖项，以及每个模块可用的最新版本：
+
+----
+$ go list -m -u all
+----
+
+[NOTE]
+====
+.译注
+* `-m` 参数用于列出模块，不加是列出所有包
+* `-u` 参数列出模块可以升级的版本信息
+====
+
+- 显示可用于特定模块的最新版本：
+
+----
+$ go list -m -u example.com/theirmodule
+----
+
+## 升级或降级依赖项
+
+您可以使用 Go tools 来升级或降级依赖模块，首先查找可用版本，然后添加不同的版本作为依赖项：
+
+1. 要发现新版本，请使用 <<发现可用更新>> 中所述 `go list` 命令。
+2. 要将特定版本添加为依赖项，请使用 <<获取特定的依赖版本>> 中所述的 `go get` 命令。
+
+## 同步代码的依赖项
+
+您可以确保所有代码所需要的依赖已经成功导入，或者不再导入的包的那些依赖已经成功删除。当您对代码和依赖项进行更改时，这可能会很有用。
+
+这是通过 `go mod tidy` 命令实现的，它可以保持您所管理的依赖集整洁。此命令编辑您的 go. mod 文件以添加必要但缺失的模块，并删除已导入但未使用的模块。
+
+该命令有一个标志 `-v`，它打印有关已删除模块的信息。
+
+----
+$ go mod tidy
+----
+
+## 使用未发布的模块进行开发和测试
+
+您的代码可能会用到未发布的依赖模块，这些模块的代码可能在它们各自的存储库中，或者在这些存储库的一个 fork 库中，又或者在您的本地磁盘上。
+
+比如：
+
+- 您想更改外部模块的代码，例如在 fork 或 clone 它之后。比如，您想要修复模块的 bug，然后发送 pull request 给模块开发人员。
+- 您正在构建一个新模块但尚未发布它，因此它在 `go get` 命令可以访问它的存储库上不可用。
+
+[[本地目录引入模块]]
+### 本地目录引入模块
+
+您可以指定所需模块与依赖它的代码位于同一本地驱动器上。例如，当您：
+
+- 开发单独模块并希望从当前模块进行测试。
+- 修复外部模块中的问题或添加功能，并希望从当前模块进行测试。（请注意，您还可以从您自己的存储库分支中获取外部模块。有关更多信息，请参阅 <<外部依赖存储库分叉模块>>）。
+
+要告诉 Go 命令使用本地模块代码，请在 go. mod 文件中使用 `replace` 指令替换 `require` 指令指定的依赖模块路径。有关指令的更多信息，请参阅 https://go.dev/doc/modules/gomod-ref[go.mod参考手册]。
+
+在以下 go. mod 文件示例中，当前模块依赖外部 `example.com/theirmodule` 模块，为了确保 `replace` 指令正常工作，模块的版本号不需要明确指定 (`v0.0.0-unpublished`)。然后该 `replace` 指令将原始模块路径替换为与当前模块目录处于同一级别的 `../theirmodule` 目录。
+
+[source, go]
+----
+module example.com/mymodule
+
+go 1.16
+
+require example.com/theirmodule v0.0.0-unpublished
+replace example.com/theirmodule v0.0.0-unpublished => ../theirmodule
+----
+
+在设置 `require` / `replace` 对时，使用 https://go.dev/ref/mod#go-mod-edit[go mod edit] 和 `go get` 命令确保文件需求描述保持一致：
+
+----
+$ go mod edit -replace=example.com/theirmodule@v0.0.0-unpublished=../theirmodule
+$ go get -d example.com/theirmodule@v0.0.0-unpublished
+----
+
+[IMPORTANT]
+====
+.注意
+当您使用 `replace` 指令时，Go tools 不会如<<添加依赖项>>中所述对外部模块进行身份验证。
+====
+
+// TODO 更新连接
+有关版本号的更多信息，请参阅 https://go.dev/doc/modules/version-numbers[模块版本编号]。
+
+[NOTE]
+====
+.译注
+`replace` 指令现在不推荐使用，更优的方式是使用 go 工作空间模式。
+====
+
+[[外部依赖存储库分叉模块]]
+### 外部依赖存储库分叉模块
+
+当您对外部模块的存储库进行了 fork （例如修复模块代码中的问题或添加功能）时，可以让外部代码依赖该 fork 模块，便于调试。（您也可以在本地驱动器上使用依赖模块代码，有关更多信息，请参阅 <<本地目录引入模块>>）。
+
+您可以在 go. mod 文件中使用 `replace` 指令将外部模块的原始模块路径替换为 fork 存储库的路径。这指示 Go tools 在编译时使用替换路径（fork 的位置），同时保留 `import` 模块语句不变。
+
+有关该 `replace` 指令的更多信息，请参阅 https://go.dev/doc/modules/gomod-ref[go.mod参考手册]。
+
+在以下 go. mod 文件示例中，当前模块需要外部模块 `example.com/theirmodule`，`replace` 指令将原始模块路径替换为 `example.com/myfork/theirmodule` 模块来使用自己的存储库的分叉。
+
+[source, go]
+----
+module example.com/mymodule
+
+go 1.16
+
+require example.com/theirmodule v1.2.3
+replace example.com/theirmodule v1.2.3 => example.com/myfork/theirmodule v1.2.3-fixed
+----
+
+设置 `require` / `replace` 对时，使用 Go tools 命令确保文件需求描述保持一致。使用 https://go.dev/ref/mod#go-list-m[go list] 命令获取当前模块正在使用的版本，然后使用 https://go.dev/ref/mod#go-mod-edit[go mod edit] 命令将需要的模块替换为 fork：
+
+----
+$ go list -m example.com/theirmodule
+example.com/theirmodule v1.2.3
+$ go mod edit -replace=example.com/theirmodule@v1.2.3=example.com/myfork/theirmodule@v1.2.3-fixed
+----
+
+[IMPORTANT]
+====
+.**注意：**
+当您使用该 `replace` 指令时，Go tools 不会像 <<添加依赖项>>中所述对外部模块进行身份验证。
+====
+
+有关版本号的更多信息，请参阅 https://go.dev/doc/modules/version-numbers[Go模块版本号]。
+
+## 使用存储库标识符获取特定commit
+
+您可以使用 `go get` 命令从其存储库中的特定提交版本为模块添加未发布的依赖。
+
+使用 `go get` 命令时，用 `@` 符号指定您想要的代码提交版本标识 (hash)。该命令将向您的 go. mod 文件添加一个 `require` 指令，并在依赖模块上使用提交的版本标识。
+
+如如下基于 git 仓库的示例：
+
+- 要在特定提交处获取模块，在 `@` 后附加  _commithash_：
+
+----
+$ go get example.com/theirmodule@4cf76c2
+----
+
+- 要在特定分支获取模块，在 `@` 后附加 _@branchname_ ：
+
+----
+$ go get example.com/theirmodule@bugfixes
+----
+
+## 删除依赖项
+
+当您的代码不再使用模块中的任何包时，您可以停止将该模块作为依赖项进行跟踪。
+
+要停止跟踪所有未使用的模块，请运行 https://go.dev/ref/mod#go-mod-tidy[go mod tidy]，此命令还可能添加缺失的依赖项。
+
+----
+$ go mod tidy
+----
+
+要删除特定依赖项，请使用 https://go.dev/ref/mod#go-get[go get] 命令，指定模块的路径并附加 `@none`，如下例所示：
+
+----
+$ go get example.com/theirmodule@none
+----
+
+此时还将降级或删除依赖于被删除模块的其他依赖项。
+
+[[指定模块代理服务器]]
+## 指定模块代理服务器
+
+当您使用 Go tools 处理模块时，这些工具默认从 proxy.golang.org（一个公共的 Google 运行的模块镜像）或直接从模块的存储库下载模块，您可以指定 Go tools 从其他特定代理服务器来下载和验证模块。
+
+设置代理服务器有很多用途。例如，更好地控制依赖项的使用方式，或者提升模块的下载速度。
+
+要为 Go tools 指定另一个模块代理服务器，请将 `GOPROXY` 环境变量设置为一个或多个代理服务器的 URL。Go tools 将按照您指定的顺序尝试每个 URL。默认情况下，`GOPROXY` 首先指定一个公共的 Google 运行模块代理，然后从模块的存储库直接下载（在其模块路径中指定）：
+
+----
+GOPROXY="https://proxy.golang.org,direct"
+----
+
+有关 `GOPROXY` 环境变量的更多信息，包括支持其他行为的值，请参阅 https://go.dev/cmd/go/#hdr-Module_downloading_and_verification[go命令参考手册]。
+
+配置多个代理服务器，需要使用 `,` 或者管道符 `|` 分隔：
+
+- 如果配置了多个代理服务器，Go tools 仅在当前 URL 返回 HTTP 404 或 410 时才会尝试列表中的下一个 URL。
+
+----
+GOPROXY="https://proxy.example.com,https://proxy2.example.com"
+----
+
+- 当您使用管道时，Go tools 将尝试列表中的下一个 URL，而不管 HTTP 错误代码如何。
+
+----
+GOPROXY="https://proxy.example.com|https://proxy2.example.com"
+----
+
+[NOTE]
+====
+.译注
+国内使用的镜像通常为：https://goproxy.cn/
+====
+
+Go 模块经常在公网不可访问的私有版本控制服务器和模块代理上开发和发布，您可以设置 `GOPRIVATE` 环境变量来配置 `go` 命令以从私有地址中下载和构建模块。
+
+`GOPRIVATE` 或 `GONOPROXY`  环境变量可以设置为全局匹配模块列表前缀，这些前缀是私有的，不能被任何代理请求。例如：
+
+----
+GOPRIVATE=*.corp.example.com,*.research.example.com
+----
+
+<完>

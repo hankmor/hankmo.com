@@ -1,0 +1,136 @@
+---
+title: Java设计模式(4)-简单工厂模式
+slug: java-simple-factory-pattern
+date: 2020/06/05
+img: /images/thumbnail/yinghuochong.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 简单工厂模式
+description: >-
+  工厂模式，一般分为三种，包括：简单工厂模式（也叫静态工厂模式）、工厂方法模式、抽象工厂模式。在GOF提及的23中设计模式中，没有简单工厂模式，但对于简单的软件开发中，简单工厂模式使用的还是很普遍的。
+---
+
+[[designpattern-simplefactory]]
+= Java设计模式(4)-简单工厂模式
+:key_word: 
+:Author: belonk.com belonk@126.com
+:Date: 2020/5/26
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+工厂模式，一般分为三种，包括：简单工厂模式（也叫静态工厂模式）、工厂方法模式、抽象工厂模式。在GOF提及的23中设计模式中，没有简单工厂模式，但对于简单的软件开发中，简单工厂模式使用的还是很普遍的。
+
+== 简介
+
+传统的设计，客户端创建各种产品，来实现功能。这样，客户端与各种产品进行了耦合，违背了OCP原则。
+
+.传统设计
+image::/images/attachment/designpattern/no-simple-factory.png[]
+
+我们能不能把产品的创建过程抽取出来，形成一个产品创建工厂呢？这样，就可以使创建与使用相分离，客户端就直接依赖工厂，而不是与直接的产品进行耦合了。这就是工厂模式的思路。
+
+简单工厂模式是工厂模式的一种，它的工厂负责创建具体的产品，客户端不需要关注产品的创建过程，而是直接依赖工厂即可。简单工厂模式的类图如下：
+
+.简单工厂模式
+image::/images/attachment/designpattern/simple-factory-structure.png[]
+
+简单工厂又称为静态工厂，因为它创建产品的方法一般都是静态方法，客户端不需要实例化工厂就可以直接调用它的产品创建方法。
+
+优点::
+. 产品的创建过程抽取出来，客户端与具体产品创建过程解耦;
+. 客户端仅负责自身业务，不关注产品创建过程，职责更单一
+
+缺点::
+. 工厂和产品耦合，违背了OCP原则，添加新产品需要修改工厂类代码
+. 工厂类的方法是静态的，并不利于扩展
+
+因此，简单工厂模式适用于创建的产品比较固定，种类少、变动不频繁的场景，往往在小型系统适用。
+
+== 示例
+
+举个例子，现在有一个牛奶店售卖各种牛奶，假设出售的过程包括生产、收款、拿货几个步骤，而且此店售卖的牛奶种类不是很多。如果没有工厂，店铺不但需要处理售卖的逻辑，而且还需要创建各种牛奶的实例。这会导致客户端职责过多，并不利于其管理和维护。
+
+现在的设计这样的：
+
+image::/images/attachment/designpattern/no-simple-factory-demo.png[]
+
+[source,java]
+----
+class Store {
+	public Milk sale(String name) {
+		System.out.println("顾客购买牛奶");
+		System.out.println("  > 生产牛奶");
+		Milk milk = createMilk(name);
+		System.out.println("  > 收款");
+		System.out.println("  > 拿货");
+		return milk;
+	}
+
+	public Milk createMilk(String name) {
+		if ("pure".equals(name)) {
+			return new PureMilk();
+		} else if ("yogurt".equals(name)) {
+			return new Yogurt();
+		} else if ("highCalcium".equals(name)) {
+			return new HighCalciumMilk();
+		} else {
+			throw new RuntimeException("无法生产牛奶：" + name);
+		}
+	}
+}
+----
+
+此时可以考虑用静态工厂模式来改造，设计变成了这样：
+
+image::/images/attachment/designpattern/simple-factory-demo.png[]
+
+[source,java]
+----
+class Store {
+	public Milk sale(String name) {
+		System.out.println("顾客购买牛奶");
+		System.out.println("  > 生产牛奶");
+		Milk milk = createMilk(name);
+		System.out.println("  > 收款");
+		System.out.println("  > 拿货");
+		return milk;
+	}
+
+	public Milk createMilk(String name) {
+		return MilkOrderFactory.createMilk(name);
+	}
+}
+
+class MilkOrderFactory {
+	public static Milk createMilk(String name) {
+		if ("pure".equals(name)) {
+			return new PureMilk();
+		} else if ("yogurt".equals(name)) {
+			return new Yogurt();
+		} else if ("highCalcium".equals(name)) {
+			return new HighCalciumMilk();
+		} else {
+			throw new RuntimeException("无法订购牛奶：" + name);
+		}
+	}
+}
+----
+
+现在，客户端需要牛奶，直接向工厂订购就行了，自己不关心生产牛奶的过程了。
+
+== 总结
+
+简单工厂模式，属于最简单的工厂模式，它体现了工厂模式最基本形态。但是它会违背软件设计的开闭原则，在使用时应该慎重考虑，如果生产的产品数量小，可以考虑使用，但是如果产品类型多、数量大，就应该考虑工厂方法模式或者抽象工厂模式了。
+
+本文示例代码见： https://github.com/belonk/java-designpattern[Github]

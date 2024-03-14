@@ -1,0 +1,210 @@
+---
+title: Java设计模式(12)-组合模式
+slug: java-composite-pattern
+date: 2020/12/7
+img: /images/thumbnail/tree.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 组合模式
+description: 组合模式（Composite Pattern），将对象组合成树形结构以表示**"部分-整体"**的层次结构，使得用户对单个对象和组合对象的使用具有一致性。
+updated:
+---
+
+= Java设计模式(12)-组合模式
+:key_word: 组合模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2020/12/7
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+image::/images/thumbnail/tree.png[]
+
+== 整体与部分的关系
+
+很多场景下，需要考虑整体和部分之间的关系，在对其进行管理功能设计时，需要考虑到灵活性和扩展性，而继承关系往往不能很好地解决这些问题。一个最典型的例子就是：组织机构。比如，就公司而言，总公司可能下设有分公司，分公司下又有办事处，而办事处、分公司、总公司可能都会存在一些职能部门。很明显，组织机构是一个整体和部分的关系，并且它是一颗树状结构。
+
+.复杂的组织机构树状结构
+image::/images/attachment/designpattern/composite-pattern-org-tree.png[]
+
+设计这样的结构，你是否会使用继承关系？如让分公司继承总公司、办事处继承分公司，这样往往是从机构的大小维度来划分的，子类除了具备父类的功能外，还能够独立扩展功能。但是，在组织机构树中，其实每个节点（机构）所承担只能都是差不多的，换言之，总公司、分公司、办事处三者其实并没有父子关系，在管理职能上他们的功能是相同的，比如都能添加、删除、查询子的机构节点。所以采用继承关系来设计其实是不合适的。
+
+还有很多整体-部分关系的例子，比如学校、学院和系的关系，电脑组装商家可以出售整机也可以出售配件，文字处理软件中单个文字和整段甚至整篇文字的处理方式差不多，又如Java AWT、Swing中的容器组件和简单控件的关系。其实，这一类问题，最终解决的都是**整体和部分被一致对待**的问题，组合模式很好的解决了这个问题。
+
+== 组合模式简介
+
+在Design Patterns一书中对组合模式的定义如下：
+
+====
+组合模式（Composite Pattern），将对象组合成树形结构以表示**"部分-整体"**的层次结构，使得用户对单个对象和组合对象的使用具有一致性。
+====
+
+组合模式是一种结构型设计模式，其"对象组合成树形结构"定义代表了对整体部分关系的抽象，将树形结构抽象为三个部分：*根节点、树枝节点和叶子节点*，其中，根节点、树枝节点可以添加子节点，而叶子节点不能添加子节点。因此，组合模式有两种方式：透明方式和安全方式。
+
+在说明这两种方式之前，先看看组合模式的角色：
+
+* 抽象构件（Component）：对象组合的高度抽象构件，声明了对象操作的公共接口。透明方式和安全方式对节点管理方法的声明存在差异：透明方式会声明管理节点的接口，如添加、删除，但是安全方式不会声明管理接口，而是将其移交到树枝节点声明和实现，具体后边再说；
+* 树枝构件（Composite）：树形结构的分支节点，实现抽象构件，同时承担管理子节点职能，如实现添加、删除节点的方法；
+* 树叶构件（Leaf）：树形结构的叶子几点，没有子节点，所以不承担管理职能，它实现添加、删除等管理职能方法是没有意义的；
+
+透明方式和安全方式主要区别在于：客户端是否需要区分树枝构件（Composite）和树叶构件（Leaf），透明方式则不区分，而安全方式则需要区分。
+
+=== 透明方式
+
+透明方式，不区分树叶构件和树枝构件，两者都实现构建构件的api，因此，树形结构管理职能的API(添加、修改、删除等)声明在抽象构件中，客户端使用时不需要区分树枝和树叶，因为他们具有相同的方法。类图如下：
+
+.透明方式类图
+image::/images/attachment/designpattern/composite-pattern-tmfs.png[]
+
+这种方式的好处在于，客户端不需要判断树叶构件和树枝构件，因此对客户端是统一的或者说透明的，方便管理；但是前边我们说过，树叶构件是没有子节点的，它不承担管理职能，实现管理职能的方法没有意思，因此我们只能进行方法空实现或者抛出异常，这一点不太友好。
+
+=== 安全方式
+
+相对于透明方式，安全方式显得比较保守。它只在抽象构件中声明公共方法，管理职能的方法放到树枝构件中进行声明和实现，这样树叶构件就不会存在管理职能的方法了。类图如下：
+
+.安全方式类图
+image::/images/attachment/designpattern/composite-pattern-aqfs.png[]
+
+这种方式的优点在于，树叶构件不需要对管理职能方法做无意义的空实现或抛异常，代码更严谨，但是其缺点也很明显：客户端需要明确知道调用的是树叶构件还是树枝构件，相对而言比较麻烦。
+
+== 应用示例
+
+看一个例子。大学中分为多个学院，每个学院下又存在多个系（专业），我们看看如果运用组合模式来实现。
+
+分析：学校、学院、系属于整体和部分关系，我们将其看做同一个整体并进行抽象，得到一个组织机构接口，让他们分别实现该接口。同时，学校、学院下都包含子节点，因此他们可以看做树枝构件，内部持有一个``List``来保存子节点数据，而系下不再有子节点，它属于树叶构件。
+
+.学校学院系类图
+image::/images/attachment/designpattern/composite-pattern-yysl.png[]
+
+类图中，``Organization``为抽象构件，声明了``add``、``remove``两个管理职能方法，而业务处理方法只有一个``print``方法，用来打印自身和其下的所有子节点。
+
+[TIP]
+====
+从类图可以看出，我们使用的是组合模式的透明方式。
+====
+
+具体代码如下：
+
+1、抽象构件：
+[source,java]
+----
+interface Organization {
+	void add(Organization org);
+
+	void remove(Organization org);
+
+	void print();
+}
+----
+
+2、树枝构件：
+
+[source,java]
+----
+// 学校
+class University implements Organization {
+	private final String name;
+	private final List<Organization> colleges = new ArrayList<>(); // <1>
+
+	public University(String name) {
+		this.name = name;
+	}
+
+	@Override
+	public void add(Organization org) {
+		this.colleges.add(org);
+	}
+
+	@Override
+	public void remove(Organization org) {
+		this.colleges.remove(org);
+	}
+
+	@Override
+	public void print() { // <2>
+		System.out.println(this.name);
+		for (Organization college : colleges) {
+			college.print();
+		}
+	}
+}
+----
+<1> 用一个``List``结构存储其子节点信息。
+<2> 先打印自身，然后在调用每一个子节点的``print()``方法。
+
+[source,java]
+----
+// 学院
+class College implements Organization {
+	private final String name;
+	private final List<Organization> depts = new ArrayList<>();
+
+	public College(String name) {
+		this.name = name;
+	}
+
+	@Override
+	public void add(Organization org) {
+		this.depts.add(org);
+	}
+
+	@Override
+	public void remove(Organization org) {
+		this.depts.remove(org);
+	}
+
+	@Override
+	public void print() {
+		System.out.println("--" + this.name);
+		for (Organization dept : depts) {
+			dept.print();
+		}
+	}
+}
+----
+
+3、树叶构件：
+
+[source,java]
+----
+class Department implements Organization {
+	private final String name;
+
+	public Department(String name) {
+		this.name = name;
+	}
+
+	@Override
+	public void add(Organization org) { // <1>
+		throw new UnsupportedOperationException("系不能进行添加操作");
+	}
+
+	@Override
+	public void remove(Organization org) { // <1>
+		throw new UnsupportedOperationException("系不能进行删除操作");
+	}
+
+	@Override
+	public void print() {
+		System.out.println("----" + this.name);
+	}
+}
+----
+<1> 对于管理方法，直接抛异常
+
+== 总结
+
+. 组合模式将整体部分一致对待，简化了客户端操作；
+. 具备良好的扩展性，组合对象的层次结构可以扩展，修改组合对象时只需要调整层次关系，客户端代码不需要改动；
+. 组合模式适用于整体部分关系可以抽象与树形结构的场景，并且树枝和树叶差异不大的情况适用。

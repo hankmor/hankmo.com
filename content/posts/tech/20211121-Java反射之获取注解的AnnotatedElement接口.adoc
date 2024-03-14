@@ -1,0 +1,400 @@
+---
+title: Java反射之获取注解的AnnotatedElement接口
+slug: annotated-element
+img: /images/thumbnail/train.png
+categories:
+  - Java
+tags:
+  - reflect
+  - 反射
+  - java
+  - AnnotatedElement
+description: AnnotatedElement接口是用于反射获取注解的顶层接口，其api获取的注解与注解的存在形式息息相关，注解有四中存在形式：直接存在、间接存在、存在和关联。这几种注解存在的形式的出现原因，一方面是由于注解可以通过继承关系传递，另一方面是Java提供了定义可重复注解的功能。
+date: 2021-11-21 00:00:00
+updated: 2021-11-21 00:00:00
+---
+
+[[AnnotatedElement]]
+= Java反射之获取注解的AnnotatedElement接口
+:key_word: Java,反射,Type,AnnotatedElement,Class,Field,Method,Parameter,Constructor,Annotation,Array,泛型数组,ParameterizedType,TypeVariable,WildcardType,GenericArrayType
+:author: belonk.com
+:date: 2021-11-21
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: java,反射,reflect
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在<</2021/11/09/reflect-class#reflect-class,Java反射的体系结构>>一文中说过，`AnnotatedElement` 接口定义了通过反射获取注解信息的方法，它是一个顶层接口，能够被标记注解的反射类都实现了该接口从而得到反射获取注解的能力，比如 `Class`、`Field`、`Constructor`、`Method`、`Parameter` 都实现了该接口。本文将详细介绍 `AnnotatedElement`。
+
+== 再说注解
+
+注解是JDK1.5推出的新特性，用于标注Java中的特定元素，以便通过反射来获取它们，并实现不同的功能。本文不会讨论注解的基本知识，有兴趣的可以自行查阅相关资料。但是注解有一些特性需要细说一番。
+
+[[anno-target]]
+=== 注解标注的位置
+
+Java中，注解可以标注在多个位置上，常见的包括类、接口上、方法（构造函数）、方法参数（构造函数参数）、成员域上以及标注在注解上（注解的注解），甚至可以将注解标注在 `package-info.java` 文件中定义的包上，这些位置是在定义注解时通过元注解 `@Target` 来指定的，比如向下边这样：
+
+[[custom-anno]]
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.PACKAGE, ElementType.TYPE, ElementType.FIELD})
+public @interface CustomAnno {
+	String value() default "";
+}
+----
+
+可以看到，通过 `ElementType` 来指定注解可以标注的位置，它定义了以下几种位置：
+
+. `ElementType.TYPE`: 标注在类型上，包括接口、类、枚举等
+. `ElementType.FIELD`: 标注在类、接口的成员域上，包括枚举的元素
+. `ElementType.CONSTRUCTOR`: 标注在构造器上
+. `ElementType.ANNOTATION_TYPE`: 标注在其他注解上
+. `ElementType.METHOD`: 标注在方法上
+. `ElementType.PARAMETER`: 标注在方法参数上
+. `ElementType.LOCAL_VARIABLE`: 标注本地变量上，即构造器、静态代码块、方法等的内部变量
+. `ElementType.PACKAGE`: 标注在 `packag-info.java` 文件中定义的包上
+. `ElementType.TYPE_PARAMETER`: 标注在类型参数上，比如泛型参数T、E上
+. `ElementType.TYPE_USE`: 使用类型，注解可以标注在任何类型变量上
+
+上边的最后两个是在JDK1.8新增的，用于在注解标注在泛型上的情况，涉及到 `AnnotatedType` 接口，我们将在下一篇专门行文来介绍它。
+
+注解用于包上的例子：
+
+[[anno-on-package]]
+.package-info.java
+[source,java]
+----
+@CustomAnno("package")
+package com.belonk.lang.reflect;
+----
+
+其他标注位置比较常见，就不在赘述了。
+
+[[anno-extend]]
+=== 注解的继承
+
+Java中定义注解时，可以指定其是否可以被继承。注解继承指的是父类标注的注解可以作用于子类，而不是说一个注解继承另一个注解。比如，自定义如下注解：
+
+[[anno-myanno]]
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Inherited // <1>
+@interface MyAnno {
+	String value() default "";
+}
+----
+<1> 标记了元注解 `@Inherited` 即表示该注解可以继承
+
+然后，编写一个父类，它被标注了自定义注解：
+
+[[AnnotatedClass]]
+[source,java]
+----
+@MyAnno
+class AnnotatedClass {
+}
+----
+
+现在，再编写一个子类，代码如下：
+
+[[SubAnnotatedClass]]
+[source,java]
+----
+class SubAnnotatedClass extends AnnotatedClass {
+}
+----
+
+虽然子类上没有标注任何注解，但是它可以从父类继承得到注解 `@MyAnno`。
+
+[[anno-repeatable]]
+=== 可重复注解
+
+在Java中，一个注解是不允许重复标记的，否则会报告编译错误。例如，将前边的 `AnnotatedClass` 重复标注注解 `@MyAnno`，编译器会报告错误：
+
+[source,java]
+----
+@MyAnno
+// @MyAnno // <1>
+class AnnotatedClass {
+
+}
+----
+<1> 尝试重复标注该注解，编译器会报告错误：duplicate annotation
+
+有时候，我们需要多次标注同一个注解，以便使用它们的不同属性，一种办法是使用一个组合注解，其持有一个注解数组，因此它可以将多个注解组合起来，就像下边这样：
+
+[[composite-anno]]
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@interface MyAnnos {
+	MyAnno[] value() default {}; // <1>
+}
+
+@MyAnnos({@MyAnno("a"), @MyAnno("b")}) // <2>
+class SubAnnotatedClass2 extends AnnotatedClass {
+}
+----
+<1> 持有 `@MyAnno` 注解的数组, 可以定义多个 `@MyAnno` 注解
+<2> 组合多个 `@MyAnno` 注解
+
+比如 SpringMVC的 `ComponentScan` 注解，其内部的 `includeFilters` 属性可以定义多个 `Filter` 注解，这样就可以定义扫描组件时的多个过滤器，具体可以看<</2020/05/07/methods-to-add-beans-to-spring#use-componentscan,给Spring注册Bean的几种方式>>一文。
+
+那么，是否还可以创建可重复标记的注解呢？答案时肯定的。除了前边所述的 `@Inherited` 元注解，Java还提供了 `@Repeatable` 元注解专门用来定义可重复注解。一个简单示例如下：
+
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Inherited
+@Repeatable(MyRepeatableAnno.class) // <1>
+@interface MyAnno1 {
+	String value() default "";
+}
+----
+<1> 定义当前的 `MyAnno1` 注解是可重复标记的，即可多次标注于同一个元素上
+
+注意标记1处的 `@Repeatable` 注解，它只有一个属性 `value`，表示组合当前注解的注解，看似不好理解，其含义稍后再来解释。既然 `@Repeatable` 引用的是一个注解，那么我们需要定义它：
+
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Inherited
+@interface MyRepeatableAnno {
+	MyAnno1[] value() default {}; // <1>
+}
+----
+<1> 定义注解数组，可以引用多个 `@MyAnno1` 注解
+
+好了，现在可重复注解定义完成了，使用时，重复标记 `@MyAnno1` 即可：
+
+[[AnnotatedClass1]]
+[source,java]
+----
+@MyAnno1("a")
+@MyAnno1("b")
+class AnnotatedClass1 {
+}
+----
+
+现在重复标记 `@MyAnno1` 没有问题了，不会报告编译错误了。
+
+回到前边的问题：`@Repeatable` 注解的 `value` 属性表示组合当前注解的注解，这个怎么理解呢？其实，反编译 `AnnotatedClass1` ，可以看到是这样的：
+
+[source,java]
+----
+@MyRepeatableAnno({@MyAnno1("a"), @MyAnno1("b")})
+class AnnotatedClass1 {
+    AnnotatedClass1() {
+    }
+}
+----
+
+这下应该很明确了，其实 `@Repeatable` 只是一个语法糖，实际上还是用其 `value` 属性指向的注解来组合可重复标记注解（这里是 `MyAnno1`），所以称之为组合注解的注解。由于这种定义可重复注解的方式更难以理解，所以一般用的比较少，还是前边自定义组合注解的方案来的更简单、直接。
+
+== 注解存在的四种形式
+
+有了前边的基础，现在是时候介绍注解存在的形式了。注解存在的形式即用来描述注解作用于特定元素(类、接口、方法、成员域、参数等)的范围和关系。注解一共有四种存在形式：直接存在、间接存在、存在、关联。
+
+* **直接存在**：如果注解注解标注在元素上，就说注解直接存在于元素上；
+* **简介存在**：一个被 `@Repeatable` 标注的注解(可重复注解)标注在元素上，它就与该元素呈间接存在关系，因为底层class标注的不是它，而是 `@Repeatable` 指向的组合注解，见<<#anno-repeatable>>；
+* **存在**：注解满足直接存在或者间接存在，或者类上的注解可以从其父类继承得到，那么可以就说注解**存在**；
+* **关联**：注解满足直接存在或间接存在，或者类的父类与该注解存在关联（直接存在或间接存在），就说该注解与类关联
+
+比如，再前边的示例中，`MyAnno` **直接存在**于<<#AnnotatedClass,AnnotatedClass>>上，但是它**存在**于<<SubAnnotatedClass, SubAnnotatedClass>>上，因为它可以通过子类从父类继承得到；而 `MyRepeatableAnno` 间接存在于<<#AnnotatedClass1, AnnotatedClass1>>上，因为它是通过可重复注解 `MyAnno1` 间接用作与类上的。
+
+[IMPORTANT]
+====
+.为什么要知道注解的这四种存在形式？
+因为知道注解的存在形式很重要，`AnnotatedElement` 接口的一些api于注解存在形式有直接的关系，后边会介绍，
+====
+
+[NOTE]
+====
+要表示注解的这几种存在关系，用注解标记于类上是最简单的方式，因为类可以继承。因此，我们本文仅测试类上的注解，方法、参数、成员域的注解形式未做测试。
+====
+
+[[annotated-element]]
+== AnnotatedElement接口
+
+`AnnotatedElement` 是JDK1.5提供的用反射获取注解的顶层接口，其目的就是获取注解。
+
+=== AnnotatedElement的类设计体系
+
+先来看看 `AnnotatedElement` 的类设计体系，既然它是顶层接口，那么肯定会有多个实现类和子接口，其类体系如下图所示：
+
+.AnnotatedElement类体系
+image::/images/reflect/annotatedElementTree.png[]
+
+可以看到，其子类或接口包括了前边几篇介绍过的 `Class`、`TypeVariable`、`Parameter`、`Package`、`AccessibleObject`、`GenericDeclaration` 它们实现或继承它的目的都是用来获取注解。在这些元素上获取注解时，就可以直接调用 `AnnotatedElement` 的相关方法。
+
+除了上述的实现类或子接口，`AnnotatedElement` 还有一个重要的接口 `AnnotatedType`，我们将在下一篇来详细讨论。
+
+=== AnnotatedElement接口api
+
+`AnnotatedElement` 定义如下：
+
+[source,java]
+----
+public interface AnnotatedElement {
+	default boolean isAnnotationPresent(Class<? extends Annotation> annotationClass) { // <1>
+        return getAnnotation(annotationClass) != null;
+    }
+
+    <T extends Annotation> T getAnnotation(Class<T> annotationClass); // <2>
+
+	Annotation[] getAnnotations(); // <3>
+
+	default <T extends Annotation> T[] getAnnotationsByType(Class<T> annotationClass) { // <4>
+		// 省略实现代码
+	}
+
+	default <T extends Annotation> T getDeclaredAnnotation(Class<T> annotationClass) { // <5>
+		// 省略实现代码
+	}
+
+	default <T extends Annotation> T[] getDeclaredAnnotationsByType(Class<T> annotationClass) { // <6>
+		// 省略实现代码
+    }
+
+    Annotation[] getDeclaredAnnotations(); // <7>
+}
+----
+<1> 检查注解是否**存在**，效果等同于 `getAnnotation(annotationClass) != null`；
+<2> 获取**存在**的指定类型的注解，**不能获取可重复注解本身，但是可以获取其组合注解**；
+<3> 获取**存在**的所有注解，**不能获取可重复注解本身，但是可以获取其组合注解**；
+<4> JDK1.8新增，获取**关联**的指定类型的注解，于 `getAnnotation(Class)` 不同，它可以**获取可重复注解本身以及其下层的组合注解**；
+<5> JDK1.8新增，获取直接存在的注解，忽略继承的注解，**不能获取可重复注解本身，但是可以获取其组合注解**
+<6> JDK1.8新增，获取直接存在的和间接存在的注解，忽略继承的注解，**可以获取可重复注解本身和其组合注解**
+<7> 获取**直接存在**的所有注解，包括可重复注解下的组合注解，不包括可重复注解
+
+这些api与注解存在形式息息相关，api与可获取的注解存在形式如下表所示：
+
+[cols="4,^1,^1,^1,^1",options="header"]
+|===
+|方法|直接存在|间接存在|存在|关联
+|T getAnnotation(Class<T>)                 |||✅|
+|Annotation[] getAnnotations()             |||✅|
+|T[] getAnnotationsByType(Class<T>)        ||||✅
+|T getDeclaredAnnotation(Class<T>)         |✅|||
+|Annotation[] getDeclaredAnnotations()     |✅|||
+|T[] getDeclaredAnnotationsByType(Class<T>)|✅|✅||
+|===
+
+[TIP]
+====
+本文将可重复标记的注解称为“可重复注解”，将其上的 `@Repeatable` 注解指向的注解称为 “组合注解”。
+====
+
+[NOTE]
+====
+总结一下几组api的区别：
+
+* getAnnotations() 和 getDeclaredAnnotations(): 两者都不能获取可重复注解，但是都可以获取可重复注解下的组合注解；前者获取**存在**的注解，后者获取**直接存在**的注解。
+* getAnnotation(Class) 与 getAnnotationsByType(Class) 的区别：前者不能获取可重复的注解，而是获取可重复注解下层的组合注解；后者可以获取可重复注解和下层的组合注解。
+* getDeclaredAnnotation(Class) 与 getDeclaredAnnotationsByType(Class) 的区别：两个都忽略继承的注解，前者获取直接存在的和间接存在的注解，不能获取重复注解；后者获取直接存在和间接存在的注解，包括重复注解
+
+总之一句话：getDeclaredXxx忽略继承关系，仅可获取直接存在的注解；不带Declared的可以获取存在的注解；getXxxByType(Class) 可以获取可重复注解以及其组合注解，不带ByType的只能获取可重复注解的组合注解。
+
+====
+
+在<</2021/11/09/reflect-class#reflect-class,Java反射的体系结构>>一文中说过，`Class` 实现了 `AnnotatedElement` 接口，而 `Constructor`, `Method`, `Field`, `Parameter` 也都间接实现了该接口，因此获取注解只需要调用对应的api即可，至于泛型参数中的注解，我们将在下一篇文章中介绍。这里看一个简单的例子，基于前边的示例，再添加如下几个类：
+
+[source,java]
+----
+class AnnotatedClass2 extends AnnotatedClass1 {
+
+}
+
+@MyAnno1("a")
+@MyAnno1("b")
+@MyAnno
+class AnnotatedClass3 {
+
+}
+----
+
+测试代码如下；
+
+[source,java]
+----
+public class AnnotatedElementDemo {
+	// 省略部分代码......
+	public void annotationApi() {
+		// 获取组合注解
+		MyRepeatableAnno myRepeatableAnno = AnnotatedClass2.class.getAnnotation(MyRepeatableAnno.class);
+		assert myRepeatableAnno != null;
+		System.out.println(myRepeatableAnno);
+		// 不能获取可重复注解
+		MyAnno1 myAnno1 = AnnotatedClass1.class.getAnnotation(MyAnno1.class);
+		Assert.isNull(myAnno1);
+
+		// 获取存在的注解，只能获取间接存在的MyRepeatableAnno注解
+		Annotation[] annotations = AnnotatedClass2.class.getAnnotations();
+		Assert.isTrue(annotations.length == 1);
+
+		// 可以获取关联的注解，MyRepeatableAnno注解是从父类继承的
+		MyRepeatableAnno[] annotationsByType = AnnotatedClass2.class.getAnnotationsByType(MyRepeatableAnno.class);
+		Assert.isTrue(annotationsByType.length == 1);
+		MyAnno1[] annotationsByType1 = AnnotatedClass2.class.getAnnotationsByType(MyAnno1.class);
+		Assert.isTrue(annotationsByType1.length == 2);
+
+		// 获取直接注解
+		MyRepeatableAnno declaredAnnotation = AnnotatedClass2.class.getDeclaredAnnotation(MyRepeatableAnno.class);
+		Assert.isNull(declaredAnnotation);
+		// 获取直接存在的注解，该类上没有标注任何注解
+		Annotation[] declaredAnnotations = AnnotatedClass2.class.getDeclaredAnnotations();
+		Assert.isTrue(declaredAnnotations.length == 0);
+		// 获取间接存在的注解
+		MyRepeatableAnno declaredAnnotation2 = AnnotatedClass1.class.getDeclaredAnnotation(MyRepeatableAnno.class);
+		Assert.notNull(declaredAnnotation2);
+		// 不能获取重复注解
+		MyAnno1 myAnno11 = AnnotatedClass1.class.getDeclaredAnnotation(MyAnno1.class);
+		Assert.isNull(myAnno11);
+		// 忽略继承
+		MyRepeatableAnno[] declaredAnnotationsByType = AnnotatedClass2.class.getDeclaredAnnotationsByType(MyRepeatableAnno.class);
+		Assert.isTrue(declaredAnnotationsByType.length == 0);
+		// 获取直接存在的重复注解
+		MyAnno1[] myAnno1s = AnnotatedClass3.class.getDeclaredAnnotationsByType(MyAnno1.class);
+		Assert.isTrue(myAnno1s.length == 2);
+		// 获取直接存在的非重复注解
+		MyAnno[] myAnnos = AnnotatedClass3.class.getDeclaredAnnotationsByType(MyAnno.class);
+		Assert.isTrue(myAnnos.length == 1);
+		// 获取简介存在的注解
+		MyRepeatableAnno[] myRepeatableAnnos = AnnotatedClass3.class.getDeclaredAnnotationsByType(MyRepeatableAnno.class);
+		Assert.isTrue(myRepeatableAnnos.length == 1);
+
+		// 检查是否存在指定注解
+		boolean annotationPresent = AnnotatedClass2.class.isAnnotationPresent(MyRepeatableAnno.class);
+		Assert.isTrue(annotationPresent);
+		boolean annotationPresent1 = AnnotatedClass2.class.isAnnotationPresent(MyAnno1.class);
+		Assert.isTrue(!annotationPresent1);
+	}
+
+	// 省略部分代码......
+}
+----
+
+完整的示例代码见： https://github.com/koobyte/java-learning/tree/master/src/main/java/com/belonk/lang/reflect[github].
+
+== 总结
+
+`AnnotatedElement` 接口是用于反射获取注解的顶层接口，其api获取的注解与注解的存在形式息息相关，注解有四中存在形式：直接存在、间接存在、存在和关联。这几种注解存在的形式的出现原因，一方面是由于注解可以通过继承关系传递，另一方面是Java提供了定义可重复注解的功能。然而，可重复注解仅仅是语法糖，而且难以理解，反射获取注解时更是容易混淆，因此，定义同一个注解的多次标记的更好的方式是自定义一个组合注解，通过数组来引用，这样更加清晰和明确。

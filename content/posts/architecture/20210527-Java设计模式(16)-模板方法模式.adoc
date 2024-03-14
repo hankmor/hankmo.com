@@ -1,0 +1,226 @@
+---
+title: Java设计模式(16)-模板方法模式
+slug: java-template-method-pattern
+date: 2021/05/27
+img: /images/wall.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 模板方法模式
+description: 模板方法模式，其核心思想是：定义一个操作中的算法骨架，而将算法的一些步骤延迟到子类中，使得子类可以不改变该算法结构的情况下重定义该算法的某些特定步骤。
+updated:
+---
+
+= Java设计模式(16)-模板方法模式
+:key_word: 设计模式,模板方法模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2021/05/27
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+软件设计过程中，有时候我们发现某一业务场景的基本流程是固定的，但是可能不同业务的某些步骤存在一些差异，但是整体上存在很大的共性。比如，现在全国正大力推动新冠疫苗的接种工作，不论是现在的新冠疫苗，还是以前接种的乙肝、流感等等疫苗，接种的流程其实都差不多，比如可能都需要经过预约、前往、现场审核、接种和最后的观察等步骤。现在我们来设计疫苗接种的类图，怎么设计呢？我们可以找出流程中的共性，设计出几个基本的流程骨架，然后将不同的步骤抽象化，由具体子类去实现，这就是"模板方法模式"。
+
+前边的系列文章，我们已经学习了创建型设计模式和结构型设计模式，从本篇开始开始学习行为型设计模式。模板方法模式属于行为型设计模式的一种，比较简单，我们直接切入正题。
+
+== 模板方法模式
+
+模板方法模式（Template Method Pattern），也称模板模式，其思想是：**定义一个操作中的算法骨架，而将算法的一些步骤延迟到子类中，使得子类可以不改变该算法结构的情况下重定义该算法的某些特定步骤**。
+
+模板方法模式的类图如下：
+
+image::/images/attachment/designpattern/template-method-class.png[]
+
+从图上可以看到，模板方法模式分为2个部分：
+
+- 抽象模板类(Abstract Template)：给出一个算法的轮廓和骨架。它由一个模板方法和若干个基本方法构成。
+. 模板方法：模板方法定义了算法的骨架，内部会顺序调用其他基本方法，实现某一算法流程。通常，模板方法会定义为``final``的以禁止子类重写；
+. 基本方法：基本方法定义了算法流程中的某一个步骤，它可以定义为**抽象方法**，具体实现交给子类；也可以定义为**普通方法**，即提供了默认实现，子类可以选择是否重写。还有一种比较特殊的方法，称为**钩子方法**，这种方法默认是空方法，子类可以选择是否重写。
+- 具体实现类(Concrete Class)：实现抽象模板类定义的抽象方法，并依据情况覆盖抽象模板类提供的基本方法，完成自身特定的业务逻辑处理。
+
+**优点**
+
+模板方法模式的优点：
+
+- 可扩展性: 模板方法模式封装了程序不变的部分，将可变的部分延迟到子类实现，可以很容的扩展多个具体子类实现
+- 代码重用: 公共代码抽象到父类中，便于代码的复用
+
+**缺点**
+
+- 基于继承体系实现，因此具有继承体系的缺点，如在父类添加抽象方法，所有子类都需要实现
+- 存在多个子类，导致类的数量过多，系统变的庞大
+
+== 示例
+
+模板方法模式较为简单，我们来看一个demo。
+
+[NOTE]
+====
+案例：以本文开头的疫苗接种为例，疫苗接种需要经过预约、前往、现场审核、接种和观察等步骤，使用模板方法模式设计程序。
+====
+
+程序代码如下：
+
+1、首先，抽象模板类：
+
+.代码清单：抽象模板类
+[source,java]
+----
+abstract class AbstractVaccinate {
+	protected final String name;
+
+	public AbstractVaccinate(String name) {
+		this.name = name;
+	}
+
+	// 疫苗接种
+	public final void vaccinate() { // <1>
+		order();
+		tripMode();
+		check();
+		vaccinating();
+		if (mustObservate()) // <5>
+			observate();
+		afterVaccinated();
+	}
+
+	// 预约
+	public abstract void order(); // <2>
+
+	// 去往接种目的地方式
+	public void tripMode() { // <3>
+		System.out.println(this.name + " 接种前自行前往接种地...");
+	}
+
+	// 审核
+	public abstract void check(); // <2>
+
+	// 接种
+	public void vaccinating() { // <3>
+		System.out.println(this.name + " 接种中...");
+	}
+
+	// 观察
+	public void observate() { // <3>
+		System.out.println(this.name + " 接种后观察30分钟...");
+	}
+	
+	// 钩子方法，是否必须观察
+	public boolean mustObservate() { // <4>
+		return false;
+	}
+
+	// 接种完成后
+	public void afterVaccinated() { // <3>
+		System.out.println(this.name + " 接种成功！");
+	}
+}
+----
+<1> 模板方法，一般可以设置为final，以禁止子类重写
+<2> 抽象方法，延迟逻辑到子类中，子类必须实现这些方法
+<3> 基本方法，父类提供了默认实现，子类可以重写
+<4> 钩子方法，这里假设不是所有疫苗接种都需要观察，如果必须要求观察，则子类可以重写该方法，这样就可以调用``observate()``方法
+<5> 按照钩子方法返回的条件，来决定是否执行``observate()``方法
+
+2、具体实现类，假设这里有两个实现：流感疫苗和新冠疫苗
+
+.流感疫苗接种实现类
+[source,java]
+----
+class InfluenzaVaccine extends AbstractVaccinate {
+	public InfluenzaVaccine() {
+		super("流感疫苗");
+	}
+
+	@Override
+	public void order() {
+		System.out.println(this.name + " 接种前到医院预约...");
+	}
+
+	@Override
+	public void check() {
+		System.out.println(this.name + " 接种前审核户口本和疫苗接种本...");
+	}
+}
+----
+
+假设流感疫苗接种不需要观察，那么子类不需要重写父类的钩子方法。
+
+.新冠疫苗接种实现类
+[source,java]
+----
+class Covid19Vaccine extends AbstractVaccinate {
+	public Covid19Vaccine() {
+		super("COVID-19疫苗");
+	}
+
+	@Override
+	public void order() {
+		System.out.println(this.name + " 接种前到社区预约...");
+	}
+
+	@Override
+	public void tripMode() {
+		System.out.println(this.name + " 接种前社区统一安排前往接种地...");
+	}
+
+	@Override
+	public void check() {
+		System.out.println(this.name + " 接种前审核身份证...");
+	}
+	
+	@Override
+	public boolean mustObservate() {
+		return true;
+	}
+}
+----
+
+3、客户端调用
+
+[source,java]
+----
+// 流感疫苗接种过程
+System.out.println("==== 流感疫苗接种过程 ====");
+AbstractVaccinate vaccinate = new InfluenzaVaccine();
+vaccinate.vaccinate();
+// 新冠疫苗接种过程
+System.out.println("==== 新冠疫苗接种过程 ====");
+vaccinate = new Covid19Vaccine();
+vaccinate.vaccinate();
+----
+
+输出如下：
+
+[source,java]
+----
+==== 流感疫苗接种过程 ====
+流感疫苗 接种前到医院预约...
+流感疫苗 接种前自行前往接种地...
+流感疫苗 接种前审核户口本和疫苗接种本...
+流感疫苗 接种中...
+流感疫苗 接种成功！
+==== 新冠疫苗接种过程 ====
+COVID-19疫苗 接种前到社区预约...
+COVID-19疫苗 接种前社区统一安排前往接种地...
+COVID-19疫苗 接种前审核身份证...
+COVID-19疫苗 接种中...
+COVID-19疫苗 接种后观察30分钟...
+COVID-19疫苗 接种成功！
+----
+
+== 总结
+
+模板方法模板，体现了一种抽象思维，找出程序共同的部分，抽象出来，然后不同的部分交给具体子类去实现。
+
+抽象模板使用非常广泛，最典型的例子就是Spring容器的启动过程的类设计，有兴趣的可以查看``ClassPathXmlApplicationContext``到其父类``AbstractApplicationContext``这一条继承线，后者在``refresh``方法中定义了容器启动流程，即抽象模板方法，并提供了一些基本方法实现，有一些具体的方法实现需要延迟给子类去实现。网上关于Spring容器启动过程的文章很多，这里就不一一分析了。

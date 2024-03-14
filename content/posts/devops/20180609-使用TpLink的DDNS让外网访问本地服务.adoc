@@ -1,0 +1,183 @@
+---
+title: 使用TpLink的DDNS让外网访问本地服务
+slug: expose-local-server-by-ddns-of-tplink
+img: /images/thumbnail/attachment/20190615/b3b9c005a33a498f94b15ddc88823b7a.png
+categories:
+  - 开发运维
+tags:
+  - ddns
+description: >-
+  很多时候，我们需要将本地服务暴露给外网访问，或者简单地说能够通过互联网访问本地电脑。比如，公司内网有一台服务器，上边的多个服务都需要在公司和在家里都能访问到，如代码库、数据库等；又比如，在开发微信公众号此类需要外网回调本地环境的应用，如果能够将本地服务暴露给外网访问，那么调试起来将非常方便。TpLink目前是自带了DDNS，可以免费申请DDNS域名，免费而且稳定。在使用的时候，需要将TpLink路由器作为上网源，光猫只是充当交换器而不提供路由功能。
+date: 2018-06-09 12:12:58
+updated: 2019-06-15 08:45:37
+---
+
+= 使用TpLink的DDNS让外网访问本地服务
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: DDNS,内网暴露到外网,外网访问内网,花生壳,光猫,电信,光猫破解
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: ddns
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+
+
+== 背景
+ 
+
+很多时候，我们需要将本地服务暴露给外网访问，或者简单地说能够通过互联网访问本地电脑。比如，公司内网有一台服务器，上边的多个服务都需要在公司和在家里都能访问到，如代码库、数据库等；又比如，在开发微信公众号此类需要外网回调本地环境的应用，如果能够将本地服务暴露给外网访问，那么调试起来将非常方便。
+
+目前，市面上有许多工具软件，能够实现上述目的，但是，一方面稳定性欠佳，另一方面几乎都需要付费，不能作为长期使用。
+
+所以，本文介绍的是，如何使用TpLINK路由器提供的DDNS
+footnote:ddns[DDNS（Dynamic Domain Name Server）是动态域名服务的缩写。DDNS是将用户的动态IP地址映射到一个固定的域名解析服务上，用户每次连接网络的时候客户端程序就会通过信息传递把该主机的动态IP地址传送给位于服务商主机上的服务器程序，服务器程序负责提供DNS服务并实现动态域名解析。]
+功能，改造家里的电信网络，将家里的电脑暴露给外网。
+ 
+
+== 准备
+
+原网络服务商为电信，需要有电信光猫、一台TpLINK路由器（支持DDNS footnote:ddns[]）、网线。由于我家里的网络原来都是已经连接好的，电信光猫下接了路由器，通过电信光猫和路由器都可以上网，所以本文是基于此来进行网络配置修改的，**全部使用的是笔记本的无限网络访问路由器和光猫，并没有用网线直连光猫和路由器**。
+
+
+== 整体思路
+ 
+
+将电信光猫上网方式由原来的“路由”改为“桥接”，让其仅充当交换机的作用；然后配置TpLink路由器，所有的上网都通过TpLink而不是光猫；然后利用TpLink的DDNS和虚拟服务器功能，将本地端口映射到外网，通过DDNS域名就可以访问本地服务了。
+ 
+
+== 实现步骤
+
+在我的网络环境中，以电信光猫为中心，下边连接了多个路由器，包括一台TpLink路由器，路由器和光猫都可以上网，具体怎么实现上述结构的请查阅相关资料。路由器地址：192.168.0.1，电信光猫地址：192.168.1.1。
+
+=== 破解电信光猫
+
+首先，电信光猫默认的useradmin账号登进去的权限很有限，不能修改网络设置。所以，我们需要破解之，为修改上网方式做准备。
+
+使用``useradmin``和密码登录光猫（用户名和密码在光猫背面，一般为``useradmin``），然后访问http://192.168.1.1/backupsettings.conf，此时会下载光猫配置文件；
+
+用记事本等文本工具打开，搜索``TeleComAccount``，然后你会看到如下的配置：
+
+[source,xml]
+----
+<X_CT-COM_TeleComAccount>
+<Password>8MAB1223</Password>
+</X_CT-COM_TeleComAccount>
+----
+ 
+
+``Password``就是光猫管理用户``telecomadmin``的密码，记录下来备用。
+
+然后，再搜所``Username``，找到如下配置：
+ 
+[source,xml]
+----
+<Username>CD68458918</Username>
+<Password>aAg0xDgADTgA</Password>
+----
+ 
+
+其中，``Username``就是宽带拨号上网的账号，``Password``就是其密码，不过是``Base64``的密文，在线找一个``BASE64``解码网站，就可以得到原始密码，记录下来备用。
+
+然后，把http://devacs.edatahome.com:9090/ACS-server/ACS找到（只有一处），改成http://devacs.edatahome.com.disable:9090/ACS-server/ACS，使得无法连接远程管理服务器，然后找到
+
+----
+<TotalTerminalNumber>5</TotalTerminalNumber>
+----
+
+把5改成一个比较大的数字用以解除光猫接入设备数量限制。
+
+最后，通过前边的``telecomadmin``和找到的密码，登录光猫，访问http://192.168.1.1/updatesettings.html，选择刚才修改的配置，让光猫启用最新配置（过程大概需要2分钟）。
+
+ok，光猫破解完成。
+ 
+
+=== 修改电信光猫桥接上网
+ 
+
+光猫完成破解后，通过``telecomadmin``登录，找到状态菜单-用户侧信息，可以查看到当前WAN连接信息，如下图所示：
+
+
+image::/images/attachment/20180609/e560fc56593d41628cd6d6022711b2d6.png[]
+
+
+找到TpLink路由器连接的对应WAN连接，我这里是上边红框部分，截图是我已经修改成了桥接模式，所以地址获取方式一栏写的是BRIDGE。
+
+然后，点击网络-网络设置，连接名称选择上边确定的TpLink连接的WAN连接，然后将连接模式改为桥接，如下图所示：
+
+
+image::/images/attachment/20180609/8209d9a69e5f4e47b6e0f2485f14babc.png[]
+
+
+其他不用做任何修改。
+
+保存过后，现在光猫是不能上网的，接下来，需要配置路由器上网。
+ 
+
+=== TpLink宽带拨号上网
+ 
+
+访问http://192.168.0.1，登录TpLink，点击左侧上网设置菜单，修改上网方式为宽带拨号上网（原来是默认的自动获得IP地址），如下图：
+
+
+image::/images/attachment/20180609/ac10c2752a4b41ffb59f4ec01833503e.png[]
+
+
+宽带账号和密码分别填入前边 #netaccount[破解光猫时]找到的宽带账号和密码，然后点击连接按钮。
+
+现在，路由器可以正常上网了。但是由于更改了网络配置，现在不能通过192.168.1.1访问光猫了，要WIFI访问光猫，把路由器的上网方式还原为自动获取IP地址即可。
+ 
+
+=== TpLink  #ddns[DDNS]配置
+ 
+
+点击路由器下边的应用管理，找到DDNS，点击进入，如图所示：
+
+
+image::/images/attachment/20180609/b021f4abd591425580022b5eec084e02.png[]
+
+
+看到的界面如下：
+
+
+image::/images/attachment/20180609/f0696d8280e042f4a8dd14463fb81061.png[]
+
+
+服务提供商选择TP-LINK，在我的域名下会显示当前登录的DDNS域名，如果没有，点击创建新域名，然后登录即可，具体DDNS使用可以看 http://service.tp-link.com.cn/detail_article_2444.html[这里]。
+ 
+
+=== TpLink虚拟服务器端口映射
+ 
+
+DDNS有了，但是还不能访问内网服务，还需要在路由器上做端口映射，将内网端口暴露到外网。
+
+同样在应用管理，找到虚拟服务器，进入后可以看到如下图所示界面：
+
+
+image::/images/attachment/20180609/fa4df0ef63e6433281c990a92f6d9890.png[]
+
+
+外部端口：外网能够访问的端口
+
+内部端口：内部服务的端口
+
+添加完成后，现在通过``[DDNS域名]:[外部端口]``就可以访问内网服务了，我这里是 http://belonk.tpddns.cn:8088。
+
+大功告成！！
+
+
+== 结束语
+
+TpLink目前是自带了DDNS，可以免费申请DDNS域名，免费而且稳定。在使用的时候，需要将TpLink路由器作为上网源，光猫只是充当交换器而不提供路由功能。

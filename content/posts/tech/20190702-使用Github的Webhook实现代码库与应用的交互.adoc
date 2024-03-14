@@ -1,0 +1,339 @@
+---
+title: 使用Github的Webhook实现代码库与应用的交互
+slug: github-webhook
+img: /images/thumbnail/attachment/20190702/7784a82d56d541d28a23164f3f02e629.png
+categories:
+  - 高新技术
+tags:
+  - github
+  - webhook
+description: >-
+  Webhook，翻译过来可以称为网络钩子，用来将Github上的一系列事件信息回传到某一回调地址上，从而完成与外部应用的交互，它是github提供的一种与外部交互的入口。Github上提供了很多交互事件，当某一事件被触发后，如果设置了Webhook的回调地址，Github将会通过HTTP
+  POST请求将事件信息发送到回调地址上，回调处理应用通过接收事件信息然后实现自身的业务需求。
+date: 2019-07-02 11:13:29
+updated: 2019-07-02 17:26:32
+---
+
+= 使用Github的Webhook实现代码库与应用的交互
+:author: belonk.com
+:date: 2019-07-02
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: github,webhook,issue,event,github事件
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: github,webhook
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+很早之前，博主的的网站评论模块已经更改为了 https://github.com/gitalk/gitalk[gitalk]，Gitalk是一个基于GitHub Issue和Preact的现代评论组件。更换评论组件后有一个问题：我不想每次去github上查看别人的评论，如果别人评论了文章，然后我能够在网站后台看到，这样就很方便了。此时，github的webhook功能就可以登场了。
+
+== 简介
+
+Webhook，翻译过来可以称为网络钩子，用来将Github上的一系列事件信息回传到某一回调地址上，从而完成与外部应用的交互，它是github提供的一种与外部交互的入口。Github上提供了很多交互事件，当某一事件被触发后，如果设置了Webhook的回调地址，Github将会通过HTTP POST请求将事件信息发送到回调地址上，回调处理应用通过接收事件信息然后实现自身的业务需求。
+
+目前，每个组织或代码库上最多只能创建20个webhook。
+
+一个典型的业务场景是：代码保存在github上，如果稳定的master分支上提交了代码，就触发持续集成系统如Jenkins进行代码构建、打包、部署等系列操作。
+
+== 事件
+
+配置webhook时，可以选择订阅的事件。一般情况下，我们只需要订阅关注的事件，github也支持一个匹配所有支持事件的通配符（*），添加通配符事件时，github将使用通配符事件替换您配置的任何现有事件，并为所有支持的事件发送有效负载。如果将来添加了新的可匹配的事件，那么将会自动订阅。您可以随时通过API或UI更改订阅事件列表。默认情况下，webhooks仅订阅push事件。
+
+每个事件对应于您的组织和/或存储库可能发生的某组操作。例如，如果您订阅了问题事件，则每次打开，关闭，标记等issue时您都会收到详细的有效负载。github现支持的事件列表见 #events[附录一]。
+
+=== 有效负载
+
+有效负载，简单理解就是消息所携带的内容和信息。
+
+每种事件类型都具有特定的有效负载格式以及相关的事件信息，事件的有效负载来源于具体的事件类型的有效负载，但原始``push``事件除外，它的具有更详细的webhook有效负载。
+
+除了为每个事件记录的字段之外，webhook有效负载还包括执行事件的用户（发送者）、组织和事件发生的存储库。GitHub app的webhook有效负载还可能包括安装事件。
+
+一个``marketplace_purchase``事件类型的有效负载的示例如下：
+
+[source,javascript]
+----
+{
+   "action":"purchased",
+   "effective_date":"2017-10-25T00:00:00+00:00",
+   "sender":{
+      "login":"username",
+      "id":3877742,
+      "avatar_url":"https://avatars2.githubusercontent.com/u/3877742?v=4",
+      "gravatar_id":"",
+      "url":"https://api.github.com/users/username",
+      "html_url":"https://github.com/username",
+      "followers_url":"https://api.github.com/users/username/followers",
+      "following_url":"https://api.github.com/users/username/following{/other_user}",
+      "gists_url":"https://api.github.com/users/username/gists{/gist_id}",
+      "starred_url":"https://api.github.com/users/username/starred{/owner}{/repo}",
+      "subscriptions_url":"https://api.github.com/users/username/subscriptions",
+      "organizations_url":"https://api.github.com/users/username/orgs",
+      "repos_url":"https://api.github.com/users/username/repos",
+      "events_url":"https://api.github.com/users/username/events{/privacy}",
+      "received_events_url":"https://api.github.com/users/username/received_events",
+      "type":"User",
+      "site_admin":true,
+      "email":"username@email.com"
+   },
+   "marketplace_purchase":{
+      "account":{
+         "type":"Organization",
+         "id":18404719,
+         "login":"username",
+         "organization_billing_email":"username@email.com"
+      },
+      "billing_cycle":"monthly",
+      "unit_count":1,
+      "on_free_trial":false,
+      "free_trial_ends_on":null,
+      "next_billing_date":"2017-11-05T00:00:00+00:00",
+      "plan":{
+         "id":435,
+         "name":"Basic Plan",
+         "description":"Basic Plan",
+         "monthly_price_in_cents":1000,
+         "yearly_price_in_cents":10000,
+         "price_model":"per-unit",
+         "has_free_trial":true,
+         "unit_name":"seat",
+         "bullets":[
+            "Is Basic",
+            "Because Basic "
+         ]
+      }
+   }
+}
+----
+
+=== 请求头
+
+HTTP POST传递消息到回调地址时，包含几个重要的消息头：
+
+* ``X-GitHub-Event``: 触发的事件类型名称
+* ``X-GitHub-Delivery``：这次请求的GUID，唯一标识一个请求
+* ``X-Hub-Signature``:&nbsp;HMAC响应体的十六进制摘要。如果webhook配置了secret密钥，则将发送此请求头。使用sha1散列函数生成HMAC十六进制摘要，并使用密钥作为HMAC密钥生成。该值主要用来对消息体进行签名和验证，secret在webhook配置界面可以设置。
+
+== 使用
+
+接下来，我们来解决前边所说的问题：当gitalk评论仓库有人进行了评论时，利用webhook回调事件到配置的地址上交给网站后台，后台接收到事件消息然后将评论信息持久化到数据库，这样后台就可以直接查看评论信息。
+
+使用webhook，主要就是对其进行配置。
+
+1、登录github，进入评论代码仓库，点击setting标签页，可以看到左侧有一个webhooks菜单
+
+
+image::/images/attachment/20190702/21ced0d603694c25a67fb6e80ae4e381.png[]
+
+
+由于我这里是设置过了，如果没设置会进入设置页面
+
+2、设置webhook，webhook的设置页面有很多选项：
+
+* Payload URL: 必须设置，该项设置Github回调地址，当事件触发时github会将事件信息回传给应用
+* Content type: 回调时Http请求的ContentType属性，建议为application/json，还支持application/x-www-form-urlencoded表单提交方式
+* Secret:&nbsp; 前边所提到的响应头X-Hub-Signature所需要的秘钥信息，如果配置了，则会传递该响应头，用来对消息体进行签名和验证
+* webhook订阅的事件：配置webhook时，您可以选择要为其接收有效负载的事件，甚至可以选择订阅所有当前和未来的事件活动。一般而言，我们仅需订阅计划处理的特定事件。默认情况下，webhooks仅订阅该push事件。
+
+在这里，我仅配置Payload URL，Content Type为application/json已处理json格式的消息体，事件仅订阅issue comments，该事件在有人对问题进行回复、修改、删除时会触发，如果有人评论了文章，则回调地址会受到消息。
+
+设置完成后，点击保存按钮即可。
+
+image::/images/attachment/20190702/3c5be1b5260b4380bd8ca8441b476c52.png[]
+
+image::/images/attachment/20190702/c0a033de04564cb0923eaa28038659f6.png[]
+
+3、编写后台回调代码
+
+前边配置了回调地址，我们只需要编写代码来处理业务逻辑即可。这里仅需要接收到消息内容，并从中获取到评论信息，插入到数据库即可：
+
+[source,java]
+----
+@RouterMapping(url = "/github")
+@RouterNotAllowConvert
+public class GithubController extends BaseFrontController {
+
+    private static final String SECRET = "BlogOfBelonk";
+
+    public void index() {
+        renderError(404);
+    }
+
+    public void webhook() throws Exception {
+        // TODO 验证签名
+
+        HttpServletRequest request = getRequest();
+        String event = request.getHeader("X-GitHub-Event");
+        String delivery = request.getHeader("X-GitHub-Delivery");
+        String sign = request.getHeader("X-Hub-Signature");
+        String json = getRequestObject(String.class);
+
+        if (!"issue_comment".equals(event) || StringUtils.isBlank(json)) {
+            renderAjaxResult("Event not supported", 500);
+            return;
+        }
+
+        JSONObject jsonObject = JSONObject.parseObject(json);
+        String action = (String) jsonObject.get("action");
+        // 获取评论人信息
+        JSONObject commentMap = (JSONObject) jsonObject.get("comment");
+        BigInteger commentId = new BigInteger(commentMap.get("id").toString());
+        String status = Comment.STATUS_NORMAL;
+        if ("deleted".equals(action)) {
+            status = Comment.STATUS_DELETE;
+        }
+
+        String commentText = commentMap.get("body").toString();
+        String ip = getIPAddress();
+        String agent = getUserAgent();
+
+        Comment comment = CommentQuery.me().findById(commentId);
+        if (comment != null) {
+            comment.setText(commentText);
+            comment.setIp(ip);
+            comment.setAgent(agent);
+            comment.setStatus(status);
+            if (comment.update()) {
+                ActionCacheManager.clearCache();
+            }
+        } else {
+            JSONObject issue = (JSONObject) jsonObject.get("issue");
+            String title = (String) issue.get("title");
+            title = title.replace(" - IT技术博客", "");
+            Content content = ContentQuery.me().findFirstByModuleAndTitle("article", title);
+            if (content == null) {
+                renderAjaxResult("Content not be found.", 500);
+                return;
+            }
+
+            // 解析消息内容并插入数据库
+            ……
+        }
+        renderAjaxResultForSuccess();
+    }
+}
+----
+
+== 总结
+
+这里只是简单介绍了一下github webhook的功能，利用它我们可以完成很多事情。总结一下：
+
+1、github webhook提供了gihub与开发者应用的交互入口
+
+2、代码库和组织都能够设置webhook
+
+3、配置webhook时，回调地址和响应的Content type必须要配置，建议为json格式
+
+4、github有诸多事件，一般我们只需要订阅关注的几个事件，以减少应用接收的http请求数量
+
+5、利用通配符``*``可以订阅所有支持的事件
+
+[appendix]
+== 目前github可用的事件列表
+
+.Github支持的事件
+[cols="1,2"]
+|====
+|名称|描述
+
+|``*``|任何时候触发任何事件（ https://developer.github.com/webhooks/#wildcard-event[通配事件]）。
+
+| https://developer.github.com/v3/activity/events/types/#checkrunevent[``check_run``]|触发时检查运行是``created``，``rerequested``，``completed``，或拥有``requested_action``。
+
+| https://developer.github.com/v3/activity/events/types/#checksuiteevent[``check_suite``]|触发时检查套件``completed``，``requested``或``rerequested``。
+
+| https://developer.github.com/v3/activity/events/types/#commitcommentevent[``commit_comment``]|创建 https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository[提交注释]时触发。
+
+| https://developer.github.com/v3/activity/events/types/#contentreferenceevent[``content_reference``]|当问题或请求的正文或注释包含与配置的内容引用域匹配的URL时触发。只有GitHub Apps才能收到此活动。
+
+| https://developer.github.com/v3/activity/events/types/#createevent[``create``]|表示已创建的分支或标记。
+
+| https://developer.github.com/v3/activity/events/types/#deleteevent[``delete``]|表示 https://developer.github.com/v3/git/refs/#delete-a-reference[已删除的分支或标记]。
+
+| https://developer.github.com/v3/activity/events/types/#deploykeyevent[``deploy_key``]|在存储库中添加或删除部署密钥时触发。
+
+| https://developer.github.com/v3/activity/events/types/#deploymentevent[``deployment``]|表示 https://developer.github.com/v3/repos/deployments/#list-deployments[部署]。
+
+| https://developer.github.com/v3/activity/events/types/#deploymentstatusevent[``deployment_status``]|表示 https://developer.github.com/v3/repos/deployments/#list-deployment-statuses[部署状态]。
+
+| https://developer.github.com/v3/activity/events/types/#forkevent[``fork``]|用户 https://developer.github.com/v3/repos/forks/#create-a-fork[分叉存储库]时触发。
+
+| https://developer.github.com/v3/activity/events/types/#githubappauthorizationevent[``github_app_authorization``]|当有人撤销对GitHub应用程序的授权时触发。
+
+| https://developer.github.com/v3/activity/events/types/#gollumevent[``gollum``]|创建或更新Wiki页面时触发。
+
+| https://developer.github.com/v3/activity/events/types/#installationevent[``installation``]|当有人安装（``created``），卸载（``deleted``）或接受``new_permissions_accepted``GitHub应用程序的新权限（）时触发。当GitHub应用程序所有者请求新权限时，安装GitHub应用程序的人员必须接受新的权限请求。
+
+| https://developer.github.com/v3/activity/events/types/#installationrepositoriesevent[``installation_repositories``]|存储库是``added``或``removed``来自安装时触发。
+
+| https://developer.github.com/v3/activity/events/types/#issuecommentevent[``issue_comment``]|当触发一个 https://developer.github.com/v3/issues/comments/[问题的评论]是``created``，``edited``或``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#issuesevent[``issues``]|触发时的 https://developer.github.com/v3/issues[问题]是``opened``，``edited``，``deleted``，``transferred``，``pinned``，``unpinned``，``closed``，``reopened``，``assigned``，``unassigned``，``labeled``，``unlabeled``，``locked``，``unlocked``，``milestoned``，或``demilestoned``。
+
+| https://developer.github.com/v3/activity/events/types/#labelevent[``label``]|触发当仓库中的标签``created``，``edited``或``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#marketplacepurchaseevent[``marketplace_purchase``]|当有人购买 https://github.com/marketplace[GitHub市场]计划，取消他们的计划，升级他们的计划（立即生效），降级计划，直到结算周期结束时，或者取消待定的计划更改时，触发。
+
+| https://developer.github.com/v3/activity/events/types/#memberevent[``member``]|当用户接受邀请或作为协作者删除到存储库或已更改其权限时触发。
+
+| https://developer.github.com/v3/activity/events/types/#membershipevent[``membership``]|当用户是团队``added``或``removed``来自团队时触发。组织挂钩。
+
+| https://developer.github.com/v3/activity/events/types/#metaevent[``meta``]|删除配置此事件的webhook时触发。
+
+| https://developer.github.com/v3/activity/events/types/#milestoneevent[``milestone``]|当触发一个里程碑``created``，``closed``，``opened``，``edited``，或``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#organizationevent[``organization``]|删除和重命名组织时以及向组织添加，删除或邀请用户时触发。组织挂钩。
+
+| https://developer.github.com/v3/activity/events/types/#orgblockevent[``org_block``]|组织阻止或取消阻止用户时触发。组织挂钩。
+
+| https://developer.github.com/v3/activity/events/types/#pagebuildevent[``page_build``]|在推送到GitHub页面启用分支时触发（``gh-pages``对于项目页面，``master``用户和组织页面）。
+
+| https://developer.github.com/v3/activity/events/types/#projectcardevent[``project_card``]|当触发一个 https://developer.github.com/v3/projects/cards[工程卡]为``created``，``edited``，``moved``，``converted``以一个问题，或``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#projectcolumnevent[``project_column``]|当触发一个 https://developer.github.com/v3/projects/columns[项目列]是``created``，``updated``，``moved``，或``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#projectevent[``project``]|当触发一个 https://developer.github.com/v3/projects/[项目]是``created``，``updated``，``closed``，``reopened``，或``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#publicevent[``public``]|私有存储库 https://developer.github.com/v3/repos/#edit[公开]时触发。
+
+| https://developer.github.com/v3/activity/events/types/#pullrequestevent[``pull_request``]|当触发一个 https://developer.github.com/v3/pulls[拉要求]是``assigned``，``unassigned``，``labeled``，``unlabeled``，``opened``，``edited``，``closed``，``reopened``，``synchronize``，``ready_for_review``，``locked``，``unlocked``或当请求或删除pull请求审查。
+
+| https://developer.github.com/v3/activity/events/types/#pullrequestreviewevent[``pull_request_review``]|当拉取请求审核``submitted``进入非挂起状态，正文是``edited``或正在审核时触发``dismissed``。
+
+| https://developer.github.com/v3/activity/events/types/#pullrequestreviewcommentevent[``pull_request_review_comment``]|当触发 https://developer.github.com/v3/pulls/comments[上拉要求的统一差异的评论]是``created``，``edited``或``deleted``（在改变的文件选项卡）。
+
+| https://developer.github.com/v3/activity/events/types/#pushevent[``push``]|在推送到存储库分支时触发。分支推送和存储库标记推送也会触发webhook&nbsp; https://developer.github.com/webhooks/#events[``push``事件]。这是默认事件。
+
+| https://developer.github.com/v3/activity/events/types/#registrypackageevent[``registry_package``]|在包版本``published``或``updated``GitHub包注册表中触发。
+
+| https://developer.github.com/v3/activity/events/types/#releaseevent[``release``]|当触发一个 https://developer.github.com/v3/repos/releases/#get-a-single-release[版本]是``published``，``unpublished``，``created``，``edited``，``deleted``，或``prereleased``。
+
+| https://developer.github.com/v3/activity/events/types/#repositoryevent[``repository``]|当触发一个仓库是``created``，``archived``，``unarchived``，``renamed``，``edited``，``transferred``，公开或不公开。存储库时也会触发 https://developer.github.com/v3/orgs/hooks/[组织挂钩]``deleted``。
+
+| https://developer.github.com/v3/activity/events/types/#repositoryimportevent[``repository_import``]|成功，取消或失败的存储库导入完成GitHub组织或个人存储库时触发。
+
+| https://developer.github.com/v3/activity/events/types/#repositoryvulnerabilityalertevent[``repository_vulnerability_alert``]|在创建，解除或解决 https://help.github.com/articles/about-security-alerts-for-vulnerable-dependencies/[安全警报]时触发。
+
+| https://developer.github.com/v3/activity/events/types/#securityadvisoryevent[``security_advisory``]|发布，更新或撤消新安全通报时触发。
+
+| https://developer.github.com/v3/activity/events/types/#starevent[``star``]|在存储库中添加或删除星形时触发。
+
+| https://developer.github.com/v3/activity/events/types/#statusevent[``status``]|当Git提交的状态发生更改时触发。
+
+| https://developer.github.com/v3/activity/events/types/#teamevent[``team``]|触发当一个组织的球队``created``，``deleted``，``edited``，``added_to_repository``，或``removed_from_repository``。与组织挂钩
+
+| https://developer.github.com/v3/activity/events/types/#teamaddevent[``team_add``]|将 https://developer.github.com/v3/teams/#add-or-update-team-repository[存储库添加到团队]时触发。
+
+| https://developer.github.com/v3/activity/events/types/#watchevent[``watch``]|当有人 https://developer.github.com/v3/activity/starring/#star-a-repository[为存储库]加注时触发。
+
+|====

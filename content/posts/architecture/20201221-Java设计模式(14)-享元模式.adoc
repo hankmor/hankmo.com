@@ -1,0 +1,232 @@
+---
+title: Java设计模式(14)-享元模式
+slug: java-flyweight-pattern
+date: 2020/12/21
+img: /images/thumbnail/montain.jpg
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 享元模式
+description: 享元模式，"享"即共享，"元"即元素，软件中则为对象，享元就是共享对象之意。这种设计模式用来共享对象而不是大量创建对象，以节约系统资源。
+updated:
+---
+
+= Java设计模式(14)-享元模式
+:key_word:
+:author: belonk.com
+:email: belonk@126.com
+:date: 2020/12/21
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+享元模式，"享"即共享，"元"即元素，软件中则为对象，享元就是共享对象之意。这种设计模式用来共享对象而不是大量创建对象，以节约系统资源。现实中，很多东西都可以使用享元模式来解决，比如围棋、五子棋，棋子的颜色就黑白两种，只是他们在棋盘的位置不同；又如，展示类网站，多个用户公用一套系统，只是内容和展示形式存在差异；再如，教室的课桌和凳子...上述示例都有一个共同点：相关的东西存在很大的相似，但是也不完全相同，此时如果要开发软件，那么都可以用享元模式来设计。
+
+image::/images/thumbnail/montain.jpg[]
+
+== 从围棋游戏开始
+
+假设要你开发一款围棋游戏，我们知道，围棋棋子有黑色和白色两种，棋子在棋盘上的位置随着下棋的进行而不同，那么你怎么设计类关系？
+
+常规的思路是使用工厂模式，棋手每落下一枚棋子，那么就创建一个棋子实例，并设置它放置的位置：
+
+.使用工厂模式
+image::/images/attachment/designpattern/flyweight-1.png[]
+
+但是，围棋有 19 × 19 = 361 个交叉点，假设每个点上全部都有棋子，那么足足需要创建361个对象！这无疑是对系统资源的浪费。
+
+那么，有好的解决办法吗？答案是使用享元模式来设计。
+
+== 什么是享元模式
+
+享元模式（flyweight），也叫蝇量模式，它强调对象的细粒度控制和共享，主张运用共享技术有效地支持对象的复用。"享"即共享，"元"即元素，软件中则为对象，说白了就是最大程度的让对象可以共享并复用。享元模式的类结构如图所示：
+
+.享元模式类结构
+image::/images/attachment/designpattern/flyweight-2.png[]
+
+如图所示，可以看出，享元模式有如下几种角色：
+
+. 抽象享元角色(Flyweight)：具体享元对象的超类或接口，可以接受作用于外部状态（见后文）；
+. 具体享元角色(ConcreteFlyweight)：继承或实现抽象享元角色，为内部状态增加存储空间；
+. 非共享享元角色(UnsharedConcreteFlyweight)：同样继承或实现抽象享元角色，但是这些类并不需要共享出来；
+. 享元工厂角色：管理Flyweight对象，确保合理的共享他们。它往往提供获取Flyweight对象的方法，当对象存在时直接返回，否则创建一个。
+
+.提示
+[NOTE]
+====
+有的书上也将``UnsharedConcreteFlyweight``对象单独提出来，将其看做外部状态的抽象，它并不实现``Flyweight``，而是作为``Flyweight``接口方法的参数进行传递，以说明它不共享。
+====
+
+享元模式的结构也好理解：抽象一个享元接口，提供通用的方法，然具体享元对象实现该接口，但是并不是所有逇具体享元对象都需要共享，因此按需共享并拆分，最后由享元工厂统一管理他们。上边还提到两个概念：外部状态和内部状态，它们是什么？
+
+=== 外部状态和内部状态
+
+在享元模式中，对象状态按是否共享分为两种：共享和不共享，随着环境变化而改变的、不可以共享的状态称为**外部状态**；相反，不会随着环境变化而改变的状态称为**内部状态**。
+
+使用享元模式，重点是要分析出哪些对象是外部状态，哪些是内部状态，并将外部状态单独抽象出来，作为一个变化的部分。
+
+在前边围棋的例子中，棋子的颜色只有黑、白两种，它们不会随着下棋的进行而增加或者减少，因此棋子的颜色是内部状态。而棋子在棋盘上放置的位置，随着下棋的进行，棋子的位置都会不同，因此，棋子的位置是外部状态。
+
+又比如，多个用户共用一个网站，网站可以作为``Flyweight``对象而共享，而网站的代码、模板、数据库都是不会变化（增加或减少）的，它们可作为内部状态来共享。但是，不同的用户账号是不同的，每个用户都有自己额账号，因此，账号可以作为外部状态。此时就可以将账号单独提取出来作为一个变化的实体：
+
+.共享网站的设计类图
+image::/images/attachment/designpattern/flyweight-3.png[]
+
+== 围棋游戏改进
+
+我们再来看看如何使用享元模式来解决围棋中重复创建对象、浪费资源的问题。
+
+首先，前边已经分析了，围棋棋子的颜色是内部状态，而其在棋盘的位置是外部状态。那么，我们可以设计如下的类图：
+
+.围棋使用享元模式设计的类图
+image::/images/attachment/designpattern/flyweight-4.png[]
+
+内部对象定义为``Color``类，外部对象抽象为``Position``类，``Piece``为抽象的Flyweight对象，``WeiqiPiece``作为具体的享元对象实现了``Piece``接口。最后，这些对象通过``WeiqiPieceFactory``统一管理。示例代码如下：
+
+1、定义外部状态类：
+
+[source,java]
+----
+// 外部状态: 棋子位置
+class Position {
+	private final int x;
+	private final int y;
+
+	public Position(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	public String position() { // <1>
+		return "(" + x + "," + y + ")";
+	}
+}
+----
+<1> 获取位置坐标信息
+
+2、定义内部状态类：
+
+[source,java]
+----
+// 内部状态：棋子颜色
+class Color {
+	private final String color;
+	static final Color BLACK = new Color("black"); // <1>
+	static final Color WHITE = new Color("white");
+
+	private Color(String color) {
+		this.color = color;
+	}
+
+	public String color() {
+		return this.color;
+	}
+}
+----
+<1> 颜色常量定义
+
+3、抽象享元对象：
+
+[source,java]
+----
+// flyweight接口：棋子
+interface Piece {
+	Color getColor();
+
+	void put(Position position);
+}
+----
+
+4、具体享元对象：
+
+[source,java]
+----
+// 具体flyweight对象：围棋棋子
+class WeiqiPiece implements Piece {
+	private final Color color;
+
+	public WeiqiPiece(Color color) {
+		this.color = color;
+	}
+
+	@Override
+	public Color getColor() {
+		return this.color;
+	}
+
+	@Override
+	public void put(Position position) {
+		System.out.println("put " + this.getColor().color() + " piece at: " + position.position());
+	}
+}
+----
+
+5、享元工厂代码：
+
+[source,java]
+----
+// flyweight工厂
+class WeiqiPieceFactory {
+	private final Map<Color, Piece> pieces = new ConcurrentHashMap<>();
+
+	public Piece getPiece(Color color) {
+		pieces.putIfAbsent(color, new WeiqiPiece(color));
+		return pieces.get(color);
+	}
+
+	public int count() {
+		return pieces.size();
+	}
+}
+----
+
+6、客户端调用：
+
+[source,java]
+----
+public class FlyweightPatternDemo2 {
+	public static Position randomPos() { // <1>
+		int x = 19, y = 19;
+		int posX = (int) (Math.random() * x);
+		int posY = (int) (Math.random() * y);
+		return new Position(posX, posY);
+	}
+
+	public static void main(String[] args) {
+		WeiqiPieceFactory factory = new WeiqiPieceFactory();
+		Piece piece;
+		int steps = 20;
+		for (int i = 0; i < steps; i++) {
+			// 黑子先行
+			if (i % 2 == 0) {
+				piece = factory.getPiece(Color.BLACK);
+			} else {
+				piece = factory.getPiece(Color.WHITE);
+			}
+			piece.put(randomPos());
+		}
+		System.out.println(factory.count());
+	}
+}
+----
+<1> 模拟棋子在棋盘上放置的位置，这里随机生成
+
+最后，通过输出结果可以看到，系统只有两个``WeiqiPiece``对象，而不共享的外部状态``Position``存在多个。这样，就达到了对象共享的目的，而不是前文最早方案中每次都创建一个围棋对象。通过有效的复用对象达到了节约系统资源的目的。
+
+== 总结
+
+享元模式强调对象细粒度控制和共享，当遇到以下场景，可以考虑使用享元模式：
+
+. 系统会创建大量对象，而且这些对象存在很多共同点
+. 系统中需要大量的创建对象，对象虽然不同但是可以通过内部状态进行分组，此时可以考虑使用享元模式
+
+其实，java中很多地方都使用了享元模式，比如，``Integer``类，在值为-128和128之间时，直接共享``IntegerCache``内部类中的缓存对象；又比如，``String``类设计时存在String常量池，直接共享字符串而不是每次都创建；再如，常见的池化技术，如数据库连接池，等等……

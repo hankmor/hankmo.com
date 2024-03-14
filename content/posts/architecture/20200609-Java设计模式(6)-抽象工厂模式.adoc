@@ -1,0 +1,472 @@
+---
+title: Java设计模式(6)-抽象工厂模式
+slug: java-abstract-factory-pattern
+date: 2020/06/09
+img: /images/thumbnail/mountain.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 抽象工厂模式
+description: 如果工厂模式中需要生产多种类型的产品，那么工厂方法模式就适合了，需要用到抽象工厂模式。
+---
+
+[[designpattern-abstractfactory]]
+= Java设计模式(6)-抽象工厂模式
+:key_word: 
+:Author: belonk.com belonk@126.com
+:Date: 2020/5/26
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+如果工厂模式中需要生产多种类型的产品，那么工厂方法模式就适合了，需要用到抽象工厂模式。
+
+== 简介
+
+抽象工厂模式，定义抽象工厂，并将产品生产延迟到具体工厂实现中，而它生产的产品都是**同种类型**的。比如，电视机工厂生产的都是电视机，电视机是一个抽象产品，而它的具体实现有黑白电视、彩色电视、液晶电视等等，但是都属于同一种产品类型-电视机。
+
+如果现在电视机工厂不仅生产电视，还能生产空调等其他电器了，那么，我们称电视机、空调等不同类型的产品为**产品簇**，代表不同类型的多种产品。
+
+.产品簇示意图
+image::/images/attachment/designpattern/multi-products.png[]
+
+现在，工厂方法模式不适用了，我们需要使用抽象工厂模式。
+
+抽象工厂模式（Abstract Factory Pattern）的定义如下：提供一个创建一系列相关或相互依赖对象的接口，而无需指定它们具体的类，访问类无须指定具体的类就可以得到同组的不同类型的产品。
+
+抽象工厂模式升级了工厂方法模式，将原本仅能创建同种类型的产品升级为可以创建多种类型的产品.
+
+优点:: 可以使用工厂模式生产多个产品簇，**新增同类型产品**时只需要__**新增一个具体工厂实现**__，不需要修改客户端代码，遵循开闭原则。
+缺点:: 当**产品簇中需要新增产品**时，会修改原产品簇的所有工厂类，不符合开闭原则。
+
+因此，抽象工厂模式在使用时应该酌情考虑其倾斜性，新增同类产品时，遵循开闭原则；但是，产品簇添加新的产品，所有的工厂类都需要添加生产新产品的方法。
+
+== 适用场景
+
+抽象工厂模式通常适用于以下场景：
+
+* 当需要创建的对象是一系列相互关联或相互依赖的产品族时，如电器工厂中的电视机、电风扇、洗衣机、空调等
+* 系统中有多个产品族，但每次只使用其中的某一族产品，比如有人只喜欢穿某一个品牌的衣服和鞋
+* 系统中提供了产品的类库，且所有产品的接口相同，客户端不依赖产品实例的创建细节和内部结构
+
+== 结构
+
+抽象工厂模式的结构与工厂方法模式一样，同样具有抽象工厂、抽象产品、具体工厂、具体产品四大角色：
+
+* 抽象工厂: 定义产品创建的接口，具有多个产品创建方法，这些方法负责创建不同的产品；
+* 具体工厂: 实现抽象工厂的产品创建方法，用于具体实现如何创建这些产品簇中不同的产品；
+* 抽象产品: 定义产品的规范，如产品规格、属性、功能等；就有多个抽象产品，组成产品簇；
+* 具体产品: 抽象产品的具体实现，具体产品与具体工厂是多对一的关系，即一个具体工厂可以生产多个具体产品。
+
+.抽象工厂模式结构
+image::/images/attachment/designpattern/abstractfactory-structure.png[]
+
+可以看到，`AbstractFactory` 是顶层抽象工厂接口，定义了创建不同产品簇的方法。不同的产品簇抽象出不同的产品接口，如图中的 `Product1`、`Product2`。
+
+如果要添加一个产品的具体实现，那么客户端和工厂不需要改动，只需要新增一个具体工厂即可，那么结构变成了这样：
+
+.新增具体产品时的类结构变化
+image::/images/attachment/designpattern/abstractfactory-structure-of-new-concrete-product.png[]
+
+图中紫色部分是需要新加的部分，原工厂和客户端不需要做改动，遵循开闭原则。
+
+但是，如果现在要增加新的产品线，即是说产品簇中要新加一个新产品，那么原工厂代码需要添加生产这个新产品的方法，而且客户能也需要为调用这个新方法而做出修改，此时的类结构如下图：
+
+.产品簇中添加新产品时的类结构变化
+image::/images/attachment/designpattern/abstractfactory-structure-of-new-product.png[]
+
+图中紫色部分为新加的产品，而原来的工厂添加新的方法（红色部分）来生产这个新的 `Product3` 产品，客户端也需要修改代码来调用工厂的新方法。
+
+== 与工厂方法模式的比较
+
+抽象工厂模式与工厂方法模式在结构上其实是相同的，但是他们创建的产品类型不同：
+
+* 工厂方法模式仅能创建某一类产品，而抽象工厂模式可以创建多种类型的产品；
+* 工厂方法模式如果能够支持创建多种类型的产品，那么它会演变为抽象工厂模式；同理，如果抽象工厂模式仅创建同一类型的产品，它就变成了工厂方法模式
+* 抽象工厂模式具有工厂方法模式的优点和缺点
+
+== 示例
+
+接下来看一个实例。现在有一个电器工厂，可以生产电视机、空调，假设电视机有黑白、彩色两种，空调有挂式和柜式空调两种。工厂既能生产电视机，也能生产空调。我们用抽象工厂来设计，创建两个具体的工厂，工厂A来生产黑白电视机和挂式空调，而工厂B来生产彩电和柜式空调。类的结构如下：
+
+.电器工厂设计类图
+image::/images/attachment/designpattern/abstractfactory-demo.png[]
+
+=== 代码实现
+
+我们来看看具体代码。
+
+首先，抽象工厂接口定义如下：
+
+.抽象工厂定义
+[source,java]
+----
+interface ElectricFactory {
+	// 生产电视
+	Television createTelevision();
+
+	// 生产空调
+	AirConditioning createAirConditioning();
+}
+----
+
+然后，定义两个抽象产品：
+
+.抽象产品-电视机
+[source,java]
+----
+interface Television {
+	int BLACK_WHITE = 1;
+	int COLOR       = 2;
+
+	// 类型
+	int type();
+
+	// 生产时间
+	default Date createTime() {
+		return new Date();
+	}
+}
+----
+
+.抽象产品-空调
+[source,java]
+----
+interface AirConditioning {
+	int HANGING = 1;
+	int CABINET = 2;
+
+	// 类型
+	int type();
+
+	// 生产时间
+	default Date createTime() {
+		return new Date();
+	}
+}
+----
+
+现在来定义具体的产品信息：
+
+.具体的电视机产品
+[source,java]
+----
+// 具体产品：黑白电视
+class BlackWhiteTelevision implements Television {
+	@Override
+	public int type() {
+		return BLACK_WHITE;
+	}
+
+	@Override
+	public String toString() {
+		return "黑白电视机，生产时间：" + createTime();
+	}
+}
+
+// 具体产品：彩色电视
+class ColorTelevision implements Television {
+	@Override
+	public int type() {
+		return COLOR;
+	}
+
+	@Override
+	public String toString() {
+		return "彩色电视机，生产时间：" + createTime();
+	}
+}
+----
+
+.具体的空调产品
+[source,java]
+----
+// 具体产品：挂式空调
+class HangingAirConditioning implements AirConditioning {
+	@Override
+	public int type() {
+		return HANGING;
+	}
+
+	@Override
+	public String toString() {
+		return "挂式空调，生产时间：" + createTime();
+	}
+}
+
+// 具体产品：柜式空调
+class CabinetAirConditioning implements AirConditioning {
+	@Override
+	public int type() {
+		return CABINET;
+	}
+
+	@Override
+	public String toString() {
+		return "柜式空调，生产时间：" + createTime();
+	}
+}
+----
+
+现在，来定义具体的工程，生产这些具体的产品：
+
+.工厂A
+[source,java]
+----
+// 具体工厂1：生产黑白电视和挂式空调
+class ElectricFactoryA implements ElectricFactory {
+	@Override
+	public Television createTelevision() {
+		System.out.println("生产黑白电视");
+		return new BlackWhiteTelevision();
+	}
+
+	@Override
+	public AirConditioning createAirConditioning() {
+		System.out.println("生产挂式空调");
+		return new HangingAirConditioning();
+	}
+}
+----
+
+.工厂B
+[source,java]
+----
+// 具体工厂2：生产彩色电视和柜式空调
+class ElectricFactoryB implements ElectricFactory {
+	@Override
+	public Television createTelevision() {
+		System.out.println("生产彩色电视");
+		return new ColorTelevision();
+	}
+
+	@Override
+	public AirConditioning createAirConditioning() {
+		System.out.println("生产柜式空调");
+		return new CabinetAirConditioning();
+	}
+
+	@Override
+	public Fan createFan() {
+		System.out.println("生产加湿台式风扇");
+		return new WetDesktopFan();
+	}
+}
+----
+
+最后，来编写客户端代码：
+
+.客户端
+[source,java]
+----
+class Client {
+	private ElectricFactory factory;
+
+	// 生产电视
+	public Television newTelevision() {
+		return factory.createTelevision();
+	}
+
+	// 生产空调
+	public AirConditioning newAirConditioning() {
+		return factory.createAirConditioning();
+	}
+
+	public void setFactory(ElectricFactory factory) { // <1>
+		this.factory = factory;
+	}
+}
+----
+<1> 调用方来设置具体使用的工厂
+
+编码完成，现在来编写测试代码：
+
+.测试代码
+[source,java]
+----
+public class AbstractFacotryPatternDemo {
+	public static void main(String[] args) {
+		Client client = new Client();
+
+		System.out.println("电器工厂A开始生产……");
+		client.setFactory(new ElectricFactoryA()); // <1>
+		Television      blackWhiteTelevision   = client.newTelevision();
+		AirConditioning hangingAirConditioning = client.newAirConditioning();
+		Fan             dryDesktopFan          = client.newFan();
+		System.out.println(blackWhiteTelevision);
+		System.out.println(hangingAirConditioning);
+		System.out.println(dryDesktopFan);
+
+		System.out.println("电器工厂B开始生产……");
+		client.setFactory(new ElectricFactoryB());
+		Television      colorTelevision        = client.newTelevision();
+		AirConditioning cabinetAirConditioning = client.newAirConditioning();
+		Fan             wetDesktopFan          = client.newFan();
+		System.out.println(colorTelevision);
+		System.out.println(cabinetAirConditioning);
+		System.out.println(wetDesktopFan);
+	}
+}
+----
+<1> 告诉 `Client`，现在要使用哪个工厂来生产
+
+=== 添加同类型产品
+
+现在，如果我们希望新加一个产品：中央空调，电视机产品不变，怎么办呢？我们只需要添加一个工厂C，让它来生产中央空调，原 `Client` 和各个工厂不需要修改。
+
+新加的具体产品：中央空调。
+
+.中央空调类
+[source,java]
+----
+class CentralAirConditioning implements AirConditioning {
+	@Override
+	public int type() {
+		return 3;
+	}
+
+	@Override
+	public String toString() {
+		return "中央空调，生产时间：" + createTime();
+	}
+}
+----
+
+新加具体的工厂，让它来负责生产中央空调：
+
+.新加具体的工厂
+[source,java]
+----
+class ElectricFactoryC implements ElectricFactory {
+	@Override
+	public Television createTelevision() {
+		System.out.println("此工厂暂时不生产电视");
+		return null;
+	}
+
+	@Override
+	public AirConditioning createAirConditioning() {
+		System.out.println("生产中央空调");
+		return new CentralAirConditioning();
+	}
+
+	@Override
+	public Fan createFan() {
+		System.out.println("生产加湿立式风扇");
+		return new WetStandingFan();
+	}
+}
+----
+
+然后，调用方直接给客户端设置这个新工厂，让它来负责生产产品即可：
+
+[source,java]
+----
+public class AbstractFacotryPatternDemo {
+	public static void main(String[] args) {
+		Client client = new Client();
+
+		// ……
+
+		// 新加了同类型产品
+
+		System.out.println("电器工厂C开始生产");
+		client.setFactory(new ElectricFactoryC());
+		Television      someTelevision         = client.newTelevision();
+		AirConditioning centralAirConditioning = client.newAirConditioning();
+		Fan             wetStandingFan         = client.newFan();
+		System.out.println(someTelevision);
+		System.out.println(centralAirConditioning);
+		System.out.println(wetStandingFan);
+	}
+}
+----
+
+现在，工厂C也可以开始工作了。
+
+=== 添加新型产品
+
+现在，如果除了电视机和空调外，我们还需要生产一个全新的产品：电风扇，那么又该怎么办呢？
+
+现在，我们有A、B、C三个工厂了。如果我们增加新的具体工厂来生产电风扇，但是必须要实现抽象工厂 `ElectricFactory` 所定义的生产电视和空调的方法，这违背了接口隔离原则。此时，最简单有效的方法是在原抽象工厂 `ElectricFactory` 中添加一个生产电扇的方法：
+
+.ElectricFactory添加了新方法
+[source,java]
+----
+// 顶层抽象工厂：电器生产工厂
+interface ElectricFactory {
+	// 生产电视
+	Television createTelevision();
+
+	// 生产空调
+	AirConditioning createAirConditioning();
+
+	// === 产品簇新添加了新产品
+
+	// 生产风扇
+	Fan createFan(); // <1>
+}
+----
+<1> 新加了生产电扇的方法
+
+`Fan` 的定义如下：
+
+[source,java]
+----
+// 新增新产品：电风扇
+interface Fan {
+	int type();
+
+	default Date createTime() {
+		return new Date();
+	}
+
+	// 加湿功能
+	boolean canWet();
+}
+----
+
+假设具体电扇有三种：干式台式电扇、加湿台式电扇和加湿立式电扇，我们让A、B、C三个工厂分别来生产它们。那么，我们只需要在具体工厂中实现新加的方法来生产这几种电扇即可：
+
+.FactoryA可以生产干式台式电扇
+[source,java]
+----
+@Override
+public Fan createFan() {
+	System.out.println("生产干式台式风扇");
+	return new DryDesktopFan();
+}
+----
+
+.FactoryB可以生产加湿台式电扇
+[source,java]
+----
+@Override
+public Fan createFan() {
+	System.out.println("生产加湿台式风扇");
+	return new WetDesktopFan();
+}
+----
+
+.FactoryC可以生产加湿立式风扇
+[source,java]
+----
+@Override
+public Fan createFan() {
+	System.out.println("生产加湿立式风扇");
+	return new WetStandingFan();
+}
+----
+
+如果有更多的风扇，我们可以新加工厂来生产，只是新工厂不需要生产电视机和空调，这会违背接口隔离原则。我们还可以让一个具体工厂生产多个具体产品，但是这又会违背开闭原则。因此，抽象工厂模式的核心思想是，将多个产品分布到不同的工厂来创建实例，至于如何分配需要设计时做出一些权衡，尽量满足开闭原则、接口隔离原则的要求。
+
+本文示例代码见: https://github.com/belonk/java-designpattern[Github]

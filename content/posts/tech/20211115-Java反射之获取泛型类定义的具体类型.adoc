@@ -1,0 +1,285 @@
+---
+title: Java反射之获取泛型类定义的具体类型
+slug: generic-actualtype
+img: /images/thumbnail/cb.png
+categories:
+  - Java
+tags:
+  - reflect
+  - 反射
+  - java
+  - Type
+  - 泛型
+description: 很多时候，我们需要获取到泛型类上定义的具体类型，从而完成一些业务逻辑。比如，最常见的情景就是JSON的反序列化，需要将JSON字符串反序列化为泛型的具体类型，比如反序列化为 `List<User>`，这就要求每一个 `List` 中的元素都是 `User` 对象。那么，如何获取到泛型类上定义的具体类型呢？这就是本文要阐述的内容。
+date: 2021-11-15 00:00:00
+updated: 2021-11-15 00:00:00
+---
+
+= Java反射之获取泛型类定义的具体类型
+:key_word: Java,反射,Type,AnnotatedElement,Class,Field,Method,Parameter,Constructor,Annotation,Array,泛型数组,泛型具体类型
+:Author: belonk.com belonk@126.com
+:Date: 2021-11-11
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+通过上一篇<</2021/11/14/type-components, Java反射之表示所有类型的Type接口>>一文，我们知道 `Type` 接口及其五大组件是用来描述Java的各种类型，主要包括原始类型和泛型类型。很多时候，我们需要获取到泛型类上定义的具体类型，从而完成一些业务逻辑。比如，最常见的情景就是JSON的反序列化，需要将JSON字符串反序列化为泛型的具体类型，比如反序列化为 `List<User>`，这就要求每一个 `List` 中的元素都是 `User` 对象。那么，如何获取到泛型类上定义的具体类型呢？这就是本文要阐述的内容。
+
+== 通过Class能获取泛型类型吗？
+
+在<</2021/11/09/reflect-class#class#reflect-class>>中说过，`Class` 类上有一个 `getTypeParameters()` 方法用来获取类上的类型变量。通过它能不能获取到泛型类型呢？看下边的示例：
+
+[source,java]
+----
+class Parent<T> { // <1>
+}
+----
+<1> 定义一个泛型类
+
+这里定义一个泛型类，现在尝试通过它的实例对象来获取泛型类型，代码如下：
+
+[source,java]
+----
+public void printParent() {
+	Parent<String> parent = new Parent<>(); // <1>
+	TypeVariable<? extends Class<? extends Parent>>[] parentTypeParameters = parent.getClass().getTypeParameters(); // <2>
+	System.out.println(Arrays.toString(parentTypeParameters));
+}
+----
+<1> 创建 `Parent` 类的实例
+<2> 获取类型变量
+
+上边的示例并不能拿到实例上的 `String` 类型，而只能拿到 `Parent` 类上定义的泛型类型 `T`，因此，输出结果为：
+
+----
+[T]
+----
+
+很显然，这个结果不是我们想要的，我们想要获取到 `String` 这个类。在 <<20211110-Java反射之创建泛型数组.adoc#generic-type-erased, Java反射之创建泛型数组>> 一文中说过，泛型是编译期特性，在运行时泛型会被擦除。因此，我们想通过`Class` 在运行时用反射直接去获取泛型类型，看起来是不行的。
+
+既然直接获取不行，那么有没有别的办法呢？
+
+在上一篇<</2021/11/14/type-components, Java反射之表示所有类型的Type接口>>一文中说过，**`Type` 的参数化类型组件 `ParameterizedType` 可以获取整个泛型定义，那么要获取类上的泛型，肯定少不了它**！
+
+但是，`Field` 通过 `getGenericType()` 方法可以获取到参数化类型，`Constructor`、`Method` 可以通过 `getGenericParameterTypes()` 获取泛型参数或者通过 `getGenericReturnType()` 方法获取泛型值的泛型类型，而翻看 `Class` 类的 api，与泛型相关的看似有用的只有两个方法：
+
+[source,java]
+----
+public Type[] getGenericInterfaces(); // <1>
+public Type	getGenericSuperclass(); // <2>
+----
+<1> 获取类上的实现的泛型接口
+<2> 获取类的泛型父类
+
+它们是不是我们所需要的呢？看下边的示例：
+
+[source,java]
+----
+public class GenericActualType {
+	interface GenericInterface1<T> { // <1>
+	}
+
+	interface GenericInterface2<T> { // <1>
+	}
+
+	class GenericSuperClass<T> { // <2>
+	}
+
+	class GenericCls extends GenericSuperClass<Integer> implements GenericInterface1<String>, GenericInterface2<Long> { // <3>
+	}
+
+	public void genericSuperClassAndInterface() { // <4>
+		Type genericSuperclass = GenericCls.class.getGenericSuperclass();
+		Type[] genericInterfaces = GenericCls.class.getGenericInterfaces();
+		System.out.println(genericSuperclass.getClass());
+		for (Type genericInterface : genericInterfaces) {
+			System.out.println(genericInterface.getClass());
+		}
+	}
+}
+----
+<1> 创建泛型接口
+<2> 创建泛型父类
+<3> 创建泛型类分别继承和实现了泛型父类和接口
+<4> 测试方法
+
+示例中，标记1、2分别申明了两个泛型接口和一个泛型类，然后声明一个 `GenericCls` 类来继承和实现它们。最后，通过测试方法，打印出 `getGenericSuperclass()` 和 `getGenericInterfaces()` 获取到的泛型类型，其结果输出如下：
+
+----
+class sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl
+class sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl
+class sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl
+----
+
+可以看到，通过这两个方法，确实能够拿到参数化类型 `ParameterizedType`，然后通过它来获取泛型具体类型就很容易了，前一篇已经介绍过，不再赘述。
+
+== 为什么只能通过父类或接口来获取到子类的泛型？
+
+其实这个问题是Java类体系决定的。
+
+首先，泛型类在实例化时才知道具体类型，但是泛型类型被擦除，所以反射获取不到具体类型，只能获取到泛型类申明时定义的诸如 `T`、`E` 之类的东西：
+
+[source,java]
+----
+Parent<String> parent = new Parent<>();
+----
+
+其次，子类继承或实现泛型父类或接口，就获得了具体的泛型定义，如下所示：
+
+[source,java]
+----
+class GenericCls extends GenericSuperClass<Integer> {
+}
+----
+
+子类 `GenericCls` 在编译期和运行期都知道其泛型类型是 `Integer`，这个泛型类型已经具体化了，所以能够获取到具体泛型类型。
+
+所以，有的书上说Java中的泛型并不是真正意义的泛型。
+
+== 通用的获取类定义的具体泛型方案
+
+有了前边的了解，现在我们可以得到一个思路：**要获取泛型类的具体泛型类型，需要创建其子类并持有具体类型**。看一个例子：
+
+[source,java]
+----
+// List<String> list = new ArrayList<String>(); // <1>
+List<String> list = new ArrayList<String>() {
+}; // <2>
+Type genericSuperclass = list.getClass().getGenericSuperclass();
+ParameterizedType parameterizedType = (ParameterizedType) genericSuperclass;
+Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
+System.out.println(Arrays.toString(actualTypeArguments));
+----
+<1> 不能获取的泛型类型
+<2> 通过创建 `ArrayList` 的匿名子类来获取泛型类型
+
+注意标记1和2的区别，2是创建了 `ArrayList` 的匿名子类，从而通过 `getGenericSuperclass()` 就能获取泛型真实类型。上边的示例输出：
+
+----
+[class java.lang.String]
+----
+
+这种方式虽然有用，但是不够优雅，可以编写一个专门负责泛型类型具体化的抽象父类，如下所示：
+
+[source,java]
+----
+abstract class ParameterizedTypeRef<T> {
+	private Type type; // <1>
+
+	public ParameterizedTypeRef() {
+		Class<?> cls = findParameterizedTypeClass(this.getClass()); // <2>
+		Type genericSuperclass = cls.getGenericSuperclass();
+		assert genericSuperclass instanceof ParameterizedType;
+		ParameterizedType parameterizedType = (ParameterizedType) genericSuperclass;
+		this.type = parameterizedType.getActualTypeArguments()[0]; // <3>
+	}
+
+	public Type getType() { // <4>
+		return type;
+	}
+
+	private static Class<?> findParameterizedTypeClass(Class<?> child) {
+		Class<?> parent = child.getSuperclass();
+		if (parent == Object.class) // 没找到，抛异常
+			throw new IllegalArgumentException();
+		if (parent == ParameterizedTypeRef.class) // 找到，直接返回
+			return child;
+		return findParameterizedTypeClass(parent); // 递归查找
+	}
+}
+----
+<1> 持有泛型具体类型的成员域
+<2> 找到父类是ParameterizedTypeRef的类，从而根据父类可以获取其泛型类型
+<3> 通过参数化类型获取具体泛型类型
+<4> 返回具体泛型类型
+
+然后，其使用方法如下：
+
+[source,java]
+----
+ParameterizedTypeRef<String> parameterizedTypeRef = new ParameterizedTypeRef<String>() {
+};
+System.out.println(parameterizedTypeRef.getType()); // class java.lang.String
+ParameterizedTypeRef<Integer> intParameterizedTypeRef = new ParameterizedTypeRef<Integer>() {
+};
+System.out.println(intParameterizedTypeRef.getType());
+ParameterizedTypeRef<Parent<String>> parentParameterizedTypeRef = new ParameterizedTypeRef<Parent<String>>() {
+};
+System.out.println(parentParameterizedTypeRef.getType().getTypeName()); // com.belonk.lang.generic.Parent<java.lang.String>
+----
+
+上边的示例通过创建 `ParameterizedTypeRef` 的匿名子类来具体化泛型参数。
+
+其实，很多框架都是采用这种方式来获取具体泛型的：
+
+1、Spring中有一个 `ParameterizedTypeReference` 类，来做同样的事情：
+
+[source,java]
+----
+public abstract class ParameterizedTypeReference<T> {
+
+	private final Type type;
+
+
+	protected ParameterizedTypeReference() {
+		Class<?> parameterizedTypeReferenceSubclass = findParameterizedTypeReferenceSubclass(getClass());
+		Type type = parameterizedTypeReferenceSubclass.getGenericSuperclass();
+		Assert.isInstanceOf(ParameterizedType.class, type, "Type must be a parameterized type");
+		ParameterizedType parameterizedType = (ParameterizedType) type;
+		Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
+		Assert.isTrue(actualTypeArguments.length == 1, "Number of type arguments must be 1");
+		this.type = actualTypeArguments[0];
+	}
+
+	// 省略其他代码
+}
+----
+
+2、Jackson中的解决方案
+
+Jackson在反序列化是，可以通过传递 `TypeReference` 对象的匿名子类来决定底层json需要反序列化的对象，比如：
+
+[source,java]
+----
+List<User> users = objectMapper.readValue(json, new TypeReference<List<User>>() {});
+----
+
+示例中，使用 `ObjectMapper` 直接将json反序列化 `List<User>` 类型的对象，list中每一个元素都是 `User`，其实就是通过 `TypeReference` 来持有具体泛型实现的，`TypeReference` 定义如下：
+
+[source,java]
+----
+public abstract class TypeReference<T> implements Comparable<TypeReference<T>> {
+    protected final Type _type;
+
+    protected TypeReference() {
+        Type superClass = this.getClass().getGenericSuperclass();
+        if (superClass instanceof Class) {
+            throw new IllegalArgumentException("Internal error: TypeReference constructed without actual type information");
+        } else {
+            this._type = ((ParameterizedType)superClass).getActualTypeArguments()[0];
+        }
+    }
+
+    public Type getType() {
+        return this._type;
+    }
+
+    public int compareTo(TypeReference<T> o) {
+        return 0;
+    }
+}
+----
+
+== 总结
+
+Java不能通过 `Class` 直接获取到类的具体泛型，但是可以通过创建泛型父类持有具体泛型并创建其匿名子类来实现。
+
+本文示例代码见： https://github.com/koobyte/java-learning/tree/master/src/main/java/com/belonk/lang/generic[github].

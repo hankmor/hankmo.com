@@ -1,0 +1,288 @@
+---
+title: 使用Redis实现分布式锁
+slug: distributed-lock-by-redis
+img: /images/thumbnail/attachment/20191017/936e52c9aca74919b8cbbf2ba5adb939.png
+categories:
+  - 高新技术
+tags:
+  - redis
+  - 分布式
+  - 锁
+description: >-
+  在单体Java应用中，由于代码运行于同一个JVM，使用实现资源加锁是比较容易的，例如使用synchronized或ReentrantLock加锁来控制并发访问；但是在分布式系统中，多个分布式系统之间也需要控制并发访问，由于处于不同的JVM，此时就不能简单使用java的锁机制来进行控制。这种跨进程或者跨服务器的加锁，需要额外使用全局的获取锁的服务，就是本文探讨的分布式锁。
+date: 2019-10-17 19:51:29
+updated: 2019-10-17 19:55:55
+---
+
+= 使用Redis实现分布式锁
+:author: belonk.com
+:date: 2019-10-17
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: Redis,分布式锁,redisson,RedLock,Zookeeper
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: redis,分布式,锁
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在单体Java应用中，由于代码运行于同一个JVM，使用实现资源加锁是比较容易的，例如使用``synchronized``或``ReentrantLock``加锁来控制并发访问；但是在分布式系统中，多个分布式系统之间也需要控制并发访问，由于处于不同的JVM，此时就不能简单使用java的锁机制来进行控制。这种跨进程或者跨服务器的加锁，需要额外使用**全局的获取锁的服务**，就是本文探讨的分布式锁。
+
+
+== 为什么需要分布式锁
+ 
+分布式锁解决的问题：**保证分布式系统的共享资源在某一时刻只被一个客户端访问，保证数据的准确性**。
+
+举个例子：
+
+image::/images/attachment/20191017/a1f73bb5e1ef4bd195ab016bf79ce24a.png[]
+
+如图所示，订单服务下单前需要保证库存足够，库存服务首先会检查库存充足，然后在将订单的库存数量锁定，如果此时管理系统对库存数量进行了修改，那么由于跨系统的并发操作可能操作库存数据的不正确。此时，对库存的操作就需要考虑分布式锁，将库存锁定，暂时不能更改。
+
+
+image::/images/attachment/20191017/5c12b2d0192f4e1bb5fc259ffab4be3c.png[]
+
+
+这样一来，对库存的更改和扣减操作使用同一把锁来锁定，每次只有一个客户端能够操作成功，要么订单服务先扣减服务，要么管理系统先修改库存，反正两个不能同时进行。
+
+
+== 分布式锁的现有方案
+ 
+分布式锁的整体思路是：在分布式系统中，有一个全局的东西（中间件或服务），各个服务需要加锁时都向它获取锁，然后给锁一个标记(例如锁的名称)，如果标记相同则认为是同一把锁，这样就可以控制各个系统的资源共享。
+
+目前，分布式锁的方案大致有以下几种：
+
+* 基于Zookeeper的临时节点
+* 基于Redis的SET命令
+
+这里仅仅讨论Redis的分布式锁实现。
+
+
+== Redis实现分布式锁的原理
+ 
+基于Redis来实现分布式锁，其原理很简单：在Redis中设置一个Key，表示加锁，如果其他系统来加锁时发现这个Key已经存在，表示已经加了锁，则它获取锁失败，然后它再不断重试加锁，直到加锁成功，然后才能执行后续业务逻辑。释放锁也很简单，直接将这个KEY删除即可。
+
+锁一旦被创建，就必须能够释放，否则会引起死锁（其他系统永远获取不到锁），一般会使用Redis的过期机制，让KEY一段时间后自动过期以避免死锁。
+
+加锁时，过程如下：
+
+* 首先，使用SET命令来为某一个KEY（可以作为锁名称）设置一个唯一的值，仅当KEY不存在时才能加锁成功，如果KEY存在则设置失败，表明锁已经存在；
+* 其次，为该KEY设置一个过期时间，来避免死锁问题；
+
+释放锁时，先获取锁是否存在，如果存在则调用DEL命令删除该KEY。
+
+无论是加锁，还是释放锁，都需要保证命令的原子性执行（要么都成功，要么都失败，试想一下，如果加锁时SET命令成功，然后在调用EXPIRE命令设置过期时间，未完成时Redis宕机了，会造成死锁）。例如，加锁时，SET命令和设置过期时间需要为一个原子命令，Redis已经提供了原子命令，如下：
+
+----
+// NX是指如果key不存在就成功，key存在返回false，PX指定过期时间，单位毫秒
+SET anyLock unique_value NX PX 30000
+----
+ 
+释放锁时，获取锁和删除KEY为一个原子操作，Redis没有提供获取KEY然后DEL的原子命令，这里需要用到LUA脚本以保证原子性：
+
+----
+// 执行LUA脚本保证原子性，先获取锁，然后调用DEL删除
+if redis.call("get",KEYS[1]) == ARGV[1] then
+return redis.call("del",KEYS[1])
+else
+return 0
+end
+----
+ 
+需要注意的是，**加锁时设置的KEY值value必须是唯一的**，这是因为在释放锁时需要获取到该值以便验证释放锁的客户端和加锁的客户端是同一客户端，如果value值不唯一则可能客户端A加了锁，但是由客户端B给释放了，引起业务混乱而没有达到加锁的目的。
+
+
+== 三种部署方式下的锁问题
+ 
+Redis有三种部署方式，每种方式下的分布式锁都存在一些问题：
+
+1、单机部署
+
+这种方式下，很明显的缺点就是单点问题，Redis故障了，那么分布式锁就不能使用了。
+
+2、Master-Slave + Sentinel模式
+
+主从+哨兵模式，主节点挂了，哨兵会重新选择一个从节点作为主节点，数据会复制到从节点上，但是复制过程需要一定的时间，如果主节点挂了，它上边的锁可能还没有复制到从节点上，就会造成锁丢失。
+
+3、Cluster模式
+
+集群部署模式，同理，在某一个节点上的锁可能还没有复制到其他节点上，同样会造成锁丢失。
+
+使用Redis的分布式锁，其优点是性能很高，支持高并发分布式锁场景，缺点则是如果加锁失败，需要不断循环重试加锁，消耗资源，另外，Redis集群下可能造成锁丢失的极端情况，对于这种情况，Redis的作者也考虑到了，他提出了RedLock算法，具体可以看 https://redis.io/topics/distlock[这里]。
+
+
+== 使用Redisson的分布式锁
+ 
+一般而言，不推荐自己实现Redis分布式锁，因为需要考虑诸如锁重入等多种情况，Java的Redisson框架已经为我们提供了分布式锁的支持。
+
+Redisson是一个Java版的Redis Client，提供了大量的基于Redis的分布式特性支持，例如 https://github.com/redisson/redisson/wiki/8.-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81%E5%92%8C%E5%90%8C%E6%AD%A5%E5%99%A8[分布式锁]、分布式任务调度、分布式远程服务、分布式集合等等，Redisson官网： https://redisson.org/[https://redisson.org/]
+
+要使用Redisson的分布式锁非常简单，基本的代码如下：
+
+[source,java]
+----
+RLock lock = redisson.getLock("anyLock");
+lock.lock();
+// do something
+……
+lock.unlock();
+----
+ 
+是不是很简单？另外，在Spring boot工程中，集成也很简单，步骤如下：
+
+1、创建一个名为redisson.yaml的配置文件，配置内容如下：
+
+[source,java]
+----
+---
+singleServerConfig:
+  idleConnectionTimeout: 10000
+  pingTimeout: 1000
+  connectTimeout: 10000
+  timeout: 3000
+  retryAttempts: 3
+  retryInterval: 1500
+  reconnectionTimeout: 3000
+  failedAttempts: 3
+  password: hmp_uat
+  subscriptionsPerConnection: 5
+  clientName: null
+  address: "redis://192.168.0.31:6379"
+  subscriptionConnectionMinimumIdleSize: 1
+  subscriptionConnectionPoolSize: 50
+  connectionMinimumIdleSize: 32
+  connectionPoolSize: 64
+  database: 0
+  dnsMonitoringInterval: 5000
+#threads: 0
+#nettyThreads: 0
+# 监控锁的看门狗超时，默认30s，避免死锁
+lockWatchdogTimeout: 300000
+----
+ 
+这里Redis使用的是单机部署方式
+
+2、pom.xml引入starter
+
+[source,xml]
+----
+<dependency>
+<groupId>org.redisson</groupId>
+<artifactId>redisson-spring-boot-starter</artifactId>
+<version>3.9.1</version>
+</dependency>
+----
+ 
+3、application.properties中配置redisson配置文件路径：
+
+[source,java]
+----
+spring.application.name=redisson-demo
+server.port=8081
+# redis configuration
+spring.redis.database=0
+spring.redis.host=192.168.0.31
+spring.redis.port=6379
+spring.redis.password=hmp_uat
+# Redisson settings
+#path to redisson.yaml or redisson.json
+spring.redis.redisson.config=classpath:redisson.yaml
+----
+ 
+由于Redisson的starter基于Jedis，所以这里也配置了redis信息
+
+4、集成完成，编写测试代码，只需要注入RedissClient即可：
+
+[source,java]
+----
+@Controller
+@RequestMapping("/redisson")
+public class RedissonApi {
+    private static Logger log = LoggerFactory.getLogger(RedissonApi.class);
+
+    @Autowired
+    RedissonClient client;
+    private Random random = new Random();
+
+    @RequestMapping("/lock")
+    public void lock1() {
+        String lockName = "lockDemo";
+        int time1 = random.nextInt(30);
+        int time2 = random.nextInt(30);
+        int time3 = time1 + time2 + 1;
+        new Thread(() -> {
+            String thread = Thread.currentThread().getName();
+            RLock lock = client.getLock(lockName);
+            try {
+                System.err.println(thread + ": before lock ...");
+                // 锁定，使用默认的超时时间，默认是30秒
+                lock.lock();
+                System.err.println(thread + ": get lock ...");
+                System.err.println(thread + ": do something ...");
+                System.err.println(thread + ": spend " + time1 + " s");
+                Thread.sleep(time1 * 1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                System.err.println(thread + ": unlock ...");
+                lock.unlock();
+            }
+        }).start();
+        new Thread(() -> {
+            String thread = Thread.currentThread().getName();
+            RLock lock = client.getLock(lockName);
+            try {
+                System.err.println(thread + ": before lock ...");
+                lock.lock();
+                System.err.println(thread + ": get lock ...");
+                System.err.println(thread + ": do something ...");
+                System.err.println(thread + ": spend " + time2 + " s");
+                Thread.sleep(time2 * 1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                System.err.println(thread + ": unlock ...");
+                lock.unlock();
+            }
+        }).start();
+        new Thread(() -> {
+            String thread = Thread.currentThread().getName();
+            RLock lock = client.getLock(lockName);
+            System.err.println(thread + ": waiting to tryLock ...");
+            try {
+                Thread.sleep(time3 * 1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            // 尝试获得锁，如果锁空闲，则立即返回true，否则理解返回false
+            if (lock.tryLock()) {
+                System.err.println(thread + ": got lock successfully");
+            } else {
+                System.err.println(thread + ": got lock failed");
+            }
+
+        }).start();
+    }
+}
+----
+ 
+其实，Redisson底层实现大多基于LUA脚本，保证了原子性，另外，还考虑了很多问题：
+
+* Redisson加锁的默认过期时间为30s，极端情况下，如果客户端持有锁时间超过30s，Redisson还有一个看门狗(watchdog)的机制，它会监控并延长客户端持有锁的时间
+* 锁的可重入：基于Redis的Redisson分布式可重入锁``RLock`` Java对象实现了``java.util.concurrent.locks.Lock``接口。同时还提供了异步（Async）、反射式（Reactive）和RxJava2标准的接口
+* 另外，Redisson还支持读写锁、公平锁、RedLock、联锁（MultiLock）、信号量（Semaphore）等等特性，具体可以看 https://github.com/redisson/redisson/wiki/8.-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81%E5%92%8C%E5%90%8C%E6%AD%A5%E5%99%A8[这里]
+
+ 
+
+== 总结
+ 
+基于Redis的分布式锁具有高性能高并发的特性，能够满足绝大多数业务需求，而其Java客户端Redisson更是为使用者提供了许多基于Redis的特性，方便使用。但是，在某些极端情况下，Redis也可能出现丢锁的情况，其作者提供的RedLock算法也存在一定的争议。如果业务要求高，也可以考虑Zookeeper的分布式锁实现。

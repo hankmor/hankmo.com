@@ -1,0 +1,941 @@
+---
+title: Spring Boot JPA使用详解
+slug: spring-boot-jpa-guide
+img: /images/thumbnail/attachment/20190615/0956f9795f554e6f94b43c7354deafeb.png
+categories:
+  - Spring
+tags:
+  - springboot
+  - springdatajpa
+description: >-
+  JPA是Java Persistence API的简称，中文名Java持久层API，是JDK
+  5.0注解或XML描述对象－关系表的映射关系，并将运行期的实体对象持久化到数据库中。本文介绍了Spring boot
+  JPA的用法，包括核心接口和类介绍，查询创建，投影、分页查询、条件查询用法等。
+date: 2018-06-27 18:08:47
+updated: 2019-06-15 08:42:58
+---
+
+= Spring Boot JPA使用详解
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring data,jpa,使用,spring boot jpa,查询创建,分页查询,条件查询,投影,动态投影,JPQL,Query查找策略
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: springboot,springdatajpa
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在上一篇**SpringBoot-工程结构、配置文件以及打包**中，我们介绍了Spring Boot项目的工程结构、基本配置、使用IDEA开发的配置，以及可执行jar包的结构和打包方式，对Spring Boot的项目有了整体的认识。在本篇，我们将介绍JPA的使用。
+
+
+== 简介
+ 
+百度百科对JPA的解释是这样的：
+
+[blockquote]
+____
+JPA是Java Persistence API的简称，中文名Java持久层API，是JDK 5.0注解或XML描述对象－关系表的映射关系，并将运行期的实体对象持久化到数据库中。 JPA由EJB 3.0软件专家组开发，作为JSR-220实现的一部分。但它又不限于EJB 3.0，你可以在Web应用、甚至桌面应用中使用。JPA的宗旨是为POJO提供持久化标准规范。Hibernate3.2+、TopLink 10.1.3以及OpenJPA都提供了JPA的实现。
+____ 
+简单来说，Hibernate这种ORM的持久化框架的出现极大的简化了数据库持久层的操作，随着使用人数的增多，ORM的概念越来越深入人心。因此，JAVA专家组结合Hibernate，提出了JAVA领域的ORM规范，即JPA。
+
+**JPQL**
+
+其实同Hibernate的HQL类似，是JPA标准的面向对象的查询语言。百度百科的解释如下：
+
+[blockquote]
+____
+JPA是Java Persistence API的简称，中文名Java持久层API，是JDK 5.0注解或XML描述对象－关系表的映射关系，并将运行期的实体对象持久化到数据库中。 JPA由EJB 3.0软件专家组开发，作为JSR-220实现的一部分。但它又不限于EJB 3.0，你可以在Web应用、甚至桌面应用中使用。JPA的宗旨是为POJO提供持久化标准规范。Hibernate3.2+、TopLink 10.1.3以及OpenJPA都提供了JPA的实现。
+____ 
+**JPA与Hibernate的关系**
+
+JPA是参考Hibernate提出的Java持久化规范，而Hibernate全面兼容JPA，是JPA的一种标准实现。
+
+**JPA与Spring Data JPA**
+
+Spring Boot对JPA的支持其实使用的是Spring Data JPA，它是Spring对JPA的二次封装，默认实现使用的是Hibernate，支持常用的功能，如CRUD、分页、条件查询等，同时也提供了强大的扩展能力。
+
+
+== HelloWorld
+ 
+僚机了JPA的概念过后，接下来，我们使用Spring Boot工程来实现一个最简单的CRUD操作，看看使用JPA我们需要做哪些事情。
+
+**引入依赖**
+
+直接引入如下依赖：
+
+[source,xml]
+----
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-devtools</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-test</artifactId>
+</dependency>
+<dependency>
+<groupId>mysql</groupId>
+<artifactId>mysql-connector-java</artifactId>
+</dependency>
+<dependency>
+<groupId>org.projectlombok</groupId>
+<artifactId>lombok</artifactId>
+<optional>true</optional>
+</dependency>
+----
+ 
+lombok是一款自动生成样板代码、简化源码、提高可读性的工具，功能基于注解实现，例如常见的自动生成getter、setter、equlas、hashcode代码等，Spring boot官方推荐使用，官方地址： https://www.projectlombok.org/[https://www.projectlombok.org/]。在使用idea开发的时候，需要安装lombok idea插件，插件库搜索即可找到。
+
+**定义Entity**
+
+Gender：
+
+[source,java]
+----
+public enum Gender {
+    MALE, FEMALE;
+}
+----
+ 
+Employee：
+
+[source,java]
+----
+@Entity
+@Table(name = "employee")
+@Data
+@EqualsAndHashCode
+public class Employee {
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    @Column(nullable = false, columnDefinition = "varchar(50) COMMENT '姓名'")
+    private String name;
+
+    @Column(nullable = false, columnDefinition = "bit COMMENT '性别'")
+    @Enumerated(EnumType.ORDINAL)
+    private Gender gender = Gender.MALE;
+
+    private Integer age;
+}
+----
+ 
+其中``@Entity``和``@Table(name = "employee")``是JPA的标准注解，用于标记管理实体和对应的表，而``@Data``、``@EqualsAndHashCode``是lombok的注解。这里数据库使用MySQL，所以主键ID使用默认的自增长策略。``@Enumerated(EnumType.ORDINAL)``注解标识性别采用枚举类型，存储的值为枚举顺序号。
+
+**创建Repository接口**
+
+创建接口很简单，只需要继承Spring Data JPA提供的接口即可：
+
+[source,java]
+----
+public interface DefaultEmployeeDao extends JpaRepository<Employee, Long> {
+}
+----
+ 
+这里继承了Spring Data提供的``JpaRepository``接口，该接口有两个泛型参数，第一个为受管理的``Entity``，第二个为该``Entity``的主键类型。继承过后，你获得了JPA的CRUD的各种方法，现在你已经可以使用这个接口来进行数据库相关操作了。
+
+**定义查询方法**
+
+如果默认的这些方法不能满足需要，你还可以在接口中自定义查询方法：
+
+[source,block]
+----
+public interface DefaultEmployeeDao extends JpaRepository<Employee, Long> {
+    List<Employee> findByNameLike(String name);
+}
+----
+ 
+这里，定义了一个按照name属性进行模糊查询的方法。
+
+Spring Data JPA有一套根据方法名称自动解析并生成查询实现的规则，极大的简化了开发工作，正如上边的例子，要实现按照名称模糊查询，只需要按照规则定义方法名即可，不需要做更多的事情。具体的规则和用法下边章节会详细介绍。
+
+**使用Repository接口**
+
+使用接口很简单，只需要在service中注入，就可以获得定义的全部方法：
+
+[source,java]
+----
+@Service
+public class DefaultEmployeeService {
+    private static Logger log = LoggerFactory.getLogger(DefaultEmployeeService.class);
+
+    @Autowired
+    private DefaultEmployeeDao employeeDao;
+
+    public Employee add(Employee employee) {
+        return employeeDao.save(employee);
+    }
+
+    public Employee update(Employee employee) {
+        return employeeDao.save(employee);
+    }
+
+    public void delete(Long id) {
+        employeeDao.delete(id);
+    }
+
+    public List<Employee> queryAll() {
+        return employeeDao.findAll();
+    }
+
+    public Employee getById(Long id) {
+        return employeeDao.findOne(id);
+    }
+
+    public List<Employee> queryByName(String name) {
+        name = "%" + name + "%";
+        return employeeDao.findByNameLike(name);
+    }
+}
+----
+ 
+上边的Service定义了常见的CRUD的和模糊查询方法。
+
+到这里，最简单的CRUD业务逻辑就完成了，是不是很简单呢?
+
+正如你所见的，我们不需要实现Repository接口，只需要继承已有接口，接下来的事情就交给Spring Data JPA来处理，它会为我们自动生成代理实现。
+
+下面，我们来详细了解下到底有哪些接口我们可以继承，他们都提供了什么功能。
+
+
+== 核心接口和类
+ 
+Spring data JPA Repository接口体系如下：
+
+
+image::/images/attachment/20180628/45a793793f1e48448349f71e69815f9e.png[]
+
+
+&nbsp;
+
+**Repository**
+
+顶层标记接口，通过泛型定义了其管理的Entity和Entity对应的主键类型。同时，也会从此接口开始扫描继承它的Repository接口，并创建代理Bean：
+
+[source,java]
+----
+public interface Repository<T, ID extends Serializable> {
+}
+----
+ 
+&nbsp;
+
+**CrudRepository**
+
+定义了通用的CRUD方法，一般而言，增删改查业务逻辑直接继承该接口即可。
+
+[source,java]
+----
+public interface CrudRepository<T, ID extends Serializable> extends Repository<T, ID> {
+    // 保存实体，返回保存后的实体
+<S extends T> S save(S entity);
+
+    // 保存所有给定的实体，如果参数为null，则抛出IllegalArgumentException。返回保存后的全部实体
+<S extends T> Iterable<S> save(Iterable<S> entities);
+
+    // 按照给定id查询实体，如果id为null，则抛出IllegalArgumentException，找到则返回带id的实体，否则返回null
+    T findOne(ID id);
+
+    // 判断给定id的实体是否存在，id不能为null，否则抛出IllegalArgumentException，如果存在则返回true，否则返回false
+    boolean exists(ID id);
+
+    // 查询所有实体对象
+    Iterable<T> findAll();
+
+    // 返回给定id列表的所有实体
+    Iterable<T> findAll(Iterable<ID> ids);
+
+    // 返回可用实体的数量
+	long count();
+
+    // 删除给定id的实体，id不能为null
+    void delete(ID id);
+
+    // 删除给定的实体，实体不能为null
+    void delete(T entity);
+
+    // 删除给定的所有实体，参数不能为null
+    void delete(Iterable<? extends T> entities);
+
+    // 删除所有实体
+    void deleteAll();
+}
+----
+ 
+&nbsp;
+
+**PagingAndSortingRepository
+**
+
+在CurdRepository的基础上增加了分页查询和排序方法：
+
+[source,java]
+----
+public interface PagingAndSortingRepository<T, ID extends Serializable> extends CrudRepository<T, ID> {
+    // 查询所有实体，并按照给定规则排序
+    Iterable<T> findAll(Sort sort);
+
+    // 分页查询，返回分页对象
+    Page<T> findAll(Pageable pageable);
+}
+----
+ 
+关于分页查询后边再细说。
+
+&nbsp;
+
+**JpaRepository**
+
+继承了PagingAndSortingRepository和QueryByExampleExecutor接口，扩展和重写了部分方法，同时支持QBE查询。
+
+[source,java]
+----
+public interface JpaRepository<T, ID extends Serializable>
+		extends PagingAndSortingRepository<T, ID>, QueryByExampleExecutor<T> {
+    // 查询所有对象列表
+    List<T> findAll();
+
+    // 查询所有对象列表并进行排序
+    List<T> findAll(Sort sort);
+
+    // 查询给定一批id的实体
+    List<T> findAll(Iterable<ID> ids);
+
+    // 保存所有给定的实体
+<S extends T> List<S> save(Iterable<S> entities);
+
+    // 刷新到数据库
+    void flush();
+
+    // 保存实体并立即刷新到数据库
+<S extends T> S saveAndFlush(S entity);
+
+    // 批量删除给定实体
+    void deleteInBatch(Iterable<T> entities);
+
+    // 批量删除所有实体
+    void deleteAllInBatch();
+
+    // 获取单个实体，如果实体不存在，抛出EntityNotFoundException异常
+    T getOne(ID id);
+
+    // 查询匹配给定example的所有实体
+<S extends T> List<S> findAll(Example<S> example);
+
+    // 查询匹配给定example的所有实体并按给定规则排序
+<S extends T> List<S> findAll(Example<S> example, Sort sort);
+}
+----
+ 
+更多关于QBE查询的信息可以看 https://en.wikipedia.org/wiki/Query_by_Example[这里]。
+
+&nbsp;
+
+**JpaSpecificationExecutor**
+
+简单而言，这个接口用于实现复杂的条件查询的。
+
+[source,java]
+----
+public interface JpaSpecificationExecutor<T> {
+    // 根据给定条件查询单个对象
+    T findOne(Specification<T> spec);
+
+    // 查询所有匹配条件的实体
+    List<T> findAll(Specification<T> spec);
+
+    // 按照给定条件进行分页查询
+    Page<T> findAll(Specification<T> spec, Pageable pageable);
+
+    // 按照给定条件进行查询，并且排序
+    List<T> findAll(Specification<T> spec, Sort sort);
+
+    // 按照给定条件统计实体数量
+    long count(Specification<T> spec);
+}
+----
+ 
+可以看到，每个方法都需要传递一个``Specification``接口，用于表示查询规则，该接口只有一个方法：
+
+[source,java]
+----
+public interface Specification<T> {
+    // 使用给定的Root和CriteriaQuery对象构建一个Predicate，用于拼接where语句
+    Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb);
+}
+----
+ 
+* ``Root``接口：From子句的跟类型，对Entity的引用；
+* ``CriteriaQuery``接口：具体的查询条件定义，包括sql常用的语句，如``distinct``、``orderBy``、``groupBy``等；
+* ``CriteriaBuilder``接口；条件查询构建器，组合``CriteriaQuery``查询条件,例如``and``、``or``、``not``等；
+
+核心的几个接口介绍完了，接下来我们看看一些用法。
+
+
+== 查询创建
+ 
+前边提到，Spring Data JPA能够根据定义的方法名称自动生成查询实现，同时，我们也可以使用``@Query``注解来手动定义查询。如果这两种方式都不能满足要求，我们还可以自定义Repository实现，通过原生sql来实现更复杂的业务逻辑。本节我们将介绍前边的两种：根据方法名自动生成实现、使用``@Query``自定义查询。
+
+
+=== 根据方法名自动查询
+ 
+通过方法名命名规则，Spring Data JPA能够自动解析方法名称并生成实现，其查询构建机制如下：
+
+将前缀``find...By...``、``read...By...``、``query...By...``、``count...By...``和``get...By...``从方法中剥离，并开始解析其余部分，还可以引入一些SQL关键字作为子句，如``Distinct``，``OrderBy``等。第一个By作为分隔符，表示查询条件由此后开始，通过使用``And``和``Or``关键词来组合Entity的属性名称，自动生成查询条件。
+
+下边是一些方法名称定义的例子：
+
+[source,java]
+----
+interface PersonRepository extends Repository<User, Long> {
+    // 根据Email地址和Lastname查询Person列表
+    List<Person> findByEmailAddressAndLastname(EmailAddress emailAddress, String lastname);
+
+  // 根据Lastname或者Firstname查询Person列表，并对结果去重
+  List<Person> findDistinctPeopleByLastnameOrFirstname(String lastname, String firstname);
+  List<Person> findPeopleDistinctByLastnameOrFirstname(String lastname, String firstname);
+
+  // 根据Lastname查询Person，不区分大小写
+  List<Person> findByLastnameIgnoreCase(String lastname);
+  // 根据Lastname和Firstname查询Person列表，都忽略大小写
+  List<Person> findByLastnameAndFirstnameAllIgnoreCase(String lastname, String firstname);
+
+  // 根据Lastname查询Person列表，结果按照Firstname排序
+  List<Person> findByLastnameOrderByFirstnameAsc(String lastname);
+  List<Person> findByLastnameOrderByFirstnameDesc(String lastname);
+}
+----
+ 
+方法名定义说明如下：
+
+* 通过And、Or组合实体的属性名称，也可以使用 #sql-keywords[支持的SQL关键词]，例如Between、LessThan、GreatThan、Like等，对这些关键词的支持取决于使用的存储库（见附录）
+* 方法解析器支持为每个属性设置一个IgnoreCase标志，例如findByLastnameIgnoreCase，也可以支持忽略所有String类型属性的大小写，使用AllIgnoreCase，例如findByLastnameAndFirstnameAllIgnoreCase
+* 您可以通过将OrderBy子句附加到引用属性的查询方法并通过提供排序方向(Asc或Desc)来应用排序，例如findByLastnameOrderByFirstnameAsc
+
+ 
+
+=== 使用@Query定义查询
+ 
+自动查询虽然为我们带来的极大的便利，但是某些业务场景下仍不能满足需求，例如：连表查询。此时，我们可以手动定义查询。Spring Data JPA提供了``@Query``注解来自定义查询，支持JPQL和原生SQL：
+
+[source,java]
+----
+@Query("select d from Employee e, Department d where e.departmentId = d.id and e.id = :employeeId")
+Department findDepartmentById(@Param("employeeId") Long employeeId);
+----
+ 
+&nbsp;
+
+**查询参数绑定**
+
+上边的例子使用了``@Param``注解来命名参数，再JPQL中则使用使用``:paramName``来获取参数的值。另外，还可以根据参数顺序来取值，不需要注解，例如：使用``?1``来或取第一个参数，以此类推。
+
+[source,java]
+----
+@Query("select d from Employee e, Department d where e.departmentId = d.id and e.id = ?1")
+Department findDepartmentById(Long employeeId);
+----
+ 
+&nbsp;
+
+**原生SQL**
+
+``@Query``注解支持原生SQL，配置``nativeQuery``为``true``即可，默认是``false``：
+
+[source,java]
+----
+@Query(value = "SELECT * FROM USERS WHERE EMAIL_ADDRESS = ?1", nativeQuery = true)
+  User findByEmailAddress(String emailAddress);
+----
+ 
+需要注意的时，使用``@Query``注解时，返回的对象必须是JPA管理的时实体Entity，或者``Object[]``，如果需要使用自定义Bean，需要使用投影，后文再详细讨论。
+
+
+=== 使用已命名的查询
+ 
+除了使用``@Query``注解外，我们还可以预先定义好一些查询，并为其命名，然后再Repository中添加相同命名的方法：
+
+定义命名的Query：
+
+[source,java]
+----
+@Entity
+@Table(name = "employee")
+@Data
+@EqualsAndHashCode
+@NamedQueries({
+        @NamedQuery(name = "Employee.findByDeptId", query = "select e from Employee e where e.departmentId = ?1"),
+        @NamedQuery(name = "Employee.findByGender1", query = "select e from Employee e where e.gender = ?1"),
+})
+public class Employee {
+    ……
+}
+----
+ 
+通过``@NamedQueries``注解可以定义多个命名Query，``@NamedQuery``的``name``属性定义了Query的名称，注意加上``Entity名称.``作为前缀，``query``属性定义查询语句。
+
+定义对应的方法：
+
+[source,java]
+----
+List<Employee> findByDeptId(Long deptId);
+List<Employee> findByGender1(Gender gender);
+----
+ 
+
+=== **Query查找策略**
+ 
+现在，我们有了三种方法来定义Query了：通过方法名自动创建Query，通过``@Query``注解实现自定义Query，通过``@NamedQuery``注解来定义Query；那么，Spring Data JPA如何来查找这些Query呢?
+
+通过配置``@EnableJpaRepositories``的``queryLookupStrategy``属性来配置Query查找策略，有如下定义：
+
+* CREATE: 尝试从查询方法名构造特定于存储的查询。一般的方法是从方法名中删除一组已知的前缀，并解析方法的其余部分
+* USE_DECLARED_QUERY:尝试查找已声明的查询，如果找不到，则抛出异常。查询可以通过某个地方的注释定义，也可以通过其他方式声明
+* CREATE_IF_NOT_FOUND（默认）：CREATE和USE_DECLARED_QUERY的组合，它首先查找一个已声明的查询，如果没有找到已声明的查询，它将创建一个自定义方法基于名称的查询。它允许通过方法名进行快速查询定义，还可以根据需要引入声明的查询来定制这些查询调优。
+
+一般情况下使用默认配置即可，如果确定项目Query的具体定义方式，可以更改上述配置，例如全部使用``@Query``来定义查询，又或者全部使用命名的查询。
+
+
+== 简单查询
+ 
+接下来，我们看看Spring Data JPA所支持的一些简单查询用法。
+
+
+=== **特定参数和返回**
+ 
+除了前边介绍的返回List，还可以返回单个实体，使用``Pageable``对象进行分页查询等：
+
+[source,java]
+----
+public interface EmployeeDao extends BaseDao<Employee> {
+    List<Employee> findByNameLike(String name);
+
+    // 按照名称模糊查询，返回第一个员工，结果按ID升序排列
+    Employee findTopByNameLikeOrderByIdAsc(String name);
+
+    // 按名称进行分页查询，结果按ID升序排列
+    Page<Employee> findByNameLikeOrderByIdAsc(String name, Pageable pageable);
+
+    // 分页查询大于等于某一年龄的员工，结果ID升序排列
+    Slice<Employee> findByAgeGreaterThanEqualOrderByIdAsc(int age, Pageable pageable);
+}
+----
+ 
+分页查询后边再细说。
+
+
+=== **查询结果数量限制**
+ 
+可以使用first、top关键字来限定查询结果的数量，如果不设定，则返回一条数据，否则返回给定数量的条数，例如：
+
+[source,java]
+----
+List<Employee> findTop3ByNameLikeOrderByIdAsc(String name);
+Employee findTopByNameLikeOrderByIdAsc(String name);
+Employee findFirstByNameLikeOrderByIdAsc(String name);
+----
+ 
+同样支持使用``Sort``和``Pageable``进行排序和分页查询：
+
+[source,java]
+----
+Page<User> queryFirst10ByLastname(String lastname, Pageable pageable);
+Slice<User> findTop3ByLastname(String lastname, Pageable pageable);
+List<User> findFirst10ByLastname(String lastname, Sort sort);
+List<User> findTop10ByLastname(String lastname, Pageable pageable);
+----
+ 
+
+=== **使用Stream来处理结果集**
+ 
+支持使用Java8提供的Stream类来接收查询结果集：
+
+[source,java]
+----
+@Query("select e from Employee e where e.name like ?1")
+Stream<Employee> findByCustomQueryAndStream(String name);
+----
+ 
+前边的Pageable、Sort参数同样试适用，要注意的是，Stream用完后必须关闭流，可以调用close或使用try-with-resources语句块：
+
+[source,java]
+----
+@Transactional
+public List<Employee> queryByNameFilterWithAge(String name, int minAge) {
+    try (Stream<Employee> employeeStream = employeeDao.findByCustomQueryAndStream(name);) {
+        return employeeStream.filter(employee -> employee.getAge() >= minAge).collect(Collectors.toList());
+    }
+}
+----
+ 
+测试过程中发现，使用Stream时，必须保证处于事务控制范围，否则会出现``InvalidDataAccessApiUsageException``异常：
+
+[blockquote]
+____
+JPA是Java Persistence API的简称，中文名Java持久层API，是JDK 5.0注解或XML描述对象－关系表的映射关系，并将运行期的实体对象持久化到数据库中。 JPA由EJB 3.0软件专家组开发，作为JSR-220实现的一部分。但它又不限于EJB 3.0，你可以在Web应用、甚至桌面应用中使用。JPA的宗旨是为POJO提供持久化标准规范。Hibernate3.2+、TopLink 10.1.3以及OpenJPA都提供了JPA的实现。
+____ 
+
+  意思是为了保持Stream连接打开，必须保证消费Stream的代码处于事务控制。 
+ 
+
+=== **异步查询**
+ 
+通过使用Spring的异步方法执行功能，可以异步运行查询。这意味着方法在调用时立即返回，而实际的查询执行发生在已提交给Spring TaskExecutor的任务中。
+
+[source,java]
+----
+// 使用java.util.concurrent.Future作为返回类型
+@Async
+Future<User> findByFirstname(String firstname);   
+// 使用java8的java.util.concurrent.CompletableFuture作为返回类型            
+@Async
+CompletableFuture<User> findOneByFirstname(String firstname); 
+// 使用org.springframework.util.concurrent.ListenableFuture作为返回类型
+@Async
+ListenableFuture<User> findOneByLastname(String lastname);
+----
+ 
+通过``@Async``注解来标记方式需要被异步执行。
+
+
+=== **用于修改的查询**
+ 
+当需要使用sql来进行数据库update和delete操作时，Spring Data JPA也支持：
+
+[source,java]
+----
+@Modifying
+@Query("update Employee e set e.gender = com.belonk.entity.Gender.MALE where e.gender = com.belonk.entity.Gender.FEMALE")
+int reverseGenderOfFemale();
+
+@Modifying
+@Query("delete from Employee e where e.departmentId = ?1")
+void deleteInBulkByDeptId(Long deptId);
+----
+ 
+使用``@Modifying``来标记方法用于更改数据库，而不是查询。
+
+
+== 条件分页查询
+ 
+前边已经介绍了分页查询的几个对象``Pageable``、``Sort``、``Page``、``Slice``，现在我们来看一些复杂一点的条件分页查询。
+
+查询定义如下：
+
+[source,java]
+----
+Page<Employee> findByNameLikeOrderByIdAsc(String name, Pageable pageable);
+
+Slice<Employee> findByAgeGreaterThanEqualOrderByIdAsc(int age, Pageable pageable);
+----
+ 
+条件分页查询的方法使用的是``JpaSpecificationExecutor``的``findAll``方法：
+
+
+----
+``Page<T> findAll(Specification<T> spec, Pageable pageable);``
+----
+
+具体实现：
+
+[source,java]
+----
+public Page<Employee> pageQueryByName(int pageIndex, int pageSize, String name) {
+    // pageIndex从0开始
+    Pageable pageable = new PageRequest(pageIndex, pageSize);
+    return employeeDao.findByNameLikeOrderByIdAsc(name, pageable);
+}
+
+public Slice<Employee> pageQueryByAge(int pageIndex, int pageSize, int minAge) {
+    Pageable pageable = new PageRequest(pageIndex, pageSize);
+    return employeeDao.findByAgeGreaterThanEqualOrderByIdAsc(minAge, pageable);
+}
+
+public Page<Employee> pageQueryByNameAndAage(int pageIndex, int pageSize, String name, int minAge) {
+    // 创建查询条件规则
+    Specification<Employee> specification = (root, cq, cb) -> {
+        List<Predicate> predicates = new ArrayList<>();
+        if (StringUtils.hasLength(name)) {
+            predicates.add(cb.and(cb.like(root.get("name"), name)));
+        }
+        if (minAge > 0) {
+            predicates.add(cb.and(cb.greaterThanOrEqualTo(root.get("age"), minAge)));
+        }
+        if (predicates.size() > 0) {
+            cq.where(predicates.toArray(new Predicate[predicates.size()]));
+        }
+        return cq.getRestriction();
+    };
+    // 创建排序规则
+    Sort sort = new Sort(Sort.Direction.DESC, "id");
+    // 创建分页对象
+    Pageable pageable = new PageRequest(pageIndex, pageSize, sort);
+    return employeeDao.findAll(specification, pageable);
+}
+----
+ 
+前边说过，``Specification``接口用来定义查询规则，分页查询需要查询规则和分页规则，返回``Page``或``Slice``，具体的``Root``、``CriteriaQuery``、``CriteriaBuilder``前边已经介绍了，这里不赘述。
+
+**Page和Slice的区别**
+
+这里先说一下``Page``和``Slice``的区别：
+
+* ``Page``接口继承自``Slice``接口，而``Slice``继承自``Iterable``接口
+* ``Page``接口扩展了``Slice``接口，添加了获取总页数和元素总数量的方法，因此，返回``Page``接口时，必须执行两条SQL，一条复杂查询分页数据，另一条负责统计数据数量
+* 返回``Slice``结果时，查询的SQL只会有查询分页数据这一条，不统计数据数量
+* 用途不一样：``Slice``不需要知道总页数、总数据量，只需要知道是否有下一页、上一页，是否是首页、尾页等，例如前端滑动加载一页可用；而Page知道总页数、总数据量，可以用于展示具体的页数信息，例如分页工具栏可用
+
+ 
+
+== 查询投影
+ 
+很多时候，我们并不需要实体的全部字段，而是其中一部分，投影就是用来解决这个问题。Spring Data JPA有三种投影方式。
+
+
+=== 基于接口的投影
+ 
+将需要查询的字段定义到接口中，接口方法与属性名称必须对应：
+
+[source,java]
+----
+public interface MyEmployee {
+    // 属性必须与entity对应
+
+    Long getId();
+
+    String getName();
+
+    Integer getAge();
+
+    Long getDepartmentId();
+
+    String getDepartmentName();
+}
+----
+ 
+&nbsp;
+
+查询定义：
+
+[source,java]
+----
+@Query("select e.id as id, e.name as name, e.age as age, d.id as departmentId, d.name as departmentName from Employee e, Department d where e.departmentId = d.id and e.id = ?1")
+MyEmployee findByIdWithDepartment(Long id);
+----
+ 
+接口可以进行嵌套投影：
+
+[source,java]
+----
+interface PersonSummary {
+  String getFirstname();
+  String getLastname();
+  AddressSummary getAddress();
+
+  interface AddressSummary {
+    String getCity();
+  }
+}
+----
+ 
+Spring Data JPA能够对基于接口的投影进行查询优化。
+
+
+=== 自定义投影类
+ 
+也可以自定义数据传输对象（DTOS），这些DTO类型可以以使用投影接口的完全相同的方式使用，但是不会生成代理，也不能应用嵌套投影。
+如果该存储通过限制要加载的字段来优化查询执行，那么将从所暴露的构造函数的参数名称中确定要加载的字段。
+
+``UserConstructWithField``DTO定义：
+
+[source,java]
+----
+@Data
+@EqualsAndHashCode
+@ToString
+public class UserConstructWithField {
+    private Long id;
+    private String name;
+
+    public UserConstructWithField(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+----
+ 
+``MyEmployeeDTO``定义：
+
+[source,java]
+----
+@Data
+@EqualsAndHashCode
+public class MyEmployeeDTO {
+    private Long id;
+    private String name;
+    private Long deptId;
+    private String deptName;
+
+    public MyEmployeeDTO(Long id, String name, Long deptId, String deptName) {
+        this.id = id;
+        this.name = name;
+        this.deptId = deptId;
+        this.deptName = deptName;
+    }
+}
+----
+ 
+查询定义：
+
+[source,java]
+----
+// 直接返回投影对象
+UserConstructWithField findById(Long id);
+
+// 直接返回投影对象列表
+List<UserConstructWithField> findByNameIsLike(String name);
+
+// 使用自定义查询，不能直接转换DTO，JPQL需要new一个对象
+@Query("select new com.belonk.domain.MyEmployeeDTO(e.id, e.name, d.id, d.name) from Employee e, Department d where e.departmentId = d.id and e.id = ?1")
+MyEmployeeDTO findByIdWithDepartment2(Long id);
+----
+ 
+在实际的测试过程中，使用方法名自东创建查询，可以直接返回投影对象，但是使用``@Query``自定义查询不行，再写SQL时需要new DTO对象，而且必须时全限定名，需要定义带参数的构造函数。
+
+**推荐使用DTO属性来进行构造，这样Spring Data JPA能够对SQL进行优化，只查询构造器对应的字段。**
+
+
+=== 动态投影
+ 
+动态投影用于动态定义投影结果DTO对象，在进行自动创建查询投影时非常方便。
+
+再定义一个DTO:
+
+[source,java]
+----
+@Data
+@EqualsAndHashCode
+@ToString
+public class UserConstructWithField1 {
+    private String name;
+    private Integer age;
+
+    public UserConstructWithField1(String name, Integer age) {
+        this.name = name;
+        this.age = age;
+    }
+}
+----
+ 
+查询接口定义：
+
+
+----
+``<T> List<T> findByAgeGreaterThan(int age, Class<T> tClass);``
+----
+
+动态传递DTO的``Class``，作为查询结果：
+
+[source,java]
+----
+public List<UserConstructWithField> queryByAgeGreaterThan(int minAage) {
+    return employeeDao.findByAgeGreaterThan(minAage, UserConstructWithField.class);
+}
+
+public List<UserConstructWithField1> queryByAgeGreaterThan1(int minAage) {
+    return employeeDao.findByAgeGreaterThan(minAage, UserConstructWithField1.class);
+};
+----
+ 
+
+== 附录
+ 
+**支持的SQL关键字**
+
+
+  下表列出了Spring Data存储库方法名支持的关键字，数据库不同，关键字的支持也会不同： 
+ 
+[cols="1,2,3"]
+.方法名支持的SQL关键字
+|====
+|关键字|示例|对应的JPQL片段
+
+|``And``|``findByLastnameAndFirstname``|``… where x.lastname = ?1 and x.firstname = ?2``
+
+|``Or``|``findByLastnameOrFirstname``|``… where x.lastname = ?1 or x.firstname = ?2``
+
+|``Is,Equals``|
+``findByFirstname``,``findByFirstnameIs``,
+``findByFirstnameEquals``
+|``… where x.firstname = ?1``
+
+|``Between``|``findByStartDateBetween``|``… where x.startDate between ?1 and ?2``
+
+|``LessThan``|``findByAgeLessThan``|``… where x.age < ?1``
+
+|``LessThanEqual``|``findByAgeLessThanEqual``|``… where x.age <= ?1``
+
+|``GreaterThan``|``findByAgeGreaterThan``|``… where x.age > ?1``
+
+|``GreaterThanEqual``|``findByAgeGreaterThanEqual``|``… where x.age >= ?1``
+
+|``After``|``findByStartDateAfter``|``… where x.startDate > ?1``
+
+|``Before``|``findByStartDateBefore``|``… where x.startDate < ?1``
+
+|``IsNull``|``findByAgeIsNull``|``… where x.age is null``
+
+|``IsNotNull,NotNull``|``findByAge(Is)NotNull``|``… where x.age not null``
+
+|``Like``|``findByFirstnameLike``|``… where x.firstname like ?1``
+
+|``NotLike``|``findByFirstnameNotLike``|``… where x.firstname not like ?1``
+
+|``StartingWith``|``findByFirstnameStartingWith``|``… where x.firstname like ?1`` (parameter bound with appended ``%``)
+
+|``EndingWith``|``findByFirstnameEndingWith``|``… where x.firstname like ?1`` (parameter bound with prepended ``%``)
+
+|``Containing``|``findByFirstnameContaining``|``… where x.firstname like ?1`` (parameter bound wrapped in ``%``)
+
+|``OrderBy``|``findByAgeOrderByLastnameDesc``|``… where x.age = ?1 order by x.lastname desc``
+
+|``Not``|``findByLastnameNot``|``… where x.lastname <> ?1``
+
+|``In``|``findByAgeIn(Collection<Age> ages)``|``… where x.age in ?1``
+
+|``NotIn``|``findByAgeNotIn(Collection<Age> ages)``|``… where x.age not in ?1``
+
+|``True``|``findByActiveTrue()``|``… where x.active = true``
+
+|``False``|``findByActiveFalse()``|``… where x.active = false``
+
+|``IgnoreCase``|``findByFirstnameIgnoreCase``|``… where UPPER(x.firstame) = UPPER(?1)``
+
+|====

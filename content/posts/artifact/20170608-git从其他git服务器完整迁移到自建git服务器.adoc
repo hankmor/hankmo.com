@@ -1,0 +1,86 @@
+---
+title: git从其他git服务器完整迁移到自建git服务器
+slug: git-repository-full-migrate
+img: /images/thumbnail/attachment/20180228/04331105ffc54f1c9e8c1b1d4f6b4d78.png
+categories:
+  - 工具软件
+tags:
+  - git
+description: git版本库迁移，保留所有提交信息。
+date: 2017-06-08 15:57:34
+updated: 2018-05-29 14:04:44
+---
+
+= git从其他git服务器完整迁移到自建git服务器
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: git,迁移,保留日志,完整
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: git
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+image::https://git-scm.com/images/logo@2x.png[]
+
+1). 从原地址克隆一份裸版本库，原本托管于oschina。
+
+----
+git clone --bare git://github.com/username/project.git // <1>
+----
+<1> ``--bare`` 创建的克隆版本库都不包含工作区，直接就是版本库的内容，这样的版本库称为裸版本库。
+
+2). 然后到新的 Git 服务器上创建一个新项目，比如commons。
+
+----
+mkdir commons.git
+cd commons.git
+git init --bare
+----
+上边的命令表示创建名为commons的版本库，并初始化为空版本库（注意``--bare``参数）。
+
+3). 以镜像推送的方式上传代码到新的git服务器上。
+
+----
+git push --mirror git@<你的serverIp>:commons.git //<1>
+----
+<1> ``--mirror`` 克隆出来的裸版本对上游版本库进行了注册，这样可以在裸版本库中使用git ``fetch``命令和上游版本库进行持续同步。
+
+例如：
+
+----
+$ git push --mirror git@192.168.0.106:/data/code/commons.git
+Counting objects: 100, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (54/54), done.
+Writing objects: 100% (100/100), 44.88 KiB | 0 bytes/s, done.
+Total 100 (delta 13), reused 100 (delta 13)
+To 192.168.0.106:/data/code/commons.git
+ * [new branch]      master -> master
+----
+ 
+4). 删除本地代码
+
+----
+cd ..
+rm -rf project.git
+----
+
+5). 到新服务器commons上找到 Clone 地址，直接 Clone 到本地就可以了。
+
+----
+git clone git@:comons.git
+----
+
+这种方式可以保留原版本库中的所有内容。

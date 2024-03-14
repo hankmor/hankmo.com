@@ -1,0 +1,235 @@
+---
+title: 使用Spring的RestTemplate发送GET请求，并支持传递Request body参数
+slug: spring-resttemplate-get-with-body
+img: /images/thumbnail/attachment/20190615/9cd35813f29446558a1e6239c958a38a.png
+categories:
+  - Spring
+tags:
+  - spring
+  - resetful
+  - resttemplate
+description: >-
+  使用RestTemplate发送GET请求，默认使用的JDK实现，不支持传递body参数，可以改为Apache的httpclient包，只需对HttpComponentsClientHttpRequestFactory进行扩展，让GET扩展自HttpEntityEnclosingRequestBase即可。
+date: 2018-10-31 18:32:31
+updated: 2019-06-15 08:28:25
+---
+
+= 使用Spring的RestTemplate发送GET请求，并支持传递Request body参数
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: RestTemplate,httpclient,RESTful,http,get,post,request body
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: spring,resetful,resttemplate
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+最近在使用``Spring Boot``实现微服务，都是使用``RESTful``风格的``Api``接口，服务间使用``RestTemplate``来进行``HTTP``通信，遇到这样一个需求：开发一个查询请求``Api``，参数使用``JSON``格式的字符串来提交。
+
+
+== 请求格式
+ 
+希望的请求格式如下：
+
+[source,javascript]
+----
+GET /pointCard/ HTTP/1.1
+Host: localhost:8100
+Content-Type: application/json;charset=UTF-8
+Content-Length: 114
+
+{"iColumns":7,"iDisplayLength":10,"iDisplayStart":0,"iSortingCols":0,"sColumns":"","sEcho":1,"subjectId":"11227"}
+----
+ 
+在``RESTful``下，这样的设计是合理的，``GET``请求表示从服务器获取资源，但需要将查询参数以``JSON``格式来提交。但是，这违背了传统的``GET``请求的规范，我们都知道，``GET``请求只能将请求参数拼接``URI``后边，而不能单独传递request body参数，除非你改用``POST``。
+
+
+== 代码实现
+ 
+我们先来编一个上述请求的API，然后进行测试。
+
+1、编写一个API:
+
+[source,java]
+----
+@GetMapping(value = "/")
+public Response getById(@RequestBody @Valid PointCardQuery query) throws Exception {
+    Assert.notNull(query,"查询条件不能为空！");
+    ……
+    return Response.success(pointCardPurePager, "积分卡获取成功！");
+}
+----
+ 
+上边的代码片段处于一个``Restcontroller``，要求使用``GET``方法，并且使用了``@RequestBody``注解来获取request body参数。
+
+2、我们使用``RestTemplate``来测试一下：
+
+[source,java]
+----
+@Test
+public void testGetWithBody() {
+    RestTemplate restTemplate = new RestTemplate();
+    String p = "{\"iColumns\":7,\"iDisplayLength\":10,\"iDisplayStart\":0,\"iSortingCols\":0,\"sColumns\":\"\",\"sEcho\":1,\"subjectId\":\"11227\"}";
+    String url = "http://localhost:8100/pointCard/";
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON));
+    HttpEntity<String> httpEntity = new HttpEntity<>(p, headers);
+    ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.GET, httpEntity, String.class);
+    String body = responseEntity.getBody();
+    System.out.println(body);
+    System.out.println(responseEntity.getStatusCode());
+    System.out.println(responseEntity.getStatusCodeValue());
+    System.out.println(responseEntity);
+}
+----
+ 
+运行测试代码，发现请求直接400错误:
+
+----
+org.springframework.web.client.HttpClientErrorException: 400 null
+
+	at org.springframework.web.client.DefaultResponseErrorHandler.handleError(DefaultResponseErrorHandler.java:85)
+	……
+----
+
+查阅了大量资料，大部分都是说``GET``请求不能传递Request body，对于RESTful而言，这显然是不合理的。
+
+记得原来开发ElasticSearch的时候，很多API都是这样的形式：
+
+----
+GET /_search
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "match": { "title":          "quick brown fox" }},
+        { "match": { "title.original": "quick brown fox" }},
+        { "match": { "title.shingles": "quick brown fox" }}
+      ]
+    }
+  }
+}
+----
+ 
+当时还是用了curl工具来测试其API，何不试试？
+
+3、使用curl测试：
+
+----
+~> curl -XGET -k "http://localhost:8100/pointCard/" \
+    --include \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    --data '{"iColumns":7,"iDisplayLength":10,"iDisplayStart":0,"iSortingCols":0,"sColumns":"","sEcho":1,"subjectId":"11227"}'
+----
+ 
+出乎意料，curl可以正常工作。看来，问题出在测试代码的RestTemplate上。
+
+
+== 解决方案
+ 
+继续查询资料，一篇Meik Kaufmann的文章解决了我的问题，地址在文末，他遇到的问题跟我所遇到的非常相似 footnote:[原文地址: https://mekaso.rocks/get-requests-with-a-request-body-spring-resttemplate-vs-apache-httpclient[]]。
+ 
+其实，在HTTP1.1中，任何请求都可以发送body数据，只是Spring的``RestTemplate``默认使用JDK的HTTP请求实现：
+
+[blockquote]
+____
+by default the RestTemplate relies on standard JDK facilities to establish HTTP connections. You can switch to use a different HTTP library such as Apache HttpComponents, Netty, and OkHttp through the setRequestFactory property.
+____
+
+``RestTemplate``支持通过``setRequestFactory``设置HTTP请求客户端工具，支持jdk、httpclient、okHttp等，默认使用的是``SimpleClientHttpRequestFactory``，该工程使用的JDK实现，底层使用``OutputStream``来传递body数据，不支持GET传递body。
+
+我们可以修改为httpclient，只需要使用``HttpComponentsClientHttpRequestFactory``，但是默认的httpclient的GET请求也是不支持传递body的。有两个用于定义Http请求的基础抽象类：``HttpRequestBase``、``HttpEntityEnclosingRequestBase``，前者扩展的不能传递body，而后者可以。
+
+看如下代码：
+
+[source,java]
+----
+protected HttpUriRequest createHttpUriRequest(HttpMethod httpMethod, URI uri) {
+	switch (httpMethod) {
+		case GET:
+			return new HttpGet(uri);
+		case HEAD:
+			return new HttpHead(uri);
+		case POST:
+			return new HttpPost(uri);
+		case PUT:
+			return new HttpPut(uri);
+		case PATCH:
+			return new HttpPatch(uri);
+		case DELETE:
+			return new HttpDelete(uri);
+		case OPTIONS:
+			return new HttpOptions(uri);
+		case TRACE:
+			return new HttpTrace(uri);
+		default:
+			throw new IllegalArgumentException("Invalid HTTP method: " + httpMethod);
+	}
+}
+----
+ 
+``GET``请求使用的是``HttpGet``，该类定义如下：
+
+[source,java]
+----
+public class HttpGet extends HttpRequestBase {
+    ……
+}
+----
+ 
+它扩展与``HttpRequestBase``，当然不能发送body数据，所以我们只需自定义一个factory，扩展``HttpComponentsClientHttpRequestFactory``即可：
+
+.扩展HttpComponentsClientHttpRequestFactory
+[source,java]
+----
+private static final class HttpComponentsClientRestfulHttpRequestFactory extends HttpComponentsClientHttpRequestFactory {
+    @Override
+    protected HttpUriRequest createHttpUriRequest(HttpMethod httpMethod, URI uri) {
+        if (httpMethod == HttpMethod.GET) {
+            return new HttpGetRequestWithEntity(uri);
+        }
+        return super.createHttpUriRequest(httpMethod, uri);
+    }
+}
+----
+
+.HttpEntityEnclosingRequestBase
+[source,java]
+----
+private static final class HttpGetRequestWithEntity extends HttpEntityEnclosingRequestBase {
+    public HttpGetRequestWithEntity(final URI uri) {
+        super.setURI(uri);
+    }
+
+    @Override
+    public String getMethod() {
+        return HttpMethod.GET.name();
+    }
+}
+----
+ 
+自定义扩展很简单，所以的GET请求都使用扩展的``HttpGetRequestWithEntity``对象，这样就可以传递body了。
+
+然后在定义``RestTemplate``时，使用自定义factory：
+
+[source,java]
+----
+RestTemplate restTemplate = new RestTemplate();
+restTemplate.setRequestFactory(new HttpComponentsClientRestfulHttpRequestFactory());
+return restTemplate;
+----
+
+ok，搞定！

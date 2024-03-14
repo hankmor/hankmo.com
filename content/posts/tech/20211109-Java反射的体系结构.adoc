@@ -1,0 +1,472 @@
+---
+title: Java反射的体系结构
+slug: reflect-class
+img: /images/thumbnail/beijixiong.png
+categories:
+  - Java
+tags:
+  - reflect
+  - 反射
+  - java
+description: 反射是JDK5推出的非常重要的特性，通过反射，开发者可以在运行时动态的创建类实例，获取、更改、调用类的相关信息、方法等。反射也是各大框架使用的主要技术，如知名的Spring framework框架。
+date: 2021-11-09 11:15:48
+updated: 2021-11-09 15:34:36
+---
+
+= Java反射的体系结构
+:key_word: Java,反射,Type,AnnotatedElement,Class,Field,Method,Parameter,Constructor,Annotation
+:author: belonk.com
+:date: 2021-11-09
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:tag: java,反射,reflect
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+反射是JDK5推出的非常重要的特性，通过反射，开发者可以在运行时动态的创建类实例，获取、更改、调用类的相关信息、方法等。反射也是各大框架使用的主要技术，如知名的Spring framework框架。
+
+本文将介绍反射的类设计体系，并配备一些简单示例来介绍反射常用API的使用，本文示例都是采用JDK1.8编写。
+
+== 反射类设计
+
+Java专门为反射设计了名为``java.lang.reflect``包，官方API文档在这里： https://docs.oracle.com/javase/8/docs/api/java/lang/reflect/package-summary.html[反射官方文档]，该包提供了一系列类共同组成反射体系。
+
+=== 反射类概览
+
+既然反射是在运行时动态描述类信息的，那么描述类信息到底是些什么东西？类信息除了**类**、*接口*、*数组*、**枚举**等常见类型的基本信息外，还包括类型中的**域**、*方法*、**构造器**等以及它们的**修饰符**（`public`、`static`、`volatile`、`private`、`final`、`native`、`synchronized` 等），另外，还包括**方法参数**和**注解**。反射类如下表所示：
+
+.反射中的类
+[%autowidth]
+|===
+|类 |描述
+
+|<<class,Class>>|位于``java.lang``包，描述类、接口的运行时状态，枚举、数组也是一种类，而注解是一种特殊的接口。每一个类型都有一个Class对象与之对应
+
+|<<field,Field>>|描述类型中的域信息
+
+|<<constructor,Constructor>>|描述类型中的构造函数信息
+
+|<<method,Method>>|类型中的方法信息描述
+
+|<<parameter,Parameter>>|JDK8新增，提供有关方法参数的信息，包括其名称和修饰符。它还提供了一种获取参数属性的替代方法。
+
+|<<modifier,Modifier>>|类、域、方法、构造函数等的访问修饰信息工具类
+
+|AnnotatedElement|反射获取注解的顶层接口
+
+|Type|Java中的所有类型的顶层接口
+
+|Array|用于动态创建和处理数组
+
+|Proxy|动态代理的支持类
+|===
+
+这里暂时介绍基础的``Class``、`Field`、`Constructor`、`Method`、`Parameter`、`Modifier`，其他几个类会在后续文章中单独介绍。现在，我们来看看类图的设计。
+
+[[reflect-class]]
+=== 反射类图
+
+整个反射的类设计见下图：
+
+.反射类图
+image::/images/reflect/reflect-class.png[]
+
+图中只列出了比较基础且重要的类，从图中可以看到，反射的类结构并不算复杂，顶层主要包括几个重要接口和类：
+
+- `AnnotatedElement`: 定义了反射获取java注解的方法，如 `getAnnotations()` 等，实现该接口的类意味着可以获取注解信息；
+- `Member`: 定义获取类成员（域、构造函数、方法）相关的标识符信息的接口，比如获取名称、标识符等；
+- `Type`: 所有类型的顶层接口，用来描述java中的类型，比如泛型类型、类字节码等，包含五大组件，其中包括最重要和常见的 `Class` 对象，后续文章将单独介绍这个接口和其组件；
+- `GenericDeclaration`: 表示泛型申明的接口，继承自 `AnnotatedElement`，内部定义了 `getTypeParameters()` 方法，用于获取类型变量(`TypeVariable`，该接口为 `Type` 接口的一个子组件)；
+- `AccessibleObject`: 表示可访问对象，`Field`、`Method` 和 `Constructor` 对象的基类，用来检查和修改它们的访问权限：公共、包、私有访问，比如：调用其 `setAccessible(boolean)` 方法修改域的访问权限，然后才能修改域的值；
+- `Executable`: 表示可执行的对象，其实就是方法和构造函数的基类；
+
+反射的最后一层这些描述类和类中的元素的对象，它们都被申明为 `final` 的，开发者仅能使用而不能扩展它们，前边的表格已经大概说明了它们的用途，现在我们重点看一下这几个常用类。
+
+[[class]]
+== Class类
+
+`Class` 对象代表了运行时的类或接口，包括枚举和注解，它不能被开发者创建和继承，而是JVM在类加载时自动创建。其定义如下：
+
+[source,java]
+----
+public final class Class<T> implements java.io.Serializable, GenericDeclaration, Type, AnnotatedElement { // <1>
+	// ...
+}
+----
+<1> 泛型参数 `T` 代表了 `Class` 对象对应的具体类，比如 `String.class` 对应为 `Class<String>`，`int.class` 对应 `Class<Integer>` 等。
+
+[NOTE]
+====
+`Class` 类在JDK1.0就已经存在了，其定义在 `java.lang` 包，而不是在 `java.lang.reflect` 反射包中。
+====
+
+可以看到，`Class` 通过实现 `GenericDeclaration` 接口获得了获取类的类型变量的能力，实现 `AnnotatedElement` 就可以获取类的注解信息。`Class` 还提供了非常多的 https://docs.oracle.com/javase/8/docs/api/[api] 来在运行时操作字节码文件，大概可以分为几类：
+
+1、创建类::
+
+通过访问对象实例的 `getClass()` 或者类 `.class` 都可以获取到 `Class`，比如 `User.class`、`new User().getClass()`。另外，如果不能确切知道类的 `.class` 文件，也可以通过 `forName(String)` 方法获取指定全限定类名字符串的Class对象，然后就可以通过 `newInstance()` 创建类的实例对象。
+
+2、查询类::
+``Class``包含大量的查询方法，如获取类加载器、类全限定名、类/接口的修饰符等等，重要的一些方法包括：
+- 获取类的方法列表
+- 获取类的构造器
+- 获取类的域
+- 获取类的注解
+- 其他如获取类标识符、包、加载器、父类、实现的接口以及资源获取等等
+
+对于方法、域和构造器的获取，它们的方法都有一些共同点：
+
+. 都定义了获取单个和获取所有的api
+. 都定义了 `getDeclaredXxx()` 方法来获取类本身所有的(包括私有的)域、方法、构造器信息，忽略从父类继承的；
+. 都定义了 `getXxx()` 不带declared名称的方法来获取所有公共的域、方法、构造器，域、方法包括从父类继承的公共的。
+
+比如，`getDeclaredMethods()` 方法将会获取类上所有的方法，包括private的，但是不包括继承而来的；而 `getMethods()` 方法只能获取类上所有public的方法，包括继承而来的。
+
+假设我们有这样一个 `User` 类, 它继承 `Id` 类，并实现了 `Talk` 接口：
+
+.User类
+[source,java]
+----
+public class User extends Id implements Talk {
+	public static final User NULL = new User(null, 0);
+	// 包访问
+	double lat;
+	// 子类访问
+	protected float salary;
+	private String name;
+	private int age;
+
+	public User() {
+	}
+
+	private User(String name) {
+		this.name = name;
+	}
+
+	protected User(int age) {
+		this.age = age;
+	}
+
+	public User(String name, int age) {
+		this.name = name;
+		this.age = age;
+	}
+
+	public boolean isNull() {
+		return "none".equals(this.getName());
+	}
+
+	public static User create(String name, int age) {
+		return new User(name, age);
+	}
+
+	@Override
+	public void talk(String content) {
+		System.out.println(this.getName() + " is talking: " + content);
+	}
+
+	private void privateMethod() {
+		System.out.println("this is a private method.");
+	}
+
+	protected void protectedMethod() {
+		System.out.println("this is a protected method.");
+	}
+
+	void packageMethod() {
+		System.out.println("this is a package method.");
+	}
+
+	// 省略setter、getter
+}
+----
+
+.Id类
+[source,java]
+----
+public class Id {
+	private int id;
+	// 省略getter、setter
+}
+----
+
+.Talk接口
+[source,java]
+----
+public interface Talk {
+	void talk(String content);
+}
+----
+
+下边的例子将会打印User类中定义的所有public的方法，包括从 `Id` 继承的 `getId()` 和 `setId()` 方法，还包括从Object继承得到的如 `notify()` 等方法：
+
+[source,java]
+----
+Method[] methods = User.class.getMethods();
+Arrays.stream(methods).forEach(System.out::println);
+----
+
+对于注解的获取，`Class` 定义了按注解的存在方式的api，不仅是 `Class`，还包括 `Field`、`Constructor`、`Method`、`Parameter` 都可以获取其上标注的注解信息。注解的存在方式有四种：直接存在、间接存在、存在、关联，后续文章在单独介绍 `AnnotatedElement` 时会有介绍。比如 `getAnnotations()` 方法可以获取**存在**与类上的注解，而 `getDeclaredAnnotations()` 只能获取**直接存在**于类上的注解。
+
+3、判断类::
+`Class` 提供了很多 `isXxx()` 方法，大多是用来判断是否满足某个条件，比如判断类是否是枚举、数组、接口、基础类型等等，其中 `isInstance(Object)` 方法可以通过从类型层面来判断某一个对象是否与当前 `Class` 对应的类可以赋值兼容，是 `instanceof` 的另一种形式。
+
+[[field]]
+== Field类
+
+`Field` 类用以描述类、接口的域信息，并可以对域动态访问和修改。
+
+.Field类的定义
+[source,java]
+----
+public final
+class Field extends AccessibleObject implements Member { // <1>
+	// ...
+}
+----
+<1> 继承 `AccessibleObject` 类可以实现域的访问权限处理，并且可以获取域上的注解信息；实现了 `Member` 接口，可以获取标识符信息。
+
+`Field` 类可以通过 `Class` 的 `Class.getFields()`, `Class.getField(String)`, `Class.getDeclaredFields()`, `Class.getDeclaredField(String)` 等方法获取到。
+
+`Field` 类的 https://docs.oracle.com/javase/8/docs/api/java/lang/reflect/Field.html[api] 提供了获取和修改域值得方法，大多为 `getXxx()` 和 `setXxx()` 的形式从而按照指定类型来获取值，比如 `getInt(Object obj)` 可以获取obj实例上的值并将结果解析为 `int` 类型，`setInt(Object obj, int i)` 将obj实例对象的当前域值设置为 `i`。 **需要注意的是**，如果域是 `private` 访问级别的，那么需要调用 `setAccessible(boolean flag)` 方法先设置域可以访问，然后才能设置和获取值。
+
+下边的示例展示了如何访问和设置域的值：
+
+[source,java]
+----
+try {
+	// 包访问域
+	Field lat = User.class.getDeclaredField("lat");
+	lat.setDouble(user, 92.123456d);
+	double latVal = lat.getDouble(user);
+	System.out.println(latVal);
+
+	// protected域
+	Field salary = User.class.getDeclaredField("salary");
+	salary.setFloat(user, 1000.99f);
+	float salaryVal = salary.getFloat(user);
+	System.out.println(salaryVal);
+
+	// public static 域
+	Field aNull = User.class.getField("NULL");
+	User emtpyUser = (User) aNull.get(user);
+	System.out.println(emtpyUser);
+
+	// private域
+	Field name = User.class.getDeclaredField("name");
+	// private域需要设置访问权限
+	name.setAccessible(true);
+	String nameVal = (String) name.get(user);
+	System.out.println(nameVal);
+
+	Field age = User.class.getDeclaredField("age");
+	age.setAccessible(true);
+	int ageInt = age.getInt(user);
+	System.out.println(ageInt);
+} catch (Exception e) {
+	e.printStackTrace();
+}
+----
+
+[[constructor]]
+== Constructor类
+
+`Constructor` 描述类的构造函数，并可以动态的访问它们。可以通过 `Class.getConstructors()`, `Class.getConstructor(Class[])`, `Class.getDeclaredConstructors()` 获得 `Constructor` 对象实例。
+
+.Constructor类定义
+[source,java]
+----
+public final class Constructor<T> extends Executable { // <1>
+	// ...
+}
+----
+<1> 构造函数继承了 `Executable` 类，获得了注解反射、泛型类型反射和获取修饰符的能力。
+
+通过 `Constructor` 类，我们可以获取到构造函数的参数、修饰符、注解、异常申明等信息，还可以调用 `getConstructors()` 来遍历所有公共构造函数，通过 `getDeclaredConstructors()` 来获取包括 `private` 的所有构造函数。
+
+一般而言，我们会调用其 `newInstance(Object... initArgs)` 方法来用构造函数创建一个实例对象，就像下边的示例一样：
+
+[source,java]
+----
+// 获取private的构造函数
+Constructor<User> nameConstructor = User.class.getDeclaredConstructor(String.class);
+// private构造函数，需要设置可以访问
+nameConstructor.setAccessible(true);
+User sam = nameConstructor.newInstance("sam");
+System.out.println(sam);
+----
+
+同样需要注意，`private` 的构造函数需要先设置可访问才能读取和执行。
+
+[[method]]
+== Method类
+
+`Method` 类定义如下：
+
+[source,java]
+----
+public final class Method extends Executable {
+	// ...
+}
+----
+
+`Constructor` 也是一种特殊的方法，同 `Constructor` 一样, `Method` 同样继承了 `Executable` 来获得注解反射、泛型类型反射和获取修饰符的能力。
+
+方法可以被执行，只需要调用 `invoke(Object obj, Object... args)` 方法即可，obj参数为调用实例对象，args为方法参数，如下所示：
+
+[source,java]
+----
+Method talk = User.class.getMethod("talk", String.class); // <1>
+Object result = talk.invoke(user, "what a nice day!");
+System.out.println(result);
+
+Method privateMethod = User.class.getDeclaredMethod("privateMethod"); // <2>
+privateMethod.setAccessible(true); // <3>
+result = privateMethod.invoke(user);
+System.out.println(result);
+----
+<1> 获取公共方法，其实包访问权限、protected权限的方法跟public方法一样，都可以直接调用
+<2> 获取私有方法
+<3> 私有方法需要先设置访问权限，然后才能成功调用
+
+如果是静态方法，那么 `invoke(Object obj, Object...args)` 方法的obj参数设置为 `null` 即可:
+
+[source,java]
+----
+Method create = User.class.getMethod("create", String.class, int.class);
+User zhangsan = (User) create.invoke(null, "张三", 100); // <1>
+System.out.println(zhangsan);
+----
+<1> 静态方法不需要实例对象即可调用，所以第一个参数直接设置为 `null` 即可
+
+方法具有返回值，可以通过 `getReturnType()` 获取其返回值类型。
+
+其实，几个反射底层类的api存在着许多共性，注意理解这些共性，同时理解它们各自对应的反射元素之间的差异，比如：元素上能够定义注解，那么必定会实现 `AnnotatedElement` 接口来通过反射获取注解，就必定包含获取注解的api方法；`Method` 对应的是方法，方法有返回值，而且是可以调用的，因此提供了 `invoke(...)` 方法，而构造器 `Constructor` 调用过后就会创建实例对象，所以提供了 `newInstance(...)` 方法，等等。
+
+[[parameter]]
+== Parameter类
+
+`Parameter` 用来描述方法的参数，通过反射的方式获取参数信息。
+
+Parameter类是JDK1.8新增的类，用来描述方法和构造函数的参数。JDK1.8之前，通过反射获取方法的参数都得到的是arg0, arg1...这样的名称，没有实际意义，可以通过添加编译参数``-g``或``-g:vars``将参数信息存储到字节码的``LocalVariableTable``中，然后才能读取，读取方法可以参考Spring的``LocalVariableTableParameterNameDiscoverer``类；JDK1.8开始，可以通过反射读取参数信息，但是需要在编译时加入``-parameters``参数。
+
+下边的代码用来获取构造函数的参数：
+
+[source,java]
+----
+Method create = User.class.getMethod("create", String.class, int.class); // <1>
+Parameter[] parameters = create.getParameters(); // <2>
+for (Parameter parameter : parameters) {
+	String name = parameter.getName();
+	if (parameter.isNamePresent()) { // <3>
+		System.out.println("Name is present: " + name);
+	} else {
+		System.out.println("Name is not present: " + name);
+	}
+}
+----
+<1> 获取 `create` 方法对应的 `Method` 反射对象
+<2> 获取方法的参数列表，结果为 `Parameter` 数组
+<3> 是否 `.class` 文件中方法有参数名称，则 `isNamePresent()` 返回true，此时可以获取参数名称，否则参数名称形式为 arg0、arg1...
+
+结果输出为：
+
+----
+Name is not present: arg0
+Name is not present: arg1
+----
+
+然后，我们编译时加入 `-parameters` 参数：
+
+----
+javac -parameters com/belonk/lang/reflect/UserReflectDemo.java
+----
+
+再次执行上边的代码，或者直接使用 `java` 命令执行：
+
+----
+java com.belonk.lang.reflect.UserReflectDemo
+----
+
+输出结果：
+
+----
+Name is present: name
+Name is present: age
+----
+
+成功拿到了方法名称。
+
+`Method`、`Constructor` 都可以调用 `getParameters()` 方法获取参数列表，通过 `getParameterTypes()` 获取参数类型，`getParameterCount()` 获取参数数量，`getParameterAnnotations()` 可以获取参数的注解信息。
+
+[[modifier]]
+== Modifier
+
+类、方法、构造器、域都具有修饰符，比如 `public`、`static`之类的。在Java中，这些修饰符使用整型值来表示，可以通过 `Member` 接口的 `getModifiers()` 来获取，`Member` 接口定义了获取修饰符的方法：
+
+[source,java]
+----
+public interface Member {
+    public static final int PUBLIC = 0; // <1>
+    public static final int DECLARED = 1; // <2>
+	public Class<?> getDeclaringClass(); // <3>
+    public String getName(); // <4>
+    public int getModifiers(); // <5>
+    public boolean isSynthetic(); // <6>
+}
+----
+<1> 用来标记所有公共的元素
+<2> 用来标记所有申明的元素
+<3> 返回申明元素所在的类或接口
+<4> 返回元素的简单名称
+<5> 返回元素申明的标识符，用一个整型值来表示
+<6> 成员是否由编译器引入，是返回true，否则返回false
+
+[NOTE]
+====
+为什么用一个整型值能够表示元素上的所有的修饰符呢？其实查看 `Modifier` 类就可以知道，底层巧妙的通过位运算来进行区分。通过将不同的标识符定义为一个整型常量，然后修饰于同一元素的不同标识符通过位运算得到不同的整型值，不论修饰符怎么组合，它们位运算的结果是唯一的。
+====
+
+https://docs.oracle.com/javase/8/docs/api/java/lang/reflect/Modifier.html[Modifier] 就是一个工具类，所有的方法都是 `static` 的，它提供了系列 `isXxx()` 方法来检测元素多个修饰符中是否包含某一个特定的修饰符，另外还提供了获取 类、接口、方法、构造器、域、参数这些元素上可以使用的修饰符的整型值（JDK1.7新增），比如 `classModifiers()` 方法返回能够应用于**类**上的所有标识符的整型值。
+
+下边的例子展示了如果判断具有单个和多个标识符：
+
+[source,java]
+----
+Field aNull = User.class.getField("NULL"); // <1>
+int modifiers = aNull.getModifiers(); // <2>
+System.out.println(Modifier.isPublic(modifiers)); // <3>
+System.out.println(Modifier.isFinal(modifiers)); // <3>
+System.out.println(Modifier.isStatic(modifiers)); // <3>
+if (modifiers == (Modifier.PUBLIC | Modifier.STATIC | Modifier.FINAL)) { // <4>
+	System.out.println("public static final");
+}
+----
+<1> 获取到 `Field` 对象
+<2> 获取描述符的整型值
+<3> 分别判断是否申明了public、final、static标识符
+<4> 通过按位"或"运算，可以判断是否具有多个标识符
+
+上边标记4的代码等同于：
+
+[source,java]
+----
+if (Modifier.isPublic(Modifier.PUBLIC) && Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers)) {
+	System.out.println("public static final");
+}
+----
+
+== 总结
+
+反射是在运行时动态访问和修改类及其成员的手段。本文简单从类设计层面介绍了Java反射的一些基本功能，JDK1.5除了反射还推出了泛型、注解机制，反射获取注解、泛型参数等类型是反射的高级功能，我们将在后续文章中介绍。

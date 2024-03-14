@@ -1,0 +1,283 @@
+---
+title: Java设计模式(9)-适配器模式
+slug: java-adapter-pattern
+date: 2020/08/24
+img: /images/attachment/designpattern/adapter.png
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 适配器模式
+description: 模式来源于生活，适配器模式最能直观的体现这一点。适配器，就是将多个原本不能共同工作的产品经过一定的处理，使得他们能够彼此协同工作的一种装置。
+---
+
+[[designpattern-adapter]]
+= Java设计模式(9)-适配器模式
+:key_word:
+:Author: belonk.com belonk@126.com
+:Date: 2020/08/24
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+模式来源于生活，适配器模式最能直观的体现这一点。适配器，就是将多个原本不能共同工作的产品经过一定的处理，使得他们能够彼此协同工作的一种装置。现实生活中，有很多适配器的例子，如常见的电源适配器，可以将220V的交流电压转换为手机、电脑等电器所需的低电压；又比如，苹果手机的type-C耳机插孔，不能使用3.5mm的耳机，怎么办呢？可以增加一个耳机转换器，它就是一个适配器，能够将3.5mm耳机成功用于Type-C接口的iPhone上；还有各种转换器，如HDMI转VGA、Type-C转USB等等，都是适配器。
+
+image::/images/attachment/designpattern/adapter.png[]
+
+== 适配器模式简介
+
+适配器模式（Adapter pattern）的定义如下：将一个类的接口转换成客户希望的另外一个接口，使得原本由于接口不兼容而不能一起工作的那些类能一起工作。
+
+对于这个定义，需要明确几点：
+
+. 首先，有一个已经存在的类A，但是不满足我们的需求，我们需要的是类B；
+. 其次，A、B完成的功能相似，或者说，类B的功能类A其实都已经实现了，我们不想再实现一次；
+. 第三，A、B不能共同完成工作，我们需要经过适配将A、B变得可以协同工作。
+
+所以，什么时候可以考虑使用适配器模式?
+
+当两个类所做的事情相同或相似，但是他们不能协同工作，此时可以通过适配器模式，但是有一个前提，就是两个类都不可能修改，如果他们频繁变动，那么首先要考虑的是重构代码来使他们统一。比如，遗留的系统、老的系统组件，他们中已经实现的功能，几乎不会修改，可以使用适配器模式。
+
+适配器模式的主要优点如下：
+
+. 客户端通过适配器可以透明地调用目标接口，更简单、直接；
+. 复用了现存的类，程序员不需要修改原有代码而重用现有的适配者类；
+. 将目标类和适配者类解耦，解决了目标类和适配者类接口不一致的问题。
+
+适配器模式有三个主要角色：
+
+. 目标（Target）接口：当前业务系统所期待的类，可以是抽象类或接口
+. 被适配者（Adaptee）：即现有系统或组件中已经存在的类，实现了我们所需的功能
+. 适配器（Adapter）：一个转换器，将被适配者转换为目标，让客户可以按目标接口透明的使用被适配者的功能
+
+在java语言中，不能多继承，所以适配器模式中，我们一般会将目标申明为接口，然后通过继承或者依赖被适配者的方式来实现适配器。
+
+适配器模式有三种形式：类适配器、对象适配器、接口适配器。
+
+== 类适配器模式
+
+顾名思义，类适配器适配的是类。要想使用类的功能，java中我们只能用继承的方式，但是这违背了合成复用原则原则。尽量不要使用继承，而是使用合成的方式。
+
+因此，类适配器最典型的缺点是，如果要替换适配器，将会变得很复杂，这种方式应该尽量不用。
+
+这种形式的类结构如下图所示：
+
+.类适配器模式
+image::/images/attachment/designpattern/class-adapater.png[]
+
+Aapater类继承被适配者Adaptee，并实现目标接口Target，因此客户端可以透明的使用Target接口的api，而Adapter内部则使用Adaptee来实现Target定义的相关功能。
+
+举个例子：用手机充电器给手机充电，假设手机需要使用5V的直流电才可以充电，但是家用电都是220V交流电，我们看看如何使用适配器模式解决这个问题。
+
+1、首先，我们有220v的交流电，这就是被适配者Adaptee：
+
+.被适配者
+[source,java]
+----
+class AlternatingCurrent {
+	int outputVoltage() { // <1>
+		return 220;
+	}
+}
+----
+<1> 被适配者拥有一个输出220V的交流电方法。
+
+2、然后，我们新定义一个输出5V直流电的接口，这就是目标接口：
+
+.目标接口
+[source,java]
+----
+interface DirectCurrent {
+	int outputVoltage();
+}
+----
+
+3、最后，定义适配器，进行适配：
+
+.适配器
+[source,java]
+----
+class PhoneCharger extends AlternatingCurrent implements DirectCurrent {
+	@Override
+	public int outputVoltage() {
+		int voltage = super.outputVoltage();
+		// 电压转换处理
+		return voltage / 44; // <1>
+	}
+}
+----
+<1> 模拟电压转换过程，适配器内部使用了父类的方法，并进行转换。
+
+4、客户端调用代码：
+
+定义一个手机，使用目标接口充电：
+
+.手机类
+[source,java]
+----
+class Phone {
+	/**
+	 * 手机充电方法
+	 */
+	void charging(DirectCurrent directCurrent) {
+		int voltage = directCurrent.outputVoltage();
+		if (voltage <= 5) {
+			System.out.println("正在为手机充电...");
+		} else {
+			System.out.println("电压过高，小心手机爆炸！");
+		}
+	}
+}
+----
+
+然后，给手机充电：
+
+[source,java]
+----
+Phone phone = new Phone();
+// 给手机充电，手机充电器PhoneCharger适配了DirectCurrent，可以输出直流电
+phone.charging(new PhoneCharger());
+----
+
+类适配器模式适配的是类，只能采用继承的方式，那么对象适配器模式又是什么？
+
+== 对象适配器模式
+
+对象适配器模式，它适配的是对象，而不是类。适配器内部聚合了被适配者，而不是继承它，其他结构跟类适配器相同。
+
+其类结构如下：
+
+.对象适配器模式类结构
+image::/images/attachment/designpattern/object-adapter.png[]
+
+适配器中聚合被适配者，这遵循"合成复用原则"，降低了耦合性同时也保留了类的封装性，因此这是推荐的适配器模式。
+
+重新举个例子：我的手机是iPhone XR，只能使用Type-C接口类型的耳机，但是我有一个3.5mm的iPhone6耳机，怎么使用对象适配器模式来解决这个问题呢？
+
+1、被适配者就是已有的3.5mm的耳机：
+
+.被适配者
+[source,java]
+----
+class EarphoneWith35mm {
+	String connectorWith35mm() {
+		return "3.5mm";
+	}
+}
+----
+
+2、然后，定义目标接口，我们需要使用Type-C插头的耳机：
+
+.目标接口
+[source,java]
+----
+interface EarphoneWithTypeC {
+	String connectorWithTypeC();
+}
+----
+
+3、适配器代码如下：
+
+.适配器
+[source,java]
+----
+class EarphoneAdapter implements EarphoneWithTypeC {
+	private EarphoneWith35mm earphoneWith35mm;
+
+	public EarphoneAdapter(EarphoneWith35mm earphoneWith35mm) { // <1>
+		this.earphoneWith35mm = earphoneWith35mm;
+	}
+
+	@Override
+	public String connectorWithTypeC() {
+		String connectorWith35mm = earphoneWith35mm.connectorWith35mm();
+		System.out.println("正在做一些转换处理, 将" + connectorWith35mm + "转换为TypeC..."); // <2>
+		return "TypeC";
+	}
+}
+----
+<1> 适配器内部聚合了被适配者``EarphoneWith35mm``；
+<2> 内部的转换逻辑
+
+4、客户端使用
+
+现在有一部手机，需要使用耳机:
+
+[source,java]
+----
+class IphoneXR {
+	public void soundUsingEarphone(EarphoneWithTypeC earphoneWithTypeC) {
+		earphoneWithTypeC.connectorWithTypeC();
+		System.out.println("使用TypeC耳机听音乐");
+	}
+}
+----
+
+使用手机来听音乐：
+
+[source,java]
+----
+// 一部IphoneXR
+IphoneXR iphoneXR = new IphoneXR();
+// 一条3.5mm接口的耳机
+EarphoneWith35mm earphoneWith35mm = new EarphoneWith35mm();
+// 通过耳机适配器将3.5mm耳机转换可用的TypeC接口耳机
+iphoneXR.soundUsingEarphone(new EarphoneAdapter(earphoneWith35mm));
+----
+
+除了类适配器、对象适配器模式，还有一种接口适配器模式，它又是什么？
+
+== 接口适配器模式
+
+接口适配器模式，是一种简化的适配器模式，它的主要目的在于简化目标接口的使用，让使用者在使用目标接口时不必实现接口的所有方法。其核心就是提供一个适配器类，让它**空实现**该接口定义的所有方法，所谓的空实现就是实现接口的方法但是内部不处理任何逻辑（空方法）。
+
+这种模式的结构如下：
+
+.接口适配器类结构
+image::/images/attachment/designpattern/interface-adapter.png[]
+
+我们知道，类实现了接口，那么必须实现该接口定义的所有方法。但是，有时候，我们只需要使用接口的某几个方法，又不想实现其他的方法。接口适配器就是解决这个问题的。这种模式在安卓、java的awt或者swing开发桌面应用的使用使用很广泛，比如监听组件的事件时只想监听某一个事件，其他事件并不关心，比如下边的java awt组件事件：
+
+.事件监听器接口
+[source,java]
+----
+public interface ComponentListener extends EventListener {
+    public void componentResized(ComponentEvent e);
+
+    public void componentMoved(ComponentEvent e);
+
+    public void componentShown(ComponentEvent e);
+
+    public void componentHidden(ComponentEvent e);
+}
+----
+
+提供的适配器如下：
+
+.时间监听适配器
+[source,java]
+----
+public abstract class ComponentAdapter implements ComponentListener {
+    public void componentResized(ComponentEvent e) {}
+
+    public void componentMoved(ComponentEvent e) {}
+
+    public void componentShown(ComponentEvent e) {}
+
+    public void componentHidden(ComponentEvent e) {}
+}
+----
+
+可以看到，适配器虽然实现了接口的所有方法，但是都是空方法，并没有任何逻辑，适配器的目的仅仅在于给客户端提供一种按需实现所需方法的方式。
+
+在java8以后，JDK提供了接口的默认方法，解决了无需实现接口定义的所有方法的问题。因此，接口适配器模式可能会使用越来越少。
+
+本文示例代码见: https://github.com/belonk/java-designpattern/tree/master/src/com/belonk/designpattern/adapter[Github]

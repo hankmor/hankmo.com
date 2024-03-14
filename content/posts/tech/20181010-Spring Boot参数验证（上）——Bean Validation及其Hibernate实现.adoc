@@ -1,0 +1,814 @@
+---
+title: Spring Boot参数验证（上）——Bean Validation及其Hibernate实现
+slug: spring-boot-validation-1
+img: /images/thumbnail/attachment/20190614/f8f37e97c1ad43c6b7a6a8ef5b821e22.png
+categories:
+  - Spring
+tags:
+  - validation
+  - hibernate
+description: >-
+  Bean Validation，是JCP(Java Community
+  Process)定义的标准化的JavaBean校验API，基于注解，并且具有良好的易用性和扩展性，1.0版本定义为JSR
+  303，而现在发布了2.0版本，定义为JSR 380。Hibernate Validator是JSR
+  380的一种标准实现，同时还对其进行了扩展，如增加了部分验证约束。目前，最新的稳定版本为6.0.13.Final。
+date: 2018-10-10 15:15:34
+updated: 2019-06-14 19:54:14
+---
+
+= Spring Boot参数验证（上）——Bean Validation及其Hibernate实现
+:author: belonk.com
+:date: 2019-06-14
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: Bean Validation,hibernate validator,Spring validator,后台验证
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: validation,hibernate
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+通常，web项目都需要对请求的参数进行校验，一般是前端``JavaScript``需要校验，然后后台还需要再进行校验，而校验逻辑大多数是重复的。如果在后台通过硬编码的方式，对``Controller``参数进行逐个校验，将会非常耗时和低效的，尤其是在使用``Spring Boot``和``Spring Cloud``的微服务体系中，大多数服务均会对外提供``RESTFul``的api，如果有统一的验证机制和框架，将大大提高生产力。幸运的是，Java已经提供了标准的验证API，称为``Bean Validation``。
+
+
+== 简介
+ 
+
+=== Bean Validation
+ 
+``Bean Validation``，是JCP(Java Community Process)定义的标准化的``JavaBean``校验API，基于注解，并且具有良好的易用性和扩展性，1.0版本定义为 /attachment/20181009/28f52319fd84452ba22b490ff911fd04.pdf[JSR 303]，而现在发布了2.0版本，定义为 https://jcp.org/en/jsr/detail?id=380[``JSR 380``]，了解详细信息可以看 https://jcp.org/en/jsr/detail?id=380[这里]。
+
+``Bean Validation``并不局限于应用程序的某一层或者哪种编程模型, 它可以被用在任何一层, 也可以是像Swing这样的富客户端程序中.
+
+
+image::/images/attachment/20181009/e26d95cbac66432eb4ccb597c9589e1c.png[]
+
+
+* 目标：简化Bean校验，将以往重复的校验逻辑进行抽象和标准化，形成统一API规范；
+* 版本变化：JSR 303在2009发布了1.0Final版，而**最新的是在2017年发布的``Bean Validation 2.0``**，被定义为 https://jcp.org/en/jsr/detail?id=380[``JSR 380``]。
+
+需要注意的是，``Bean Validation``只是一个规范和标准，并没有提供实现，而接下来介绍的``hibernate validator``就是它的一种实现。
+
+
+=== Hibernate Validator
+ 
+是JSR 380的一种标准实现，同时还对其进行了扩展，如增加了部分验证约束。目前，最新的稳定版本为 http://hibernate.org/validator/[6.0.13.Final]。
+
+
+== 入门示例
+ 
+接下来，我们使用Spring Boot来编写一个简单的示例工程。如果对Spring Boot不熟悉的可以看这几篇文章：
+
+* <</2018/05/22/spring-boot-intro#, Spring Boot之基础入门>>
+* <</2018/06/07/springboot-project-overview#, SpringBoot-工程结构、配置文件以及打包>>
+* <</2018/06/27/spring-boot-jpa-guide#, Spring Boot JPA使用详解>>
+
+1、添加maven依赖
+
+前边说过，JSR 303定义了JavaBean的验证标准，而Hibernate Validator是它的一种实现，所以，这两个的jar包我们都需要添加到工程。
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-test</artifactId>
+	<scope>test</scope>
+</dependency>
+<dependency>
+	<groupId>org.projectlombok</groupId>
+	<artifactId>lombok</artifactId>
+	<optional>true</optional>
+</dependency>
+----
+ 
+其实，``spring-boot-starter-web``启动器已经依赖了``hibernate-validator``，而后者很明显会依赖``validation-api``。
+
+2、定义约束
+
+创建一个类，并且添加上约束：
+
+[source,java]
+----
+@Data
+public class Car {
+
+    @NotNull
+    // 生产厂家
+    private String manufacturer;
+
+    @NotNull
+    @Size(min = 5, max = 12)
+    // 牌照
+    private String licensePlate;
+
+    @Min(2)
+    // 座位数
+    private int seatCount;
+
+    public Car(String manufacturer, String licencePlate, int seatCount) {
+        this.manufacturer = manufacturer;
+        this.licensePlate = licencePlate;
+        this.seatCount = seatCount;
+    }
+}
+----
+ 
+这里使用了idea的lombok插件，开发神器，不多说。
+
+这里定义了一个Car类，并且要求其manufacturer（生成厂家）不能为空，licensePlate（牌照）长度在5~12，seatCount不小于2个，具体约束及其说明查阅 #constraint[约束条件]章节。
+
+3、验证约束
+
+[source,java]
+----
+public class CarTest {
+
+    private static Validator validator;
+
+    @Before
+    public void setUp() {
+        validator = Validation.buildDefaultValidatorFactory().getValidator();
+    }
+
+    /**
+     * manufacturer违反NotNull约束
+     */
+    @Test
+    public void testManufacturerIsNull() {
+        Car car = new Car(null, "川A﹒1234", 5);
+        Set<ConstraintViolation<Car>> cvs = validator.validate(car);
+        // 有一条错误信息
+        assertEquals(1, cvs.size());
+        // hibernate-validator：ValidationMessages_zh_CN.properties
+        assertEquals("不能为null", cvs.iterator().next().getMessage());
+    }
+
+    /**
+     * 牌照不合法
+     */
+    @Test
+    public void testLicensePlateIsInvalid() {
+        Car car = new Car("ford", "川A﹒1", 5);
+        Set<ConstraintViolation<Car>> constraintViolations =
+                validator.validate(car);
+        assertEquals(1, constraintViolations.size());
+        // hibernate-validator：ValidationMessages_zh_CN.properties
+        assertEquals("个数必须在5和12之间", constraintViolations.iterator().next().getMessage());
+    }
+
+    /**
+     * 座位数太小
+     */
+    @Test
+    public void testSeatCountIsTooLow() {
+        Car car = new Car("ford", "川A﹒1234", 1);
+        Set<ConstraintViolation<Car>> constraintViolations =
+                validator.validate(car);
+        assertEquals(1, constraintViolations.size());
+        // hibernate-validator：ValidationMessages_zh_CN.properties
+        assertEquals("最小不能小于2", constraintViolations.iterator().next().getMessage());
+    }
+
+    /**
+     * 验证通过
+     */
+    @Test
+    public void testCarIsValid() {
+        Car car = new Car("ford", "川A﹒1234", 5);
+        Set<ConstraintViolation<Car>> constraintViolations =
+                validator.validate(car);
+        assertEquals(0, constraintViolations.size());
+    }
+}
+----
+ 
+上边的测试代码，先通过``Validation.buildDefaultValidatorFactory()``获取到``ValidatorFactory``，在由其构建出
+
+``Validator``实例，所有的验证工作都交由``Validator``完成，调用其``validate``方法并返回一个``ConstraintViolation``对象的``Set``，代表验证结果。
+
+ok，一个最简单的Jave bean验证demo就完成了。接下来，我们了解一下一些需要关注的地方。
+
+
+== 定义约束
+ 
+``Bean Validation``默认是基于注解的，可以在三个字段级别约束、属性级别约束、类级别约束。
+
+* 字段级别约束
+
+即约束注解加在类的字段上，字段的访问级别(``private``, ``protected``或者``public``)对此没有影响，但是如果字段是``static``的，则不会进行校验。例如：
+
+[source,java]
+----
+@NotNull(message = "生产厂家不能为空")
+private String manufacturer;
+----
+ 
+* 属性级别约束
+
+与字段级别约束的不同在于，属性级别约束注解必须加在属性的访问器上（``getter``），而不能是``setter``方法。
+
+**如果字段和属性级别都添加了约束，则会重复验证。**
+
+[source,java]
+----
+@NotEmpty(message = "出租车站不能为空")
+public String getRentalStation() {
+    return rentalStation;
+}
+----
+ 
+* 类级别约束
+
+``Bean Validation``没有提供可以用在类级别的约束，不过可以自定义约束来实现。
+
+[source,java]
+----
+@PassengerCount(value = 2, message = "你确定要超载？")
+public class Car {
+    ……
+}
+----
+ 
+上边的代码，使用了自定义的约束``@PassengerCount``，用来定义车辆的核载人数，乘客数量高于该人数则会超载，具体可以看 #custom_constraint[自定义约束]章节的例子。
+
+* 约束继承
+
+如果子类继承自他的父类，除了校验子类，同时还会校验父类，这就是约束继承，这同样适用于接口。如果子类覆盖了父类的方法，那么子类和父类的约束都会被校验。
+
+[source,java]
+----
+public class RentalCar extends Car {
+    ……
+}
+----
+ 
+[source,java]
+----
+@Test
+public void testRentalCar() {
+    // 会校验子类，同时还会校验父类，这就是约束继承，这同样适用于接口。如果子类覆盖了父类的方法，那么子类和父类的约束都会被校验。
+    RentalCar rentalCar = new RentalCar(null);
+    Set<ConstraintViolation<RentalCar>> constraintViolations =
+            validator.validate(rentalCar);
+    assertEquals(4, constraintViolations.size());
+}
+----
+ 
+我们创建了一个``RentalCar``继承自``Car``，在校验它时还会校验其父类。
+
+* 约束级联
+
+如果要验证属性关联的对象，那么需要在属性上添加``@Valid``注解，**如果一个对象被校验,那么它的所有的标注了@Valid的关联对象都会被校验，**这些对象也可以是数组、集合、Map等，这时会验证他们持有的所有元素。
+
+[source,java]
+----
+@PassengerCount(value = 2, message = "你确定要超载？")
+public class Car {
+    ……
+
+    // valid注解会级联验证关联对象，如果对象是集合、Map、数组，也会验证其中的元素
+    @Valid
+    private Driver driver;
+
+    @Valid
+    private List<User> passengers;
+}
+----
+ 
+这里定义了``User``对象，``Driver``继承``User``对象，并在``Car``上添加了驾驶员和乘客信息，在校验``Car``的时候，还会级联验证``driver``、``passengers``集合的每一个元素。测试代码如下：
+
+[source,java]
+----
+@Test
+public void testDriver() {
+    // 司机，年龄未满18, 无驾照
+    Driver driver = new Driver("司机", "siji@123.com", 10, false);
+    // 车辆，生产厂商不能为空
+    Car car = new Car(null, "川A﹒12345", 5);
+    car.setDriver(driver);
+    Set<ConstraintViolation<Car>> constraintViolations =
+            validator.validate(car);
+    assertEquals(3, constraintViolations.size());
+}
+
+@Test
+public void testPassengers() {
+    // 生产厂商不对
+    Car car = new Car(null, "川A﹒12345", 5);
+    List<User> passengers = new ArrayList<>();
+    // 正确
+    User passenger1 = new User("baby", "baby@123.com");
+    // 邮箱不对
+    User passenger2 = new User("kid", "kid123.com");
+    // 邮箱为空
+    User passenger3 = new User("ghost", null);
+    passengers.add(passenger1);
+    passengers.add(passenger2);
+    passengers.add(passenger3);
+    // 载人数为2，超载了
+    car.setPassengers(passengers);
+    Set<ConstraintViolation<Car>> constraintViolations =
+            validator.validate(car);
+    assertEquals(4, constraintViolations.size());
+}
+----
+ 
+上边的几点比较简单，详细代码可以看文末的源码地址。
+
+
+== 校验约束
+ 
+前边的入门示例简单介绍了验证的流程，对约束进行验证时，有几个重要的类：
+
+
+=== Validator
+ 
+对一个实体对象验证之前首先需要有个``Validator``对象，该对象为约束的验证器，提供了线程安全的验证方法。这个对象是需要通过``Validation``类和 ``ValidatorFactory``来创建的. 最简单的方法是调用``Validation.buildDefaultValidatorFactory()``这个静态方法.
+
+[source,java]
+----
+ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+Validator validator = factory.getValidator();
+----
+ 
+常用的方法：
+
+[source,java]
+----
+// 校验给定对象的所有约束
+<T> Set<ConstraintViolation<T>> validate(T object, Class<?>... groups);
+
+// 校验对象的给定属性的所有约束
+<T> Set<ConstraintViolation<T>> validateProperty(T object, String propertyName,	Class<?>... groups);
+
+// 使用给定的属性值来校验对象的给定属性上的所有约束
+<T> Set<ConstraintViolation<T>> validateValue(Class<T> beanType, String propertyName, Object value, Class<?>... groups);
+----
+ 
+这三个方法都用于校验约束，均会返回一个``Set<ConstraintViolation>``集合，如果整个验证过程没有发现问题的话，那么这个``set``是空的, 否则, 每个违反约束的地方都会被包装成一个``ConstraintViolation``的实例然后添加到``set``当中。
+
+测试代码如下：
+
+[source,java]
+----
+// 校验所有约束
+@Test
+public void testRentalCar() {
+    // 会校验子类，同时还会校验父类，这就是约束继承，这同样适用于接口。如果子类覆盖了父类的方法，那么子类和父类的约束都会被校验。
+    RentalCar rentalCar = new RentalCar(null);
+    Set<ConstraintViolation<RentalCar>> constraintViolations =
+            validator.validate(rentalCar);
+    assertEquals(4, constraintViolations.size());
+}
+
+// 校验属性约束
+@Test
+public void testPropertyValidate() {
+    RentalCar rentalCar = new RentalCar(null);
+    Set<ConstraintViolation<RentalCar>> constraintViolations =
+            validator.validateProperty(rentalCar, "rentalStation");
+    assertEquals(1, constraintViolations.size());
+}
+
+// 给定属性值，校验所有属性约束
+@Test
+public void testPropertyValueValidate() {
+    Set<ConstraintViolation<RentalCar>> constraintViolations =
+            validator.validateValue(RentalCar.class, "rentalStation", null);
+    assertEquals(1, constraintViolations.size());
+}
+----
+ 
+所有的校验方法都接收零个或多个用来定义此次校验是基于哪个校验组的参数. 如果没有给出这个参数的话, 那么此次校验将会基于默认的校验组 (javax.validation.groups.Default)，详情请看 #groups[校验组]章节.&nbsp;
+
+
+=== ConstraintViolation
+ 
+该类用于描述违反约束的信息，通过它可以获得导致校验失败的消息，常用的方法：
+
+[source,java]
+----
+// 获取违反约束的消息
+String getMessage();
+
+// 获取违反约束的消息模板，如{javax.validation.constraints.NotNull.message}
+String getMessageTemplate();
+
+// 获取被校验的根实体
+T getRootBean();
+
+// 获取被校验的根实体class
+Class<T> getRootBeanClass();
+
+// 如果约束是添加在一个实体对象上的,那么则返回这个对象的实例, 如果是约束是定义在一个属性上的, 则返回这个属性所属的实体对象.
+Object getLeafBean();
+
+// 获取从被验证的根对象到被验证的属性的路径.
+Path getPropertyPath();
+
+// 获取导致校验失败的值
+Object getInvalidValue();
+
+// 获取导致校验失败的约束定义
+ConstraintDescriptor<?> getConstraintDescriptor();
+----
+ 
+
+=== 校验失败信息
+ 
+每个约束定义中都包含有一个用于提示验证结果的消息模版, 并且在声明一个约束条件的时候,你可以通过这个约束中的``message``属性来重写默认的消息模版。如果在校验的时候,这个约束条件没有通过,那么你配置的``MessageInterpolator``会被用来当成解析器来解析这个约束中定义的消息模版, 从而得到最终的验证失败提示信息.
+
+这个解析器会尝试解析模版中的占位符( 大括号括起来的字符串 ). 其中, ``Hibernate Validator``中默认的解析器 (``MessageInterpolator``) 会先在``classpath``下找名称为``ValidationMessages.properties``的``ResourceBundle``, 然后将占位符和这个文件中定义的resource进行匹配,如果匹配不成功的话,那么它会继续匹配``Hibernate Validator``自带的位于/org/hibernate/validator/``ValidationMessages.properties``的``ResourceBundle``（因为支持国际化，中文操作系统使用的文件为``ValidationMessages_zh_CN.properties``）, 依次类推,递归的匹配所有的占位符.
+
+因为大括号``{`` 在这里是特殊字符,所以,你可以通过使用反斜线来对其进行转义, 例如:
+
+* \{ 被转义成 {
+* \} 被转义成 }
+* \\ 被转义成 \
+
+如果默认的消息解析器不能够满足你的需求,那么你也可以在创建``ValidatorFactory``的时候, 将其替换为一个你自定义的``MessageInterpolator``.
+
+
+== 校验组
+ 
+校验组，指将约束进行分组，校验时可以选择校验某一个或几个组的约束，而忽略组外的约束，默认情况下，所有的约束都会被加入的默认组中（``Default``）。Validator的三个方法``validate``, ``validateProperty`` 和 ``validateValue``都接受多个分组参数（groups）。
+
+举个例子，汽车上路前，必须通过上路检测，汽车的驾驶员，必须年满18周岁，而且必须要有驾照，如果将通过上路检测这个约束分为一组，而不是默认组，那么验证默认组时不会校验上路检测。我们来看看具体代码：
+
+1、创建两个组：
+
+校验组必须定义为接口。
+
+汽车检测组：
+
+
+----
+``public interface CarChecks {}``
+----
+
+驾驶员检测组：
+
+
+----
+``public interface DriverChecks {}``
+----
+
+这里使用了两个标记接口，表示不同的分组。
+
+2、将约束进行分组
+
+在``Car``类上添加一个通过上路检测的属性，定义他所属的组为``CarChecks``：
+
+[source,java]
+----
+@Data
+@PassengerCount(value = 2, message = "你确定要超载？")
+public class Car {
+    ……
+
+    @AssertTrue(message = "必须先通过上路检测", groups = CarChecks.class)
+    private boolean passedVehicleInspection;
+}
+----
+ 
+修改``Dirver``类，将其``age``属性和``hasDrivingLicense``加入``DriverChecks``组中：
+
+[source,java]
+----
+@Min(value = 18, message = "驾驶员年龄必须大于18", groups = DriverChecks.class)
+@Max(value = 60, message = "驾驶员年龄必须小于60", groups = DriverChecks.class)
+private Integer age;
+
+@AssertTrue(message = "你想无证驾驶？", groups = DriverChecks.class)
+private boolean hasDrivingLicense;
+----
+ 
+3、使用组进行校验
+
+现在可以使用组进行校验了，想要校验哪个组，就多传递一个组的参数：
+
+[source,java]
+----
+@Test
+public void driveAway() {
+    // 通过校验，默认组，由于passedVehicleInspection属于另外的组，所以这里并不校验该属性
+    Car car = new Car("ford", "川A12345", 2);
+    Set<ConstraintViolation<Car>> constraintViolations = validator.validate(car);
+    assertEquals(0, constraintViolations.size());
+    // 未通过上路检测
+    constraintViolations = validator.validate(car, CarChecks.class);
+    assertEquals(1, constraintViolations.size());
+    assertEquals("必须先通过上路检测", constraintViolations.iterator().next().getMessage());
+    // 设置通过上路检测
+    car.setPassedVehicleInspection(true);
+    assertEquals(0, validator.validate(car).size());
+    // 设置一个司机
+    Driver john = new Driver("john", "john@123.com", 20);
+    car.setDriver(john);
+    constraintViolations = validator.validate(car, DriverChecks.class);
+    assertEquals(1, constraintViolations.size());
+    assertEquals("你想无证驾驶？", constraintViolations.iterator().next().getMessage());
+    // 司机通过了驾照考试
+    john.setHasDrivingLicense(true);
+    assertEquals(0, validator.validate(car, DriverChecks.class).size());
+    // 全部通过
+    assertEquals(0, validator.validate(car, Default.class, CarChecks.class, DriverChecks.class).size());
+}
+----
+ 
+上边的测试代码，先创建一个Car，校验其默认组属性的约束，由于``passedVehicleInspection``属于``CarChecks``组，默认组并不校验；然后再校验``CarChecks``组，此时会校验组内的``passedVehicleInspection``属性；然后创建一个``Driver``，他并没有通过驾照考试，所以校验``DriverChecks``组时不能通过；最后，当司机也通过了驾照考试后，所有条件具备，当校验所有的组时，校验成功。
+
+
+== 自定义约束
+ 
+Bean validation和hibernate支持的约束条件已经足够强大，如果还是不能满足业务需求，我们还可以自定义约束，这需要一下三步：
+
+. 创建约束注解
+. 实现一个校验器
+. 定义默认的校验错误信息
+
+我们以定义汽车核载人数的约束PassengerCount为例：
+
+1、创建约束注解
+
+[source,java]
+----
+@Documented
+@Constraint(validatedBy = PassengerCountValidator.class)
+@Target({ElementType.TYPE, ElementType.ANNOTATION_TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface PassengerCount {
+    String message() default "{com.belonk.car.passengerCount}";
+
+    Class<?>[] groups() default {};
+
+    Class<? extends Payload>[] payload() default {};
+
+    int value();
+}
+----
+ 
+``message``、``groups``、``payload``这三个属性是必须的，另外，我们还定义了一个value属性来设置汽车核载人数。
+
+* message, 这个属性被用来定义默认得消息模版, 当这个约束条件被验证失败的时候,通过此属性来输出错误信息，通过该属性可以覆盖消息模板来自定义消息内容.
+* groups, 用于指定这个约束条件属于哪(些)个校验组. 这个的默认值必须是Class<?>类型的数组.
+* payload, Bean Validation API 的使用者可以通过此属性来给约束条件指定严重级别. 这个属性并不被API自身所使用.
+* Constraint注解，用来定义当前约束的校验器是什么
+
+2、实现校验器
+
+我们需要实现``ConstraintValidator``接口来自定义校验器：
+
+[source,java]
+----
+public interface ConstraintValidator<A extends Annotation, T> {
+    // 初始化一些必要的信息
+    default void initialize(A constraintAnnotation) {}
+
+    // 校验逻辑，value为被校验目标（类、属性、方法）的值
+    boolean isValid(T value, ConstraintValidatorContext context);
+}
+----
+ 
+该接口支持两个泛型参数：第一个为约束的注解，第二个为被校验目标对象，如果是类，则为类对象，如果是属性和方法，则为属性和方法的（返回）类型。
+
+[source,java]
+----
+public class PassengerCountValidator implements ConstraintValidator<PassengerCount, Car> {
+    public static final int MIN_SEAT_COUNT = 2;
+
+    private int passengerCount;
+
+    @Override
+    public boolean isValid(Car car, ConstraintValidatorContext context) {
+        if (this.passengerCount < MIN_SEAT_COUNT) {
+            return false;
+        }
+        if (car == null) {
+            return true;
+        }
+        List<User> passengers = car.getPassengers();
+        if (passengers == null) {
+            return true;
+        }
+        if (passengers.size() > passengerCount) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void initialize(PassengerCount passengerCount) {
+        // 根据注解的value属性来获取核载人数
+        this.passengerCount = passengerCount.value();
+    }
+}
+----
+ 
+3、定义默认的校验错误信息
+
+在classpath下新建一个``ValidationMessages.properties``文件，加入约束注解中定义的消息模板配置：
+
+
+----
+``com.belonk.car.passengerCount=核载人数为{value}，请勿超载``
+----
+
+如果约束注解没有定义``message``，则会使用配置文件的消息。
+
+
+=== 约束组合
+ 
+有时候，在一个字段上加多个约束显得非常臃肿，不易阅读，例如：
+
+[source,java]
+----
+@NotEmpty
+@Size(min = 5, max = 16)
+@Pattern(regexp = "^GL.*$")
+private String productionNo;
+----
+ 
+这里，我们可以通过组合这些约束，来自定义一个约束，从而简化编码，提高可读性。
+
+1、自定义约束
+
+[source,java]
+----
+@Target({ElementType.FIELD, ElementType.ANNOTATION_TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface ValidNumber {
+    String message() default "{com.belonk.car.no}";
+
+    Class<?>[] groups() default {};
+
+    Class<? extends Payload>[] payload() default {};
+}
+----
+ 
+2、将约束上添加需要组合的多个约束：
+
+[source,java]
+----
+@Target({ElementType.FIELD, ElementType.ANNOTATION_TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@NotEmpty
+@Size(min = 5, max = 16)
+@Pattern(regexp = "^GL.*$")
+// 不需要单独的验证器
+@Constraint(validatedBy = {})
+// 有约束校验失败立即返回，信息为组合约束定义的信息
+@ReportAsSingleViolation
+public @interface ValidNumber {
+    String message() default "{com.belonk.car.no}";
+
+    Class<?>[] groups() default {};
+
+    Class<? extends Payload>[] payload() default {};
+}
+----
+ 
+因为这里没有定义特殊的约束，都是已有的，所以不需要自定义校验器(``@Constraint``注解对应的属性值为空，**但是该注解不可缺少**)，需要注意的是``@ReportAsSingleViolation``注解，它的作用是：
+
+添加了这个注解后，表示不会验证所有约束，当有一个约束验证失败，则会立即返回组合约束所定义的错误信息(``message``属性定义)，而不是单个约束本身的错误信息。
+
+例如：如果``@NotEmpty``、``@Pattern``都校验失败，不添加``@ReportAsSingleViolation``注解，则会生成两个校验失败的结果，而提示信息为``@NotEmpty``、``@Pattern``对应的错误信息；相反，如果添加了``@ReportAsSingleViolation``注解，当``@NotEmpty``校验失败时直接返回校验错误，信息为``@ValidNumber``定义的错误信息。
+
+3、测试：
+
+添加一个新类，并加上组合约束：
+
+[source,java]
+----
+@Data
+public class GeelyCar extends Car {
+    @ValidNumber(message = "汽车生产编号不合法")
+    private String productionNo;
+}
+----
+ 
+编写测试代码：
+
+[source,java]
+----
+@Test
+public void testConstraintComposing() {
+    GeelyCar geelyCar = new GeelyCar();
+    geelyCar.setManufacturer("geely wall");
+    geelyCar.setPassedVehicleInspection(true);
+    geelyCar.setLicensePlate("川A123456");
+    geelyCar.setSeatCount(5);
+    geelyCar.setProductionNo("123");
+    Set<ConstraintViolation<GeelyCar>> constraintViolations = validator.validate(geelyCar);
+    assertEquals(1, constraintViolations.size());
+    assertEquals("汽车生产编号不合法", constraintViolations.iterator().next().getMessage());
+    Driver john = new Driver("john", "john@123.com", 2);
+    john.setHasDrivingLicense(true);
+    geelyCar.setDriver(john);
+    geelyCar.setProductionNo("GL12345");
+    constraintViolations = validator.validate(geelyCar);
+    assertEquals(0, constraintViolations.size());
+}
+----
+ 
+运行测试代码，测试通过。
+
+
+== **总结**
+ 
+``Bean Validation``是java官方定义的bean验证标准，现在最新的版本为2.x，``hibernate validator``作为其标准实现，对其进行了扩展，增加了多种约束，如果仍然不能满足业务需求，我们还可以自定义约束。
+
+本文仅简单了介绍了如何使用``Bean Validation``，要获取更多内容请参阅官方文档。
+
+本文的源码： https://github.com/belonk/springboot-demo/tree/master/06-webapp-demo[GITHUB]
+
+&nbsp;
+
+
+'''
+
+[appendix]
+== Bean validation支持的约束
+
+[cols="1,2,2,2"]
+|====
+|Annotation|Supported data types|作用|Hibernate metadata impact
+
+|@AssertFalse|``Boolean</code>,&nbsp;``boolean``|Checks that the annotated element is&nbsp;``false``.|没有
+
+|@AssertTrue|``Boolean``,&nbsp;``boolean``|Checks that the annotated element is&nbsp;``true``.|没有
+
+|@DecimalMax|<code class="classname">BigDecimal``,&nbsp;``BigInteger``,&nbsp;``String``,&nbsp;``byte``,&nbsp;``short``,&nbsp;``int``,&nbsp;``long``&nbsp;and the respective wrappers of the primitive types. Additionally supported by HV: any sub-type of&nbsp;``Number``.|被标注的值必须不大于约束中指定的最大值. 这个约束的参数是一个通过``BigDecimal``定义的最大值的字符串表示.|没有
+
+|@DecimalMin|``BigDecimal``,&nbsp;``BigInteger``,&nbsp;``String``,&nbsp;``byte``,&nbsp;``short``,&nbsp;``int``,&nbsp;``long``&nbsp;and the respective wrappers of the primitive types. Additionally supported by HV: any sub-type of&nbsp;``Number``.|被标注的值必须不小于约束中指定的最小值. 这个约束的参数是一个通过``BigDecimal``定义的最小值的字符串表示.|没有
+
+|@Digits(integer=, fraction=)|``BigDecimal``,&nbsp;``BigInteger``,&nbsp;``String``,&nbsp;``byte``,&nbsp;``short``,&nbsp;``int``,&nbsp;``long``&nbsp;and the respective wrappers of the primitive types. Additionally supported by HV: any sub-type of&nbsp;``Number``.|Checks whether the annoted value is a number having up to&nbsp;``integer``&nbsp;digits and&nbsp;``fraction``&nbsp;fractional digits.|对应的数据库表字段会被设置精度(precision)和准度(scale).
+
+|@Future|``java.util.Date``,&nbsp;``java.util.Calendar``; Additionally supported by HV, if the&nbsp; http://joda-time.sourceforge.net/[Joda Time]&nbsp;date/time API is on the class path: any implementations of&nbsp;``ReadablePartial``&nbsp;and&nbsp;``ReadableInstant``.|检查给定的日期是否比现在晚.|没有
+
+|@Max|``BigDecimal``,&nbsp;``BigInteger``,&nbsp;``byte``,&nbsp;``short``,&nbsp;``int``,&nbsp;``long``and the respective wrappers of the primitive types. Additionally supported by HV:&nbsp;``String``&nbsp;(the numeric value represented by a String is evaluated), any sub-type of&nbsp;``Number``.|检查该值是否小于或等于约束条件中指定的最大值.|会给对应的数据库表字段添加一个check的约束条件.
+
+|@Min|``BigDecimal``,&nbsp;``BigInteger``,&nbsp;``byte``,&nbsp;``short``,&nbsp;``int``,&nbsp;``long``and the respective wrappers of the primitive types. Additionally supported by HV:&nbsp;``String``&nbsp;(the numeric value represented by a String is evaluated), any sub-type of&nbsp;``Number``.|检查该值是否大于或等于约束条件中规定的最小值.|会给对应的数据库表字段添加一个check的约束条件.
+
+|@NotNull|Any type|Checks that the annotated value is not&nbsp;``null.``|对应的表字段不允许为null.
+
+|@Null|Any type|Checks that the annotated value is&nbsp;``null.``|没有
+
+|@Past|``java.util.Date``,&nbsp;``java.util.Calendar``; Additionally supported by HV, if the&nbsp; http://joda-time.sourceforge.net/[Joda Time]&nbsp;date/time API is on the class path: any implementations of&nbsp;``ReadablePartial``&nbsp;and&nbsp;``ReadableInstant``.|检查标注对象中的值表示的日期比当前早.|没有
+
+|@Pattern(regex=, flag=)|``String``|检查该字符串是否能够在__``match``__指定的情况下被__``regex``__定义的正则表达式匹配.|没有
+
+|@Size(min=, max=)|``String</code>,&nbsp;``Collection``,&nbsp;``Map``&nbsp;and&nbsp;``arrays``|Checks if the annotated element's size is between min and max (inclusive).|对应的数据库表字段的长度会被设置成约束中定义的最大值.
+
+|@Valid|Any non-primitive type|递归的对关联对象进行校验, 如果关联对象是个集合或者数组, 那么对其中的元素进行递归校验,如果是一个map,则对其中的值部分进行校验.|没有
+
+|====
+ 
+[appendix]
+== Hibernate添加的约束
+
+[cols="2,1,3,1"]
+|====
+|Annotation|Supported data types|作用|Hibernate metadata impact
+
+|@CreditCardNumber|``String``|Checks that the annotated string passes the Luhn checksum test. Note, this validation aims to check for user mistakes, not credit card validity! See also&nbsp; http://www.merriampark.com/anatomycc.htm[Anatomy of Credit Card Numbers].|没有
+
+|@Email|``String``|Checks whether the specified string is a valid email address.|没有
+
+|@Length(min=, max=)|``String``|Validates that the annotated string is between&nbsp;__``min``__and&nbsp;__``max``__&nbsp;included.|对应的数据库表字段的长度会被设置成约束中定义的最大值.
+
+|@NotBlank|``String``|Checks that the annotated string is not null and the trimmed length is greater than 0. The difference to @NotEmpty is that this constraint can only be applied on strings and that trailing whitespaces are ignored.|没有
+
+|@NotEmpty|<code class="classname">String``,&nbsp;``Collection``,&nbsp;``Map``&nbsp;and arrays|Checks whether the annotated element is not&nbsp;``null``nor empty.|没有
+
+|@Range(min=, max=)|
+``BigDecimal``,&nbsp;``BigInteger``,&nbsp;``String``,&nbsp;``byte``,&nbsp;``short``,&nbsp;
+``int``,&nbsp;``long``&nbsp;and the respective wrappers of the primitive types
+|Checks whether the annotated value lies between (inclusive) the specified minimum and maximum.|没有
+
+|@SafeHtml(whitelistType=, additionalTags=)|``CharSequence``|Checks whether the annotated value contains potentially malicious fragments such as&nbsp;``<script/>``. In order to use this constraint, the&nbsp; http://jsoup.org/[jsoup]&nbsp;library must be part of the class path. With the&nbsp;__``whitelistType``__&nbsp;attribute predefined whitelist types can be chosen. You can also specify additional html tags for the whitelist with the&nbsp;__``additionalTags``__attribute.|没有
+
+|@ScriptAssert(lang=, script=, alias=)|Any type|要使用这个约束条件,必须先要保证Java Scripting API 即JSR 223 ("Scripting for the Java^TM^&nbsp;Platform")的实现在类路径当中. 如果使用的时Java 6的话,则不是问题, 如果是老版本的话, 那么需要把 JSR 223的实现添加进类路径. 这个约束条件中的表达式可以使用任何兼容JSR 223的脚本来编写. (更多信息请参考javadoc)|没有
+
+|@URL(protocol=, host=, port=, regexp=, flags=)|``String``|Checks if the annotated string is a valid URL according to RFC2396. If any of the optional parameters&nbsp;__``protocol``__,&nbsp;__``host``__&nbsp;or&nbsp;__``port``__&nbsp;are specified, the corresponding URL fragments must match the specified values. The optional parameters&nbsp;__``regexp``__and&nbsp;__``flags``__&nbsp;allow to specify an additional regular expression (including regular expression flags) which the URL must match.|没有
+
+|====

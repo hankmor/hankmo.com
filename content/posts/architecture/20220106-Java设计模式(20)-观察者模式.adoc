@@ -1,0 +1,302 @@
+---
+title: Java设计模式(20)-观察者模式
+slug: java-observer-pattern
+date: 2022/01/06
+img:
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 观察者模式
+description: 很快又到年底了，一年一度的春节除了可以享受愉快地享受假期之外，每年的"春节联欢晚会"也是让人倍感期待。然而，大多数人都没能坐在电视机跟前等着它的开始，有的人在厨房忙着准备丰富的食物，有的在一起打麻将、玩牌，还有的可能在玩电脑游戏……大家都想看晚会，于是派出一个小朋友，告诉他："如果晚会开始了，你要立刻来通知我们哦！"虽然，大家就可以继续做自己的事情，小朋友就坐在电视跟前，当晚会开始的时候，他就立即跑去挨个通知大家……
+updated: 2022/01/10
+---
+
+= Java设计模式(20)-观察者模式
+:key_word: 设计模式,观察者模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2022/01/06
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+很快又到年底了，一年一度的春节除了可以享受愉快地享受假期之外，每年的"春节联欢晚会"也是让人倍感期待。然而，大多数人都没能坐在电视机跟前等着它的开始，有的人在厨房忙着准备丰富的食物，有的在一起打麻将、玩牌，还有的可能在玩电脑游戏……大家都想看晚会，于是派出一个小朋友，告诉他："如果晚会开始了，你要立刻来通知我们哦！"虽然，大家就可以继续做自己的事情，小朋友就坐在电视跟前，当晚会开始的时候，他就立即跑去挨个通知大家……
+
+image::/images/attachment/designpattern/observer-view.png[width="600"]
+
+.观察者模式示意（图片来源网络）
+模式源于生活，上边的这个场景，就是一个典型的观察者模式的例子。
+
+== 概念
+
+先来看看观察者模式的定义。
+
+[NOTE]
+====
+.DP 对观察者模式的定义
+观察者模式（Observer），又叫发布-订阅（publish-subscribe）模式，定义了对象间的一种**一对多**的依赖关系，当一个对象发生改变时，所有依赖它的对象都得到通知并被自动更新。
+====
+
+生活中，有很多这样的**一个对象依赖其他多个对象（一对多关系）**的例子，该对象状态发生变化了，其他关联的对象都需要知道并且做出行动。如上边的小孩儿看到晚会开始了，要立即通知其他人，其他人可以选择去看春晚，也可以选择继续做自己的事情。又比如，路口红绿灯变绿时，意思是告诉大家可以通行了；微信群有人发消息了，群成员都可以看到这条消息，等等……
+
+在软件领域，观察者模式的运用非常多，如：消息队列(MQ) 可以视为观察者模式实现；又比如，*响应式编程* 的核心就是观察者模式。
+
+== 结构
+
+观察者模式类图如下：
+
+image::/images/attachment/designpattern/observer-class.png[width="600"]
+
+可以看到，观察者模式有4个角色：
+
+. Subject: 抽象主题对象，又叫做被观察者(Observable)，或者目标对象，定义了添加、删除和通知观察者的方法，知道注册的观察者列表
+. ConcreteSubject: 具体主题对象，实现 Subject，有自身的状态，状态变化后向各个 Observer 发出通知
+. Observer: 抽象观察者，定义观察者的通用接口，包含一个用于更新的 update 方法
+. ConcreteObserver: 具体观察者，实现 Observer，依赖 ConcreteSubject ，当 ConcreteSubject 变化时得到通知，自身也可以更改 ConcreteSubject 的状态，此时可以通知其他观察者更新
+
+上边的几个角色，将抽象和实现相分离，主题对象和观察者都可以各自进行扩展。另外，并不总是主题对象调用 `notify` 方法去通知观察者们，观察者也可以调用它从而通知其他观察者。
+
+优点：
+
+. 观察者模式降低了对象间的耦合性，提高了复用性，符合依赖倒置原则
+. 主题对象广播通知给所有观察者，并不关心具体的观察者是谁，易于添加和删除观察者，而具体的更新与否以及如何更新由观察者自身实现
+
+缺点：
+
+. 观察者自身并不知道其他观察者的存在，它对更改主题状态的代价一无所知，因此需要定义和维护依赖准则，否则可能引起错误更新
+. 主题和观察者之间仍然存在耦合性（没有完全解耦），存在相互依赖关系甚至可能造成循环依赖
+
+== 适用场景
+
+观察者模式的使用场景：
+
+. 对象间存在一对多的依赖关系，双方都需要独立的扩展和复用
+. 一个对象的改变会同时改变其他依赖对象
+. 一个对象必须通知其他对象，但是并不知道其他对象具体是谁
+
+== 示例
+
+接下来看看观察者模式的示例代码（注意，下边的代码没有考虑并发安全性）。
+
+1、定义观察者
+
+[source,java]
+----
+public interface Observer {
+	void update(); // <1>
+}
+----
+
+<1> 观察者自身更新方法
+
+2、定义主题对象
+
+先定义一个可观察接口：
+
+[source,java]
+----
+public interface Observable {
+	void attach(Observer observer); // <1>
+	void detach(Observer observer); // <2>
+	void notifyObservers(); // <3>
+	long count(); // <4>
+}
+----
+
+<1> 添加一个观察者
+<2> 移除一个观察者
+<3> 通知所有观察者
+<4> 返回观察者数量
+
+然后，定义抽象的主体对象：
+
+[source,java]
+----
+public abstract class Subject implements Observable {
+	private static final List<Observer> OBSERVERS = new ArrayList<>();
+	@Override
+	public void attach(Observer observer) {
+		OBSERVERS.add(observer);
+	}
+	@Override
+	public void detach(Observer observer) {
+		OBSERVERS.remove(observer);
+	}
+	@Override
+	public void notifyObservers() {
+		for (Observer observer : OBSERVERS) {
+			observer.update();
+		}
+	}
+	public abstract String name(); // <1>
+	@Override
+	public long count() {
+		return OBSERVERS.size();
+	}
+}
+----
+
+<1> 示例抽象方法，返回主体对象名称
+
+3、定义具体主体对象
+
+[source,java]
+----
+public class ConcreteSubject extends Subject {
+	private String state; // <1>
+	public String getState() {
+		return state;
+	}
+	public void setState(String state) {
+		this.state = state;
+	}
+	@Override
+	public String name() {
+		return "具体观察者";
+	}
+}
+----
+
+<1> 具体主题对象有一个状态，可以被读取和更改
+
+4、定义具体观察者
+
+[source,java]
+----
+public class ConcreteObserver implements Observer {
+	private static int count = 0;
+	private final int id = count++; // <1>
+	private ConcreteSubject subject;
+	public ConcreteObserver(ConcreteSubject subject) {
+		this.subject = subject;
+	}
+	@Override
+	public void update() {
+		System.out.println("观察者 " + id + ": 主体 [" + this.subject.name() + "] 状态变成了：" + this.subject.getState());
+	}
+	public ConcreteSubject getSubject() {
+		return subject;
+	}
+	public void setSubject(ConcreteSubject subject) {
+		this.subject = subject;
+	}
+}
+----
+
+<1> 这里给每一个具体观察者一个id，以便区分
+
+5、客户端调用
+
+[source,java]
+----
+public class ObserverClient {
+	public static void main(String[] args) {
+		// 一个主体
+		ConcreteSubject subject = new ConcreteSubject();
+		subject.setState("原始状态");
+		// 两个观察者
+		ConcreteObserver observer1 = new ConcreteObserver(subject);
+		ConcreteObserver observer2 = new ConcreteObserver(subject);
+		subject.attach(observer1);
+		subject.attach(observer2);
+		// 状态变化了，通知更新
+		subject.setState("状态更改");
+		subject.notifyObservers();
+	}
+}
+----
+
+输出结果如下：
+
+[source,text]
+----
+观察者 0: 主体 [具体观察者] 状态变成了：状态更改
+观察者 1: 主体 [具体观察者] 状态变成了：状态更改
+----
+
+== Java语言级的观察者
+
+上一节的示例代码中，我们定义了 `Observable` 和 `Observer` 分别代表可观察对象（主题）和观察者对象。其实，早在 Jdk1.0 Java就已经提供了这两个对象，他们位于 `java.util` 包中。
+
+1、JDK1.0 的 `Observer` 的定义：
+
+[source,java]
+----
+public interface Observer {
+    void update(Observable o, Object arg); // <1>
+}
+----
+<1> 更新方法，传递可观察对象参数和一个传递到 `notifyObservers` 方法的参数对象
+
+2、JDK1.0 的 `Observable`:
+
+[source,java]
+----
+public class Observable {
+    private boolean changed = false;
+    private Vector<Observer> obs;
+    public Observable() {
+        obs = new Vector<>();
+    }
+    public synchronized void addObserver(Observer o) {
+        if (o == null)
+            throw new NullPointerException();
+        if (!obs.contains(o)) {
+            obs.addElement(o);
+        }
+    }
+    public synchronized void deleteObserver(Observer o) {
+        obs.removeElement(o);
+    }
+    public void notifyObservers() {
+        notifyObservers(null);
+    }
+    public void notifyObservers(Object arg) {
+        Object[] arrLocal;
+
+        synchronized (this) {
+            if (!changed)
+                return;
+            arrLocal = obs.toArray();
+            clearChanged();
+        }
+
+        for (int i = arrLocal.length-1; i>=0; i--)
+            ((Observer)arrLocal[i]).update(this, arg);
+    }
+    public synchronized void deleteObservers() {
+        obs.removeAllElements();
+    }
+    protected synchronized void setChanged() {
+        changed = true;
+    }
+    protected synchronized void clearChanged() {
+        changed = false;
+    }
+    public synchronized boolean hasChanged() {
+        return changed;
+    }
+    public synchronized int countObservers() {
+        return obs.size();
+    }
+}
+----
+
+可以看到，该类提供了线程安全的 `api`，内部使用 `Vector` 作为存储 `Observer` 的容器，同时还存储一个 `changed` 状态，只有该状态为 `true` 时才会进行通知。
+
+虽然前边示例代码定义的这两个类也实现了观察者模式的基本功能，但是没有考虑线程安全性，JDK 提供的这两个类更完整，可以直接使用，也可以根据需求自定义实现。
+
+== 总结
+
+观察者模式定义了对象之间的一对多的依赖关系，抽象了主题对象和观察者，使得系统可以很容易扩展它们。但是，由于主题对象会通知所有注册的观察者，而且观察者对其他观察者并不感知，所以当某一个观察者触发主题状态修改并通知时，如果没有定义和遵照依赖准则，可能付出较大的代价。
+
+本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/observer[github]。

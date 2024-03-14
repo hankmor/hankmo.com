@@ -1,0 +1,376 @@
+---
+title: Spring IoC容器实现原理
+slug: spring-ioc-container
+img:
+categories:
+  - Spring
+tags:
+  - Spring
+description: IOC容器两个核心的接口为 BeanFacotry 和 ApplicationContext，前者提供容器管理Bean的基本功能，后者则扩展 BeanFactory，提供了容器级的强大功能，如国际化支持、资源加载、事件、应用上下文环境等。
+date: 2020-04-08 00:00:00
+updated:
+---
+
+[[spring-ioc-container]]
+= Spring IoC容器实现原理
+:key_word: Spring,BeanFactory,ApplicationContext,容器,IoC,源码,组件,AOP
+:Author: belonk.com belonk@126.com
+:Date: 2020-05-06
+:Revision: 1.0
+:website: https://belonk.com
+:toc: left
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:tabsize: 4
+:imagesdir:
+
+[[design-of-ioc-container]]
+== IOC容器接口设计
+
+Spring IOC容器接口设计如下图所示：
+
+.Spring IoC容器接口设计
+image::/images/spring/image-20200428103554386.png[Spring IoC容器接口设计]
+
+IOC容器两个核心的接口为<<#bean-facotry, `BeanFacotry` >>和<<#application-context, `ApplicationContext`>>，前者提供容器管理Bean的基本功能，后者则扩展 `BeanFactory`，提供了容器级的强大功能，如国际化支持、资源加载、事件、应用上下文环境等。
+
+[#bean-facotry]
+== BeanFactory
+
+`BeanFactory` ，即bean工厂，定义IOC容器的基本规范，提供管理容器Bean的基本功能，如获取bean、判断单例、原型、判断包含bean、获取bean类型和别名等。下边有三个子接口  `ListableBeanFactory`、`HierarchicalBeanFactory`、`AutowireCapableBeanFactory`，他们具备不同的功能。
+
+image::/images/spring/image-20200428104231571.png[BeanFactory接口]
+
+**ListableBeanFactory**
+
+image::/images/spring/image-20200428122128712.png[ListableBeanFactory]
+
+扩展 `BeanFacoty` ，增加了列举容器中bean的功能，`BeanFactory` 提供查询单个Bean的方法，而 `ListableBeanFactory` 可以查询多个Bean，如获取 `BeanDefinition` 的名称、数量、按类型查询bean和bean的名称等。
+
+**HierarchicalBeanFactory**
+
+image::/images/spring/image-20200428122204025.png[HierarchicalBeanFactory]
+
+在 `BeanFactory` 的基础上增加了父级 `BeanFactory` 的功能，即 `BeanFacotry` 可以有层级关系了。
+
+**AutowireCapableBeanFactory**
+
+image::/images/spring/image-20200428122234853.png[AutowireCapableBeanFactory]
+
+在 `BeanFactory` 的基础上增加自动注入相关的功能。
+
+**ConfigurableBeanFactory**
+
+image::/images/spring/image-20200428122350253.png[ConfigurableBeanFactory]
+
+这是一个配置接口，扩展 `HierarchicalBeanFactory`，用于给 `BeanFactory` 提供各种配置功能，如配置 `parentBeanFactory`、`beanClassLoader`  添加后置处理器等等。
+
+**ConfigurableListableBeanFactory**
+
+image::/images/spring/image-20200428122419273.png[ConfigurableListableBeanFactory]
+
+这是一个配置接口，提供了大量方法来扩展 `ConfigurableBeanFactory` 和 `ListableBeanFactory` ，大多数可列举的bean工厂都需要实现它，除了 `ConfigurableBeanFactory` 的配置功能外，它还具备分析和修改bean定义以及预实例化单例bean的的能力。
+
+[#application-context]
+== ApplicationContext
+
+image::/images/spring/image-20200428122449054.png[ApplicationContext]
+
+`BeanFactory` 提供了管理bean的基础功能，而 `ApplicationContext` 则在其基础上有用强大的容器特性。`ApplicationContext` 作为应用上下文，是Spring IOC容器的核心接口，具备 `BeanFactory` 基础管理bean的功能，还继承了 `EnvironmentCapable` 、 `MessageSource` 、 `ResourceLoader` 、 `ApplicationEventPublisher` ，具有资源加载、国际化支持、容器事件支持、系统环境支持等能力。
+
+**EnvironmentCapable**
+
+image::/images/spring/image-20200428122517214.png[EnvironmentCapable]
+
+所有Spring应用程序上下文都支持环境，该接口提供了与Spring上下文环境交互的能力。Spring中， `Environment` 接口用来表示应用运行环境，主要包含两个方面的内容： `profiles` 和 `properties` 。Profile用于定义逻辑分组，Spring根据当前激活的分组来决定注册哪些Bean，例如，根据开发、测试和生产环境的不同，注入不同的组件(`@Profile` 注解功能)； `Properties` 表示系统的配置属性，Spring提供了非常方便的属性配置、解析功能，例如支持 `SpEL` 。
+
+**MessageSource**
+
+image::/images/spring/image-20200428122539962.png[MessageSource]
+
+消息源，用于解析消息的策略接口，支持此类消息的参数化和国际化，Spring提供了 `ResourceBundleMessageSource` 和 `ReloadableResourceBundleMessageSource` 两种消息源实现方式。
+
+**ResourceLoader**
+
+image::/images/spring/image-20200428122608141.png[ResourceLoader]
+
+资源加载器，也是一个策略接口，用于加载资源，例如加载 `classpath` 、文件系统中的资源。 `ApplicationContext` 接口扩展了该接口，通过继承 `ResourcePatternResolver` 接口实现了加载" `classpath*` "这种伪URL的资源(加载所有类路径下的资源，包括jar包)。
+
+**ApplicationEventPublisher**
+
+image::/images/spring/image-20200428122634370.png[ApplicationEventPublisher]
+
+该接口封装了事件发布相关的功能， `ApplicationEvent` 为抽象事件类，应用事件继承它来实现具体的事件功能，如容器启动事件 `ContextStartedEvent` 、刷新事件 `ContextRefreshedEvent` 。也可以使用 `PayloadApplicationEvent` 对象来发布带负载的事件。
+
+**ConfigurableApplicationContext**
+
+image::/images/spring/image-20200428122713943.png[ConfigurableApplicationContext]
+
+配置接口，继承自 `ApplicationContext` ，为应用上下文提供各种配置功能，该接口定义了刷新容器的 `refresh()` 方法。
+
+**WebApplicationContext**
+
+image::/images/spring/image-20200428122744663.png[WebApplicationContext]
+
+扩展 `ApplicationContext` ，提供Web应用环境能力。
+
+**ConfigurableWebApplicationContext**
+
+image::/images/spring/image-20200428122817754.png[ConfigurableWebApplicationContext]
+
+配置接口，继承自 `WebApplicationContext` ，为Web应用环境提供配置能力。
+
+== IOC容器基础组件
+
+除了前边的 `BeanFactory` 、 `ApplicationContext` 组件，IOC容器中还有一些基础组件。
+
+[[bean-definition]]
+**BeanDefinition**
+
+.BeanDefinition接口设计
+image::/images/spring/image-20200428122930304.png[BeanDefinition接口设计]
+
+`BeanDefinition` 是一个Spring内部的数据结构，用来描述一个bean实例，如Bean的属性、构造函数等基本信息，和Spring内部bean管理功能支持的一些高级特性信息，如bean的 `Scope` 、懒加载、初始化和销毁方法等等。 这是一个基础接口，主要目的是允许 `BeanFactoryPostProcessor` 内省、修改bean的属性值和元数据。
+
+image::/images/spring/image-20200428122911086.png[BeanDefinition接口]
+
+**RootBeanDefinition**
+
+`BeanDefinition` 的具体实现类，表示运行时 `BeanFactory` 中合并的bean定义。它可能是从多个相互继承的原始bean定义信息中创建的，通常注册为 `GenericBeanDefinition` 。 `RootBeanDefinition` 本质上是运行时的“统一”bean定义视图。
+
+`RootBeanDefinition` 也可用于在配置阶段注册单个bean定义，但是，自Spring2.5开始，以编程方式注册bean定义的首选方法是 `GenericBeanDefinition` 类。 `GenericBeanDefinition` 的优点是它允许动态定义父依赖项，而不是将角色“硬编码”为 `RootBeanDefinition` 。
+
+**ChildBeanDefinition**
+
+子bean定义，即：从父项继承设置的Bean定义。子bean定义对父bean定义具有固定的依赖关系。 子bean定义将从父bean继承构造函数参数值、属性值和重载方法，如果**指定了init method、destroy method和/或static factory method，它们将覆盖相应的父设置**。其余设置将始终取自子定义：依赖、自动注入模式、依赖项检查、singleton、lazy init。
+
+**GenericBeanDefinition**
+
+`GenericBeanDefinition` 是用于标准bean定义信息，与任何bean定义一样，它允许指定一个类以及可选的构造函数参数值和属性值。此外，支持配置父bean定义(通过设置“parentName”属性)。
+
+一般来说，使用这个 `GenericBeanDefinition` 类来注册用户可见的bean定义（post处理器可能操作这些定义，甚至可能重新配置父名称）。如果是Bean定义存在父/子关系，请使用 `RootBeanDefinition` / `ChildBeanDefinition` 。
+
+**AnnotatedBeanDefinition**
+
+扩展 `BeanDefinition` ，增加了获取bean元数据的方法：
+
+[source,java]
+----
+public interface AnnotatedBeanDefinition extends BeanDefinition {
+	// 获取bean的注解元数据
+	AnnotationMetadata getMetadata();
+
+	// 获取bean的工厂方法元数据
+	MethodMetadata getFactoryMethodMetadata();
+}
+----
+
+`AnnotatedBeanDefinition` 包含两个基本实现类:  `AnnotatedGenericBeanDefinition` 和 `ScannedGenericBeanDefinition` 。
+
+**AnnotatedGenericBeanDefinition**
+
+实现了 `AnnotatedBeanDefinition` ，实现了获取注解和工程方法元数据逻辑。主要用于测试期望在 `AnnotatedBeanDefinition` 上操作的代码，例如Spring组件扫描支持中的策略实现（其中默认的定义类是 `ScannedGenericBeanDefinition` ）。
+
+**ScannedGenericBeanDefinition**
+
+实现了 `AnnotatedBeanDefinition` ，实现了获取注解元数据逻辑。不提前加载bean类，而是从[red]**.class** 文件本身检索相关的元数据，并用ASM ClassReader进行解析。它在功能上等同于 `AnnotatedGenericBeanDefinition(AnnotationMetadata)`，但按已扫描的bean类型与以其他方式注册或检测的bean类型进行区分。
+
+**BeanDefinitionRegistry**
+
+image::/images/spring/image-20200428123021361.png[BeanDefinitionRegistry]
+
+Bean定义注册表，用于封装bean定义信息的管理功能，如 `RootBeanDefinition` 和 `ChildBeanDefinition` 实例。通常由内部使用 `AbstractBeanDefinition` 层次结构的 `BeanFactory` 实现，如 `DefaultListableBeanFactory` 、 `GenericApplicationContext` 。
+
+标准 `BeanFactory` 接口只覆盖对完全配置的工厂实例的访问。通过Spring的bean定义读取器能够处理这个接口的实现。
+
+**Resource**
+
+image::/images/spring/image-20200428123058248.png[Resource]
+
+资源描述接口，封装了通用I/O操作，常用的资源实现如 `ClassPathResource` 、 `FileSystemResource` 、 `UrlResource` 、 `InputStreamResource` 、 `PathResource` 等。 `Resource` 通过 `ResourceLoader` 来加载，默认的 `ResoureLoader` 实现是 `DefaultResourceLoader` ，而 `ApplicationContext` 接口通过继承 `ResourceLoader` 接口实现了资源加载能力。
+
+// === AnnotationConfigRegistry
+// === FactoryBean
+// === BeanPostProcessor
+// === BeanFactoryPostProcessor
+
+[[implement-of-bean-factory]]
+== BeanFactory容器实现
+
+.BeanFactory接口实现
+image::/images/spring/image-20200428123143146.png[BeanFactory容器接口设计]
+
+**AbstractBeanFactory**
+
+`BeanFactory` 的抽象实现，顶层基础实现类，实现了大部分 `BeanFactory` 、 `HierarchicalBeanFactory` 、 `ConfigurableBeanFactory` 的功能。该类并没有实现可列举Bean的功能，因此可以用作bean工厂实现的基类，从一些后端资源（其中bean定义访问是一个昂贵的操作）获取bean定义。
+
+该类继承 `DefaultSingletonBeanRegistry` 类从而具备单例缓存的功能，还实现了singleton/prototype确定、 `FactoryBean` 基础功能、别名、`BeanDefinition` 合并和bean销毁（`org.springframework.beans.factory.DisposableBean` 接口、自定义销毁方法）等方法。
+
+此外，通过实现 `HierarchicalBeanFactory` 接口来管理 `BeanFactory` 的层级结构（在bean未知的情况下委托给父级）。
+
+子类需要实现的方法有 `containsBeanDefinition` 、 `getBeanDefinition` 和 `createBean` 。这些方法默认由在 `DefaultListableBeanFactory` 和 `AbstractAutowireCapableBeanFactory` 类实现。
+
+[source,java]
+----
+// 检查这个bean工厂是否包含具有给定名称的bean定义，不考虑此工厂可能参与的任何层次结构。
+protected abstract boolean containsBeanDefinition(String beanName);
+// 按名称查找bean定义
+protected abstract BeanDefinition getBeanDefinition(String beanName) throws BeansException;
+// 按照合并的bean定义创建bean
+protected abstract Object createBean(String beanName, RootBeanDefinition mbd, @Nullable Object[] args)
+      throws BeanCreationException;
+----
+
+由于 `AbstractBeanFactory` 并没有考虑bean的可列举性， `containsBeanDefinition` 和 `getBeanDefinition` 方法可能会很耗时(比如按注册表目录遍历)。其实， `ConfigurableListableBeanFactory` 接口也定义了这两个功能，可以快速进行hash查找。
+
+**AbstractAutowireCapableBeanFactory**
+
+实现了 `AutowireCapableBeanFactory` 的所有功能，并实现了 `AbstractBeanFactory` 的createBean方法，具有 `RootBeanDefinition` 类指定的全部功能。提供bean创建（具有构造函数解析）、属性赋值、自动注入和初始化等功能，具备处理运行时bean引用、解析托管集合、调用初始化方法的能力。
+
+子类要实现 `AutowireCapableBeanFactory` 接口的 `resolveDependency` 方法，用于按类型自动注入。
+
+[source,java]
+----
+// 按照类型解析给定bean的依赖关系
+Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+      @Nullable Set<String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException;
+----
+
+注意，这个类并没有实现bean定义注册表的功能，而是在 `DefaultListableBeanFactory` 实现的。
+
+**DefaultListableBeanFactory**
+
+具有完整BeanFactory功能的实现类，除了继承 `AbstractAutowireCapableBeanFactory` 外，还实现了 `ConfigurableListableBeanFactory` 、 `BeanDefinitionRegistry` 接口。它是一个基于bean定义元数据的成熟bean工厂，可通过后置处理器( `BeanPostProcessor` )进行扩展。
+
+典型的用法是在访问bean之前先注册所有bean定义（比如从文件中读取bean定义信息），这样一来，按名称查找Bean变得非常廉价，因为它操作的是已经预先解析的Bean定义元数据对象。
+
+特定bean定义格式的读取器通常是单独实现的，而不是作为bean工厂子类实现的：请参见 `PropertiesBeanDefinitionReader` 和 `org.springframework.beans.factory.xml.XmlBeanDefinitionReader` 示例。
+
+对于 `org.springframework.beans.factory.ListableBeanFactory` 接口的另一个实现，请看一下 `StaticListableBeanFactory` ，它管理现有的bean实例，而不是基于bean定义创建新的bean实例。
+
+这个 `StaticListableBeanFactory` 只是 `ListableBeanFactory` 接口的一个简单实现，它只能管理现有的bean，不能创建bean，而且不支持原型，也没有扩展任何其他功能。
+
+[[implement-of-allication-context]]
+== ApplicationContext容器实现
+
+.ApplicationContext接口实现
+image::/images/spring/image-20200428162707703.png[ApplicationContext容器实现]
+
+**AbstractApplicationContext**
+
+`ApplicationContext` 顶层抽象实现，不指定配置的存储类型，只实现公共上下文功能。使用模板方法设计模式，需要具体的子类来实现抽象方法。
+
+与普通 `BeanFactory` 不同， `ApplicationContext` 应该检测在其内部bean工厂中定义的特殊bean：该类自动注册在上下文中定义为bean的 `BeanFactoryPostProcessor` 、 `BeanPostProcessor` 和 `ApplicationListener` 。
+
+上下文中还提供了名为" `MessageSource` "的消息源bean，如果该bean为null，则消息解析将委托给父上下文。此外，还可以提供应用事件组播功能，通过上下文中提供名称为" `applicationEventMulticaster` "类型为 `ApplicationEventMulticaster` 的bean实现；如果没有提供该bean，将使用 `SimpleApplicationEventMulticaster` 类型的默认事件组播类型。
+
+此类还通过扩展 `DefaultResourceLoader` 实现了资源加载功能，默认将非URL资源路径视为类路径资源（支持包含包路径的完整类路径资源名称，例如“mypackage/myresource.dat”），可以在子类中重写 `getResourceByPath` 方法来自定义实现。
+
+另外，此类还实现了 `LifeCycle` 接口的生命周期方法。
+
+需要子类实现的抽象方法：
+
+[source,java]
+----
+// 子类实现该方法执行配置加载逻辑，该方法会在refresh()方法调用，并且在其他初始化工作开始之前
+// 子类可以创建一个新的bean工厂并保存对它的引用，或者返回它所保存的单个bean factory实例。
+// 在后一种情况下，如果多次刷新上下文，它通常会抛出IllegalStateException。
+// 如果bean工厂的初始化失败，抛出BeansException
+// 如果已经初始化并且不支持多次刷新尝试则抛出IllegalStateException
+protected abstract void refreshBeanFactory() throws BeansException, IllegalStateException;
+// 子类实现该方法来释放持有的BeanFactory，所有其他资源释放完成后在close()方法中调用
+protected abstract void closeBeanFactory();
+// 子类必须在这里返回它们的内部bean工厂，它们应该有效地实现查找，这样就可以重复调用查找，而不会降低性能。
+// 注意：在返回内部bean工厂之前，子类应该检查上下文是否仍然处于活动状态。一旦上下文关闭，通常应认为内部工厂不可用
+public abstract ConfigurableListableBeanFactory getBeanFactory() throws IllegalStateException;
+----
+
+`AbstractApplicationContext` 下有两个子类： `AbstractRefreshableApplicationContext` 和 `GenericApplicationContext` 。
+
+**GenericApplicationContext**
+
+通用 `ApplicationContext` 实现，继承自 `AbstractApplicationContext` ，内部持有一个 `DefaultListableBeanFactory` 实例且不包含特定bean定义。实现了 `BeanDefinitionRegistry` 接口从而允许读取bean定义。
+
+典型的用法是通过 `BeanDefinitionRegistry` 接口注册各种bean定义，然后调用 `refresh()` 初始化这些bean（处理 `ApplicationContextAware` 、检测 `BeanFactoryPostProcessors` 等）。
+
+与为每次刷新创建新的内部 `BeanFactory` 实例的其他 `ApplicationContext` 实现不同，它的内部 `BeanFactory` 从一开始就可用，以便能够在其上注册bean定义，`refresh()` 只能调用一次。
+
+用法示例：
+
+[source,java]
+----
+GenericApplicationContext ctx = new GenericApplicationContext();
+XmlBeanDefinitionReader xmlReader = new XmlBeanDefinitionReader(ctx);
+xmlReader.loadBeanDefinitions(new ClassPathResource("applicationContext.xml"));
+PropertiesBeanDefinitionReader propReader = new PropertiesBeanDefinitionReader(ctx);
+propReader.loadBeanDefinitions(new ClassPathResource("otherBeans.properties"));
+ctx.refresh();
+
+MyBean myBean = (MyBean) ctx.getBean("myBean");
+...
+----
+
+对于典型的XML bean定义，可以直接使用更方便的 `ClassPathXmlApplicationContext` 或 `FileSystemXmlApplicationContext` ，但灵活性较差，因为您只可以为xml bean定义使用标准资源位置，而不是混合任意bean定义格式。web环境中的等效项是 `XmlWebApplicationContext` 。
+
+对于应该以可刷新方式读取特殊bean定义格式的自定义应用程序上下文实现，请考虑从 `AbstractRefreshableApplicationContext` 基类派生。
+
+**AbstractRefreshableApplicationContext**
+
+image::/images/spring/image-20200428163605137.png[AbstractRefreshableApplicationContext]
+
+继承自 `AbstractApplicationContext` ，支持多次调用 `refresh()` 刷新容器，每次刷新都会创建一个内部 `BeanFactory` 实例。通常，都会从配置文件来加载bean定义。
+
+子类要实现的唯一方法是 `loadBeanDefinitions` ，它在每次刷新时被调用。一个具体的实现应该将bean定义加载到给定的 `DefaultListableBeanFactory` 中，通常委派给一个或多个特定的bean定义读取器。
+
+[source,java]
+----
+// 加载bean定义信息到给定的BeanFactory，通常会委派给一个或多个bean定义读取器来加载bean定义
+protected abstract void loadBeanDefinitions(DefaultListableBeanFactory beanFactory)
+      throws BeansException, IOException;
+----
+
+注意， `WebApplicationContext` 有一个类似的基类。
+
+`AbstractRefreshableWebApplicationContext` 提供了相同的子类化策略，但还预先实现了web环境的所有上下文功能。还有一种预定义的方法来接收web上下文的配置位置。
+
+以特定bean定义格式读取的这个基类的具体独立子类是 `ClassPathXmlApplicationContext` 和 `FileSystemXmlApplicationContext` ，它们都派生自公共的 `AbstractXmlApplicationContext` 基类；`org.springframework.context.annotation.AnnotationConfigApplicationContext` 支持 `@Configuration` 注释类作为bean定义的源。
+
+**AbstractRefreshableConfigApplicationContext**
+
+image::/images/spring/image-20200428163807820.png[]
+
+继承自 `AbstractRefreshableApplicationContext` ，添加了解析配置地址的功能，为其子类提供基于xml配置基础配置地址解析功能，如 `ClassPathXmlApplicationContext` 、 `FileSystemXmlApplicationContext` 和 `XmlWebApplicationContext` 。
+
+**AbstractXmlApplicationContext**
+
+image::/images/spring/image-20200428164458440.png[AbstractXmlApplicationContext]
+
+继承自 `AbstractRefreshableConfigApplicationContext` ，通过 `XmlBeanDefinitionReader` 从包含bean定义的XML文档中提取配置信息。
+
+**ClassPathXmlApplicationContext**
+
+image::/images/spring/image-20200428164536197.png[AbstractXmlApplicationContext]
+
+独立的XML应用程序上下文，从类路径中获取xml的bean配置信息，并将纯路径解释为包含包路径的类路径资源名称（例如“mypackage/myresource.txt”）。对于测试工具以及嵌入到jar中的应用程序上下文都很有用。
+
+配置位置默认值可以通过 `getConfigLocations` 重写，配置位置可以表示具体的文件，如“/myfiles/context.xml”或Ant样式的模式，如“/myfiles/*-context.xml”（有关模式的详细信息，请参阅 `org.springframework.util.AntPathMatcher` javadoc）。
+
+注意：在多个配置位置的情况下，后面的bean定义将覆盖前面加载的文件中定义的定义。这可以用来通过一个额外的XML文件重写某些bean定义。 这是一个简单的一站式便利 `ApplicationContext` 。考虑将 `GenericApplicationContext` 类与 `XmlBeanDefinitionReader` 结合使用，以实现更灵活的上下文设置。
+
+**AnnotationConfigApplicationContext**
+
+image::/images/spring/image-20200428164305003.png[AnnotationConfigApplicationContext]
+
+独立的应用程序上下文，接受组件类作为输入，特别是 `@Configuration` 注释类，还接受普通的 `@component` 类型和使用 `javax.inject` 注释的JSR-330兼容类。
+
+允许使用 `register(Class…)` 逐个注册类，以及使用 `scan(String…)` 扫描类路径。
+
+如果有多个 `@Configuration` 类，则在后面的类中定义的 `@Bean` 方法将覆盖在前面的类中定义的方法。这可以用来通过额外的 `@Configuration` 类重写某些bean定义。
+
+有关用法示例，请参见 `@Configuration` 的javadoc。
+
+<完>

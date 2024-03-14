@@ -1,0 +1,193 @@
+---
+title: Spring Cloud简介
+slug: springcloud-intro
+img: /images/thumbnail/attachment/20190615/a1fa829a967c4a6a92738584e098f658.png
+categories:
+  - Spring
+tags:
+  - springcloud
+  - 微服务
+  - microservice
+description: >-
+  Spring Cloud是一套构建于Spring
+  boot之上的微服务框架，它整合了大部分微服务实施所需的组件，并提供了默认实现，使得复杂的微服务实施变得简单化。Spring
+  Cloud是一整套微服务解决方案，相比于dubbo等框架而言，不仅出生于Spring大家族，而且更新频繁，发展特别快，社区也很活跃，对于实施微服务的小型公司而言，使用Spring
+  Cloud不仅能够快速实施微服务，而且其已经考虑微服务的各个方面，从而极大的节约了开发成本，提高了生产力。
+date: 2018-07-20 17:13:10
+updated: 2019-06-15 08:42:07
+---
+
+= Spring Cloud简介
+:author: belonk.com
+:date: 2019-06-15
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring cloud,spring boot,微服务
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: springcloud,微服务,microservice
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+== 简介
+ 
+微服务的实施，涉及的内容非常多，包括服务治理、配置中心、服务网关、服务熔断、分布式事务、集群、消息总线等等，各个部分开源的产品也非常多：
+
+* 服务治理：阿里的Dubbo以及当当维护的DubboX、Netflix的Eureka、Apache的Consul等；
+* 配置中心：Spring Cloud的Config、百度的Disconf、Netflix的Archaius、淘宝的Diamond等；
+* 服务跟踪：Spring Cloud的Sleuth、Twitter的Zipkin等
+* 服务网关：Netflix的Zuul等
+* ……
+
+开源组件如此众多，在实施微服务时，势必带来技术选型方面的困扰，不仅要了解各个技术的作用、易用性、优缺点，还需要知道其他组件对其支持程度，以及组件之间的依赖、协作关系，因此，很多公司在一开始就心生畏惧甚至直接放弃。
+
+为了解决上述问题，Spring Cloud应运而生。它不单独解决微服务某一方面的问题，而是提出了微服务一整套解决方案。Spring Cloud整合了很多开源的微服务产品，针对微服务某一方面的问题，它提供了默认的实现，从而极大的简化了微服务实施的技术难度，使得技术人员不必再关注技术选型方面的问题，大大节约了成本。
+
+简言之，**Spring Cloud是一套构建于Spring boot之上的微服务框架，它整合了大部分微服务实施所需的组件，并提供了默认实现，使得复杂的微服务实施变得简单化**。官网地址： http://projects.spring.io/spring-cloud/[http://projects.spring.io/spring-cloud/]
+
+
+== 特点
+ 
+Spring Cloud专注于为典型用例提供良好的开箱即用体验，并为其他用户提供可扩展性机制。
+
+* 分布式/版本化配置
+* 服务注册和发现
+* 路由
+* 服务间调用
+* 负载均衡
+* 断路器
+* 分布式消息
+
+ 
+
+== 组件
+ 
+Spring Cloud整合了微服务架构所需的大部分开源组件，包括：
+
+[horizontal]
+Spring Cloud Config:: 即配置管理工具，由git(也支持svn、本地文件系统等)存储库支持的集中式外部配置管理，实现了配置的外部化存储。
+
+Spring Cloud Netflix:: 核心组件，整合了Netflix OSS开源的组件，包括许多子组件：
+
+* Eureka：服务治理组件，包括服务注册、发现，对Netflix的Eureka进行整合；
+* Hystrix：容错管理组件，断路器，对Netflix的Hystrix进行了整合；
+* Ribbon：客户端负载均衡，也是Netflix的开源组件，Spring Cloud进行了整合；
+* Feign：基于Ribbon和Hystrix的声明式服务调用，整合Netflix的Feign；
+* Zuul：网关组件，智能路由、访问过滤，整合Netflix的Zuul；
+* Archaius：外部化配置组件，整合netflix的Archaius；
+
+
+Spring Cloud Bus:: 轻量级消息总线，用于集群间通信，传播集群间状态改变，例如动态更新配置。
+
+Cloud Foundry:: 将您的应用程序与Pivotal Cloud Foundry集成。提供服务发现实现，还可以轻松实现受SSO和OAuth2保护的资源。
+
+Spring Cloud Open Service Broker:: 提供构建实现Open Service Broker API的服务代理的起点。
+
+Spring Cloud Cluster:: 基于Zookeeper，Redis，Hazelcast，Consul的选举和通用状态模式的抽象实现。
+
+Spring Cloud Consul:: Hashicorp Consul的服务发现和配置管理。
+
+Spring Cloud Security:: 为Zuul代理中的负载平衡OAuth2 rest客户端和身份验证头中继提供支持。
+
+Spring Cloud Sleuth:: Spring Cloud应用程序的分布式跟踪，兼容Zipkin，HTrace和基于日志（例如ELK）的跟踪。
+
+Spring Cloud Data Flow:: 组合微服务应用程序的本地云编排服务，提供了易用的DSL、拖放式GUI和REST-API共同简化了基于数据管道的微服务整体编排。
+
+Spring Cloud Stream:: 轻量级事件驱动的微服务框架，可快速构建可连接到外部系统的应用程序。采用声明式模型，在Spring Boot应用程序之间使用Apache Kafka或RabbitMQ发送和接收消息。
+
+Spring Cloud Stream App Starters:: 基于Spring Boot的Spring应用程序集成，可提供与外部系统的集成。
+
+Spring Cloud Task:: 一种短命的微服务框架，用于快速构建执行有限数据处理的应用程序。用于向Spring Boot应用程序添加功能和非功能功能的简单声明。
+
+Spring Cloud Task App Starters:: Spring Cloud Task App Starters是Spring Boot应用程序，可能是任何进程，包括不能永久运行的Spring Batch作业，它们在有限的数据处理期后结束/停止。
+
+Spring Cloud Zookeeper:: 使用Apache Zookeeper进行服务发现和配置管理。
+
+适用于Amazon Web Services的Spring Cloud:: 与托管的Amazon Web Services轻松集成。它提供了一种使用众所周知的Spring习语和API（如消息传递或缓存API）与AWS提供的服务进行交互的便捷方式。开发人员可以围绕托管服务构建应用程序，而无需关心基础结构或维护。
+
+Spring Cloud Connectors:: 使各种平台中的PaaS应用程序可以轻松连接到数据库和消息代理（该项目以前称为“Spring Cloud”）等后端服务。
+
+Spring Cloud CLI:: Spring Boot CLI插件，用于在Groovy中快速创建Spring Cloud组件应用程序
+
+Spring Cloud Gateway:: 一款基于Project Reactor的智能可编程路由器。
+
+Spring Cloud OpenFeign:: 通过自动配置和Spring环境以及其他Spring编程模型习惯用法提供Spring Boot应用程序的集成。
+
+Spring Cloud Function:: 通过函数促进业务逻辑的实现。它支持无服务器提供商之间的统一编程模型，以及独立运行（本地或PaaS）的能力。
+
+
+== 版本说明
+ 
+Spring Cloud是一个拥有很多子项目的大型综合项目，每个子项目各自维护自己的版本号，而为了不与其子项目版本号混淆，Spring Cloud自身的版本号没有使用1.x.x这样的版本号，而是使用版本命名，例如Angel.SR6、Edgware.SR3等。这些名称都是伦敦地铁站的名称，并且按照字母顺序排列。
+
+对于Spring Cloud每一发布个版本，基于当前版本要发布下一个新版本，则使用Service Release命名，并且跟一个X数字，表示版本号，简写为SRX，例如前边提到的Edgware.SR3，其含义为：当前Spring Cloud的版本Edgware的第3个Release版本。
+
+简单而言，Spring Cloud自身维护了一个大的版本名称，管理了其诸多子项目的版本号；随着子项目的版本更新，Spring Cloud会整理其项目的版本，然后发布新的版本。
+
+最新版本：
+
+
+|====
+|Component|Edgware.SR4|Finchley.RELEASE|Finchley.BUILD-SNAPSHOT
+
+|spring-cloud-aws|1.2.3.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-bus|1.3.3.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-cli|1.4.1.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-commons|1.3.4.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-contract|1.2.5.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-config|1.4.4.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-netflix|1.4.5.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-security|1.2.3.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-cloudfoundry|1.1.2.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-consul|1.3.4.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-sleuth|1.3.4.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-stream|Ditmars.SR4|Elmhurst.RELEASE|Elmhurst.BUILD-SNAPSHOT
+
+|spring-cloud-zookeeper|1.2.2.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-boot|1.5.14.RELEASE|2.0.2.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-task|1.2.3.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-vault|1.1.1.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-gateway|1.0.2.RELEASE|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-openfeign|&nbsp;|2.0.0.RELEASE|2.0.1.BUILD-SNAPSHOT
+
+|spring-cloud-function|1.0.0.RELEASE|1.0.0.RELEASE|1.0.1.BUILD-SNAPSHOT
+
+|====
+ 
+如上表所示，Spring Cloud版本下管理了子组件的RELEASE版本。Finchley版本Spring Boot版本已经升级到2.0.x了，不再支持1.5.x；与之相反，Edgware和Dalston版本仅能使用Spring Boot 1.5.x。
+
+
+== 与Spring Boot的关系
+ 
+Spring Cloud以Spring Boot为基础，来构建微服务体系，所有的微服务工程都必须用Spring Boot框架来开发；而Spring Boot本身也是对Spring的再次封装，旨在进行快速开发应用，所以也非常适合来构建微服务应用，但是其本身是可以独立使用的。
+
+所以说，Spring Cloud必须依赖Spring Boot，可以说后者是Spring Cloud的基础，而Spring Boot可以单独用于开发应用，而并不依赖Spring Cloud。
+
+== 总结
+ 
+Spring Cloud是一整套微服务解决方案，相比于dubbo等框架而言，不仅出生于Spring大家族，而且更新频繁，发展特别快，社区也很活跃，对于实施微服务的小型公司而言，使用Spring Cloud不仅能够快速实施微服务，而且其已经考虑微服务的各个方面，从而极大的节约了开发成本，提高了生产力。

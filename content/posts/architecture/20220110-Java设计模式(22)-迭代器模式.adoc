@@ -1,0 +1,303 @@
+---
+title: Java设计模式(22)-迭代器模式
+slug: java-iterator-pattern
+date: 2022/01/11
+updated: 2022/01/11
+img:
+categories:
+  - 架构设计
+tags:
+  - 设计模式
+  - 迭代器模式
+description: 生活中，存在这样的场景：需要逐个遍历一堆对象，然后判断对象是否符合要求，做出相应的处理。例如，乘火车时，检票员站在门口挨个检票，没有买票的人不能乘车。类似的场景还有很多，比如乘地铁、乘公交、从书架上找书、食堂排队打饭等等…… 我们把需要逐个遍历的这一堆对象称为对象集合，把挨个遍历的过程称为迭代。迭代时，如果能将迭代过程从对象集合中抽取出来单独实现，让对象集合只负责管理自身状态，而不用负担迭代的任务，这就减轻了对象集合的职责，这就是今天要说的——迭代器模式。
+---
+
+= Java设计模式(22)-迭代器模式
+:key_word: 设计模式,迭代器模式
+:author: belonk.com
+:email: belonk@126.com
+:date: 2022/01/11
+:revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:imagesdir:
+:tabsize: 4
+
+生活中，存在这样的场景：需要逐个遍历一堆对象，然后判断对象是否符合要求，做出相应的处理。例如，乘火车时，检票员站在门口挨个检票，没有买票的人不能乘车。类似的场景还有很多，比如乘地铁、乘公交、从书架上找书、食堂排队打饭等等……
+
+我们把需要逐个遍历的这一堆对象称为 *对象集合*，把挨个遍历的过程称为 *迭代*。迭代时，如果能将迭代过程从对象集合中抽取出来单独实现，让对象集合只负责管理自身状态，而不用负担迭代的任务，这就减轻了对象集合的职责，这就是今天要说的——迭代器模式。
+
+image::/images/attachment/designpattern/iterator-view.png[width="600"]
+
+也许你会想，对象集合不就是 `List` 吗，直接使用 "增强for循环" 遍历不就完成迭代过程了吗？说的没错！迭代器模式在很多面向对象的语言中都已经内置了，比如 `Iterator`，所以我们大多数情况下不会再自己实现它，但是学习模式本身的原理还是非常有必要。
+
+== 概念
+
+DP对迭代器模式的定义如下：迭代器模式提供一种方法顺序访问一个聚合对象中的各个元素，而又不需要暴露该对象的内部表示。
+
+这个定义还是比较抽象，简单而言：迭代器模式，提倡将聚合对象（就是前边提的 "对象集合"）的迭代逻辑抽取成一个 *迭代器*，聚合对象本身只需要提供一个返回迭代器的方法即可，而不需要关注迭代逻辑。客户端拿到对象集合的迭代器，就可以遍历了。
+
+这种由客户端来决定如何遍历的方式，被称为 *外部(主动)迭代器*；还有一种迭代方式，客户端调用一个方法告诉聚合对象它的每一个元素该如何处理，然后由聚合对象内部负责迭代，这被称为 *内部(被动)迭代器*。Java 两种都支持，比如外部用增强for循环遍历 `List`，就是外部迭代器，而调用 `List` 的 `forEach(Consumer<? super T> action)` 方法，或者调用 `Iterator` 的 `forEachRemaining(Consumer<? super E> action)` 方法就属于内部迭代器。
+
+[NOTE]
+====
+聚合对象中的元素并不一定是有序存储的，比如 `Set`。此外，迭代器除了从头开始遍历聚合对象，还可以实现从尾部开始遍历，这取决于具体实现。比如，Java 提供了 `ListIterator` 支持双向迭代，它继承自 `Iterator`。
+====
+
+== 结构
+
+迭代器模式的结构如下图所示：
+
+image::/images/attachment/designpattern/iterator-class.png[width="600"]
+
+这里我使用的Java的泛型方式来定义的类，标准的迭代器模式显然没有泛型。从图可知，迭代器模式一共分为四个角色：
+
+. Aggregate<T>: 抽象聚合对象，定义了通用的接口方法，通常是一个对象集合，支持存储多个对象，并支持创建一个迭代器。如 Java的 `List`、`Set`、`Coleection` 等接口
+. Iterator<T>: 抽象迭代器，定义了迭代的接口方法，如 `next` 迭代下一个对象，`hasNext()` 返回是否还有下一个对象等等
+. ConcreteIterator<T>: 具体迭代器实现，一个 `Aggregate` 可能存在多个迭代器实现
+. ConcreteAggregate<T>: 具体聚合对象，如 Java中的 `ArrayList`，`HashSet` 等等
+
+优点：
+
+. 支持以不同的方式遍历聚合对象，抽象迭代器可以具有多个实现，符合开闭原则
+. 将迭代逻辑独立出来，减少了聚合对象的职责，符合单一职责原则
+. 每个迭代器都有自身的状态，因此可以同时遍历同一个聚合对象
+
+缺点： 独立出来的迭代器，增加了一定的复杂性，有时候可能直接遍历聚合对象更简单
+
+== 适用场景
+
+迭代器模式适合以下场景：
+
+. 需要遍历复杂的聚合对象，又不想暴露它的具体细节
+. 希望抽取公共遍历逻辑，减少重复代码
+. 需要支持对聚合对象的多种迭代方式
+
+== 自定义迭代器
+
+现在，我们先抛开Java自身的迭代器，自己实现迭代器模式，这里简单实现一个容量固定的基于数组的聚合对象，支持增加和删除操作，支持迭代器遍历。
+
+1、定义通用迭代器接口：
+
+[source,java]
+----
+public interface MyIterator<T> {
+	T next(); // <1>
+	boolean hasNext(); // <2>
+	boolean first(); // <3>
+	boolean last(); // <4>
+}
+----
+
+<1> 返回下一个元素，即：当前迭代的元素
+<2> 是否还有下一个元素
+<3> 正在遍历的是否是第一个元素
+<4> 正在遍历的是否是最后一个元素
+
+2、定义抽象聚合对象接口：
+
+[source,java]
+----
+public interface MyIterable<T> {
+	MyIterator<T> iterator(); // <1>
+}
+----
+
+<1> 创建并返回迭代器
+
+3、定义具体聚合对象，迭代器在内部实现
+
+这里简单基于数组实现一个容器，它的容量是固定的，代码如下：
+
+[source,java]
+----
+public class Aggregate<T> implements MyIterable<T> {
+	private final int maxCapacity;
+	private final Object[] elements;
+	private int size;
+	public Aggregate(int capacity) {
+		this.maxCapacity = capacity;
+		elements = new Object[capacity];
+	}
+	public int size() { // <1>
+		return size;
+	}
+	public T add(T item) { // <2>
+		if (size > maxCapacity - 1) {
+			throw new IllegalStateException("Capacity overflow!");
+		}
+		elements[size++] = item;
+		return item;
+	}
+	public T remove(int index) { // <3>
+		if (index < 0 || index > size - 1) {
+			throw new ArrayIndexOutOfBoundsException();
+		}
+		T removed = (T) elements[index];
+		if (index < size - 1) {
+			System.arraycopy(elements, index + 1, elements, index, size - index - 1);
+		}
+		elements[--size] = null;
+		return removed;
+	}
+	@Override
+	public MyIterator<T> iterator() { // <4>
+		return new MyIteratorImpl<T>();
+	}
+	private class MyIteratorImpl<T> implements MyIterator<T> { // <5>
+		private int cursor; // <6>
+		@Override
+		public T next() {
+			if (!hasNext()) {
+				throw new NoSuchElementException();
+			}
+			return (T) elements[cursor++];
+		}
+		@Override
+		public boolean hasNext() {
+			return cursor != size;
+		}
+		@Override
+		public boolean first() {
+			return cursor == 1;
+		}
+		@Override
+		public boolean last() {
+			return cursor == size;
+		}
+	}
+}
+----
+
+<1> 返回容器中元素的长度
+<2> 向容器添加一个元素
+<3> 从容器中删除一个元素
+<4> 创建迭代器
+<5> 实现迭代器，可以从外部迭代这个容器
+<6> 迭代器中的游标，记录了当前的迭代位置
+
+`Aggregate` 就是一个最简单的类似 `ArrayList` 的实现，`add`、`remove` 方法分别对容器中的元素进行添加和删除操作，最后通过内部类的方式自定义实现了一个迭代器。
+
+4、客户端使用迭代器对容器进行迭代
+
+[source,java]
+----
+public class IteratorClient {
+	public static void main(String[] args) {
+		int size = 10;
+		Aggregate<Integer> aggregate = new Aggregate<>(size); // <1>
+		for (int i = 0; i < size; i++) {
+			aggregate.add(i);
+		}
+		aggregate.remove(size - 1); // <2>
+		aggregate.remove(size - 2);
+		System.out.println("size: " + aggregate.size());
+		MyIterator<Integer> iterator = aggregate.iterator(); // <3>
+		while (iterator.hasNext()) {
+			System.out.println("======");
+			Integer item = iterator.next();
+			System.out.println("next: " + item);
+			System.out.println("first: " + iterator.first());
+			System.out.println("last: " + iterator.last());
+			System.out.println("hasNext: " + iterator.hasNext());
+		}
+	}
+}
+----
+
+<1> 创建容器，向其中添加10个元素
+<2> 删除最后两个元素
+<3> 获取到迭代器，然后对容器进行遍历
+
+一个简单的迭代器模式实现就完成了。但是，Java已经提供了迭代器，而且Java集合框架中大多数集合类都实现了迭代器模式，所以我们一般不会再自己实现，看看Java的迭代器是如何工作的。
+
+== Java中的迭代器
+
+早在Jdk1.0，Java就提供了用于迭代的 `Enumeration` 接口，其定义如下：
+
+[source,java]
+----
+public interface Enumeration<E> {
+    boolean hasMoreElements();
+    E nextElement();
+}
+----
+
+这其实就是一个迭代器，不过由于它的方法名称太长了，后来JDK1.2 添加了 `Iterator` 来替代它：
+
+[source,java]
+----
+public interface Iterator<E> {
+    boolean hasNext();
+    E next();
+    default void remove() {
+        throw new UnsupportedOperationException("remove");
+    }
+    default void forEachRemaining(Consumer<? super E> action) {
+        Objects.requireNonNull(action);
+        while (hasNext())
+            action.accept(next());
+    }
+}
+----
+
+该接口除了实现迭代的功能外，还定义了删除方法。不过需要注意，迭代器遍历时，只能自身进行添加、删除操作，而任何其他线程对集合进行了修改，到会导致 https://docs.oracle.com/javase/8/docs/api/java/util/ConcurrentModificationException.html[`ConcurrentModificationException`]。
+
+另外，前边也提到，Java还提供了 `ListIterator` 来支持双向遍历，它是 `Iterator` 的子接口，主要用于遍历 `List` 结构。
+
+以陈旧的 `Vector` 为例，看看如何遍历它：
+
+[source,java]
+----
+public class EnumerationDemo {
+	public static void main(String[] args) {
+		int size = 10;
+		Vector<Integer> ints = new Vector<>(); // <1>
+		for (int i = 0; i < size; i++) {
+			ints.add(i);
+		}
+		System.out.println("size: " + ints.size());
+		for (Integer anInt : ints) { // <2>
+			System.out.println(anInt);
+		}
+		System.out.println("Use Enumeration");
+		Enumeration<Integer> elements = ints.elements(); // <3>
+		while (elements.hasMoreElements()) {
+			System.out.println(elements.nextElement());
+		}
+		System.out.println("Use Iterator");
+		Iterator<Integer> iterator = ints.iterator(); // <4>
+		while (iterator.hasNext()) {
+			System.out.println(iterator.next());
+		}
+		System.out.println("Use listIterator");
+		ListIterator<Integer> listIterator = ints.listIterator(); // <5>
+		while (listIterator.hasNext()) {
+			System.out.println(listIterator.next());
+		}
+		while (listIterator.hasPrevious()) {
+			System.out.println(listIterator.previous());
+		}
+	}
+}
+----
+
+<1> 创建Vector并存储数据
+<2> 增强for循环本身就是使用的迭代器来遍历，任何实现了Iterable接口的对象都可以被增强for循环遍历
+<3> 使用 `Enumeration` 来遍历
+<4> 使用 `Iterator` 遍历
+<5> 使用 `ListIterator` 遍历，默认情况下，`listIterator()` 返回的 `ListIterator` 初始游标为0，只能向后遍历，然后才能向前遍历
+
+== 总结
+
+迭代器模式是一种用于非常广泛的设计模式，在大多面向对象的语言中都内置了。它主张将聚合对象的迭代逻辑抽取出来，形成迭代器，减少聚合对象的职责，使得其能关注自身功能，而迭代器也可以很方便的扩展。
+
+Java中内置了迭代器，而且集合框架中大多都实现了它，通常我们不需要再去自定义实现迭代器。
+
+本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/iterator[github]

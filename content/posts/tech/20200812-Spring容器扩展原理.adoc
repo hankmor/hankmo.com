@@ -1,0 +1,452 @@
+---
+title: Spring扩展原理
+slug: spring-extension
+img:
+categories:
+  - Spring
+tags:
+  - Spring
+description: Spring Bean后置处理器用于bean创建对象初始化前后进行拦截工作，因此它是spring容器扩展必不可少的组件。
+date: 2020-08-12 00:00:00
+updated: 2020-05-13 00:00:00
+---
+
+[[spring-ext]]
+= Spring扩展原理
+:key_word: Spring,BeanFactory,BeanPostProcessor,BeanFactoryPostProcessor,源码,原理
+:Author: belonk.com belonk@126.com
+:Date: 2020-05-13
+:Revision: 1.0
+:website: https://belonk.com
+:toc:
+:toclevels: 4
+:toc-title: 目录
+:icons: font
+:numbered:
+:doctype: article
+:encoding: utf-8
+:tabsize: 4
+:imagesdir:
+
+Spring的扩展点很多，本文讨论Spring的 `BeanPostProcessor`、`BeanFactoryPostProcessor`、`ApplicationListener` 和 `SmartInitializingSingleton` 这四个扩展的基础类或接口。  
+
+[[bean-post-processors]]
+== Bean后置处理器
+
+bean后置处理器用于bean创建对象初始化前后进行拦截工作，因此它是spring容器扩展必不可少的组件。
+
+image::/images/spring/class-beanpostprocessor.png[后置处理器接口设计]
+
+[[BeanPostProcessor]]
+=== BeanPostProcessor
+
+允许自定义修改新bean实例的工厂钩子，例如，检查标记接口或用代理包装bean。
+
+通常，通过标记接口等填充bean的后处理器将在初始化前实现后处理，而使用代理包装bean的后处理器通常在初始化后实现后处理。
+
+**注册表**
+
+`ApplicationContext` 可以在其bean定义中自动检测 `BeanPostProcessor` bean，并将这些后处理器应用于随后创建的任何bean。一个普通的bean factory允许对后处理器进行编程注册，将它们应用于通过bean工厂创建的所有bean。
+
+**顺序**
+
+在 `ApplicationContext` 中自动检测到的 `BeanPostProcessor` bean将根据 `org.springframework.core.PriorityOrdered` 和 `org.springframework.core.ordered` 语义进行排序。相反，以编程方式向 `BeanFactory` 注册的 `BeanPostProcessor` bean将按注册顺序应用；通过实现 `PriorityOrdered` 或 `Ordered` 接口表示的任何排序语义对于以编程方式注册的后处理器都将被忽略。此外，`BeanPostProcessor` bean不考虑 `@Order` 注解。
+
+[source,java]
+----
+public interface BeanPostProcessor {
+   /**
+    * 在传入的bean属性设置之后、初始化之前调用。在任何bean初始化回调（如initializengbean的
+    * afterPropertiesSet或自定义init方法）之前，将此BeanPostProcessor应用于给定的新bean实例。
+    * bean已经填充了属性值。返回的bean实例可以是原始实例的包装器。
+    * 默认实现按原样返回给定的bean。
+    */
+   @Nullable
+   default Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+      return bean;
+   }
+
+   /**
+    * 在传入的bean初始化完成之后调用
+    * 在任何bean初始化回调（如initializengbean的afterPropertiesSet或自定义init方法）之后，
+    * 将此BeanPostProcessor应用于给定的新bean实例。bean已经填充了属性值。
+    * 返回的bean实例可以是原始实例的包装器。
+    * 对于FactoryBean，将为FactoryBean实例和由FactoryBean创建的对象（从Spring 2.0开始）调用此回调。
+    * 后处理器可以通过FactoryBean检查的相应bean实例来决定是应用于FactoryBean还是创建的对象，
+    * 或者两者都应用。此回调也将在InstantiationAwareBeanPostProcessor.postProcessBeforeInstantiation
+    * 方法触发短路后调用，与所有其他BeanPostProcessor回调不同。 默认实现按原样返回给定的bean。
+    */
+   @Nullable
+   default Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+      return bean;
+   }
+}
+----
+
+[[InstantiationAwareBeanPostProcessor]]
+=== InstantiationAwareBeanPostProcessor
+
+`BeanPostProcessor` 在Bean创建完成后，初始化前后执行; 而 `InstantiationAwareBeanPostProcessor` 在Bean创建前后执行
+
+`BeanPostProcessor` 的子接口，它在实例化前添加回调，在实例化后设置显式属性或进行自动注入之前添加回调。通常用于禁止特定目标bean的默认实例化，例如创建具有特殊目标源（池目标、延迟初始化目标等）的代理，或实现其他注入策略，如字段注入。
+
+注：本接口为专用接口，主要供框架内部使用。建议尽可能实现纯 `BeanPostProcessor` 接口，或者从 `InstantiationAwareBeanPostProcessorAdapter` 派生，以便屏蔽对此接口的扩展。
+
+[source,java]
+----
+public interface InstantiationAwareBeanPostProcessor extends BeanPostProcessor {
+   // 在目标bean被实例化之前应用这个BeanPostProcessor。返回的bean对象可以是要使用的代理，而不是目标bean，
+   // 从而有效地抑制了目标bean的默认实例化。如果此方法返回非空对象，则bean创建过程将短路。
+   // 唯一应用的进一步处理是来自配置的BeanPostProcessors的postProcessAfterInitialization回调。
+   // 这个回调将应用于bean定义及其bean类，以及工厂方法定义，在这种情况下，返回的bean类型将在这里传递。
+   // 后置处理器可以实现扩展的SmartInstantiationAwareBeanPostProcessor接口，以便预测它们将在这里返回
+   // 的bean对象的类型。默认实现返回空值。
+   @Nullable
+   default Object postProcessBeforeInstantiation(Class<?> beanClass, String beanName) throws BeansException {
+      return null;
+   }
+
+   // 在bean实例化之后，通过构造函数或工厂方法执行操作，但在Spring属性填充（从显式属性或自动连接）发生之前执行
+   // 操作。这是在Spring的自动注入启动之前，对给定bean实例执行自定义字段注入的理想回调。默认实现返回true。
+   // 返回值：如果要设置属性返回true，一般都是true；跳过属性设置则返回false，同时会终止后续
+   // InstantiationAwareBeanPostProcessor调用
+   default boolean postProcessAfterInstantiation(Object bean, String beanName) throws BeansException {
+      return true;
+   }
+
+   // 在工厂将给定的属性值应用于给定bean之前对其进行后处理，而不需要任何属性描述符。如果实现提供自定义的
+   // 后处理属性值实现，则应返回null（默认值），否则返回pv。在这个接口的未来版本中（去掉后处理属性值），
+   // 默认实现将直接返回给定的pv。
+   @Nullable
+   default PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName)
+         throws BeansException {
+
+      return null;
+   }
+}
+----
+
+[[MergedBeanDefinitionPostProcessor]]
+=== MergedBeanDefinitionPostProcessor
+
+运行时合并bean定义的后处理器回调接口。`BeanPostProcessor` 实现可以实现这个子接口，以便对Spring `BeanFactory` 用于创建bean实例的合并bean定义（原始bean定义的已处理副本）进行后期处理。 例如，`postProcessMergedBeanDefinition` 方法可以内省bean定义，以便在后处理bean的实际实例之前准备一些缓存的元数据。还允许修改bean定义，但仅限于实际用于并发修改的定义属性。实际上，这只适用于在 `RootBeanDefinition` 本身上定义的操作，而不适用于其基类的属性。
+
+[source,java]
+----
+public interface MergedBeanDefinitionPostProcessor extends BeanPostProcessor {
+   // 后处理指定bean的给定合并bean定义。
+   void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class<?> beanType, String beanName);
+
+   // 通知指定名称的bean定义已重置，并且此后处理器应清除受影响bean的任何元数据。
+   default void resetBeanDefinition(String beanName) {
+   }
+}
+----
+
+[[DestructionAwareBeanPostProcessor]]
+=== DestructionAwareBeanPostProcessor
+
+`BeanPostProcessor` 的子接口，用于添加销毁前回调。 典型的用法是调用特定bean类型的自定义销毁回调，匹配相应的初始化回调。
+
+[source,java]
+----
+public interface DestructionAwareBeanPostProcessor extends BeanPostProcessor {
+   // 将此BeanPostProcessor应用于给定的bean实例，然后再对其进行销毁，例如调用自定义销毁回调。
+   // 与DisposableBean的destroy和自定义destroy方法类似，此回调将仅适用于容器完全管理其生命周期的bean。
+   // 这通常是单例和作用域bean的情况。
+   void postProcessBeforeDestruction(Object bean, String beanName) throws BeansException;
+
+   // 确定给定的bean实例是否需要此后处理器销毁。 默认实现返回true。如果DestructionAwareBeanPostProcessor
+   // 的pre-5实现没有提供此方法的具体实现，Spring也会默认为true。
+   default boolean requiresDestruction(Object bean) {
+      return true;
+   }
+}
+----
+
+[[BeanFactoryPostProcessor]]
+== BeanFactoryPostProcessor
+
+`BeanFactory` 的后置处理器；在 `BeanFactory` 标准初始化之后调用，来定制和修改 `BeanFactory` 的内容；所有的bean定义已经保存加载到 `BeanFactory` ，但是bean的实例还未创建。
+
+image::/images/spring/class-beanfactorypostprocessor.png[BeanFactoryPostProcessor]
+
+工厂钩子，允许自定义修改应用程序上下文的bean定义，调整上下文的底层bean工厂的bean属性值。 对于针对系统管理员的自定义配置文件非常有用，这些文件会覆盖在应用程序上下文中配置的bean属性。有关解决此类配置需求的开箱即用解决方案，请参阅 `PropertyResourceFigurer` 及其具体实现。
+
+`BeanFactoryPostProcessor` 可以与bean定义交互并修改它们，但不能与bean实例交互。这样做可能会导致过早的bean实例化，违反容器并导致意外的副作用。如果需要bean实例交互，请考虑实现 `BeanPostProcessor`。
+
+**注册表**
+
+`ApplicationContext` 在其bean定义中自动检测 `BeanFactoryPostProcessor` bean，并在创建任何其他bean之前应用它们。`BeanFactoryPostProcessor` 也可以用 `ConfigurableApplicationContext` 以编程方式注册。
+
+**顺序**
+
+在 `ApplicationContext` 中自动检测到的 `BeanFactoryPostProcessor` bean将根据 `org.springframework.core.PriorityOrdered` 和 `org.springframework.core.Ordered` 语义进行排序( `PriorityOrdered` 优先于 `Ordered` )。相反，以编程方式向 `ConfigurableApplicationContext` 注册的 `BeanFactoryPostProcessor` bean将按注册顺序应用；通过实现 `PriorityOrdered` 或 `Ordered` 接口表示的任何排序语义对于以编程方式注册的后处理程序都将被忽略。此外，`BeanFactoryPostProcessor` bean不考虑 `@Order` 注解。
+
+**原理**
+
+- IoC容器创建对象
+- `invokeBeanFactoryPostProcessors(beanFactory)`; ​ 如何找到所有的 `BeanFactoryPostProcessor` 并执行他们的方法； 
+
+. 直接在 `BeanFactory` 中找到所有类型是 `BeanFactoryPostProcessor` 的组件，并执行他们的方法 ​ 
+. 在初始化创建其他组件前面执行
+
+[[BeanDefinitionRegistryPostProcessor]]
+=== BeanDefinitionRegistryPostProcessor
+
+在所有bean定义信息将要被加载，bean实例还未创建之前回调；优先于 `BeanFactoryPostProcessor` 执行；利用 `BeanDefinitionRegistryPostProcessor` 给容器中再额外添加一些组件。
+
+image::/images/spring/class-beandefinitionregistrypostprocessor.png[]
+
+对标准 `BeanFactoryPostProcessor` 的扩展，允许在常规 `BeanFactoryPostProcessor` 检测开始之前注册更多的bean定义。具体来说，`BeanDefinitionRegistryPostProcessor` 可以注册更多的bean定义，这些定义反过来定义 `BeanFactoryPostProcessor` 实例。
+
+[source,java]
+----
+public interface BeanDefinitionRegistryPostProcessor extends BeanFactoryPostProcessor {
+   // 在标准初始化之后修改应用程序上下文的内部bean定义注册表。所有常规bean定义都将被加载，
+   // 但是还没有bean被实例化。这允许在下一个后处理阶段开始之前添加更多的bean定义。
+   void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException;
+}
+----
+
+**原理**
+
+* Ioc创建对象 ​- `refresh()` - `invokeBeanFactoryPostProcessors(beanFactory)` * 从容器中获取到所有的 `BeanDefinitionRegistryPostProcessor` 组件。
+* 依次触发所有的 `postProcessBeanDefinitionRegistry()` 方法
+* 然后触发重写的 `postProcessBeanFactory()` 方法；
+* 再从容器中找到 `BeanFactoryPostProcessor` 组件；然后依次触发 `postProcessBeanFactory()` 方法
+
+[[ApplicationListener]]
+== ApplicationListener
+
+监听容器中发布的事件。基于观察者设计模式的标准 `java.util.EventListener` 接口。 从Spring3.0开始，`ApplicationListener` 可以广泛地声明它感兴趣的事件类型。当事件注册到 `ApplicationContext` 时，将相应地过滤事件，并只为匹配的事件对象调用侦听器。
+
+[source,java]
+----
+@FunctionalInterface
+public interface ApplicationListener<E extends ApplicationEvent> extends EventListener {
+   // 处理事件
+   void onApplicationEvent(E event);
+}
+----
+
+**事件**
+
+Spring中，事件都必须继承 `ApplicationEvent` 类，它继承自标准Java事件对象 `EventObject` 。内置的事件对象如下图所示：
+
+image::/images/spring/class-applicationevent.png[事件对象]
+
+**@EventListener注解**
+
+标记在方法上，用来监听事件，监听后触发方法。
+
+原理：使用 `EventListenerMethodProcessor` 处理器来解析方法上的 `@EventListener`。
+
+[source,java]
+----
+@EventListener(classes = {ApplicationEvent.class})
+public void listenEvent(ApplicationEvent applicationEvent) {
+	System.out.println("MonkeyService -> listenEvent");
+	System.out.println("    > received event : " + applicationEvent);
+}
+----
+
+如果容器发布了事件，则 `@EventListener` 标注的方法会收到事件并进行处理。
+
+发布事件的代码：
+
+[source,java]
+----
+applicationContext.publishEvent(Object event);
+----
+
+**事件原理**
+
+// TODO 跟踪源码，绘制时序图
+
+容器的事件由 `ApplicationContext` 发布，事件的核心类：
+`ContextStartedEvent`、`ContextStoppedEvent`、 `ContextRefreshedEvent`、`ContextClosedEvent`：
+
+* `ContextStartedEvent` 表示容器已经启动的事件
+* `ContextStoppedEvent` 表示容器已经停止的事件
+* `ContextRefreshedEvent` 表示容器已经初始化或者已经刷新的事件
+* `ContextClosedEvent` 表示容器关闭时触发的事件
+
+`ContextRefreshedEvent` 事件，主要的流程为：
+
+. 容器创建时调用 `refresh()` 方法进行容器的初始化
+. `refresh()` 方法最后执行 `finishRefresh()` 刷新完成会发布 `ContextRefreshedEvent` 事件，代码如下：
+
+[source,java]
+----
+protected void finishRefresh() {
+    this.clearResourceCaches();
+    this.initLifecycleProcessor();
+    this.getLifecycleProcessor().onRefresh();
+    this.publishEvent((ApplicationEvent)(new ContextRefreshedEvent(this))); // <1>
+    LiveBeansView.registerApplicationContext(this);
+}
+----
+<1> 发布 `ContextRefreshedEvent` 事件
+
+容器关闭会发布 `ContextClosedEvent` 事件，`AbstractApplicationContext` 的 `doClose()` 如下：
+
+[source,java]
+----
+protected void doClose() {
+	if (this.active.get() && this.closed.compareAndSet(false, true)) {
+		if (logger.isDebugEnabled()) {
+			logger.debug("Closing " + this);
+		}
+		LiveBeansView.unregisterApplicationContext(this);
+		try {
+			// 发布容器关闭事件
+			publishEvent(new ContextClosedEvent(this));
+		}
+		catch (Throwable ex) {
+			logger.warn("Exception thrown from ApplicationListener handling ContextClosedEvent", ex);
+		}
+		// 省略其他代码
+	}
+}
+----
+
+可以看到，容器刷新时发布事件的核心方法为 `publishEvent(new ContextRefreshedEvent(this))`，方法内部的核心流程为:
+
+* 获取事件的多播器（派发器）： `getApplicationEventMulticaster()`
+* 执行 `multicastEvent` 派发事件：
+
+.publishEvent 方法核心代码
+[source,java]
+----
+getApplicationEventMulticaster().multicastEvent(applicationEvent, eventType);
+----
+
+.multicastEvent 代码
+[source,java]
+----
+public void multicastEvent(final ApplicationEvent event, @Nullable ResolvableType eventType) {
+	ResolvableType type = (eventType != null ? eventType : resolveDefaultEventType(event));
+	Executor executor = getTaskExecutor(); // <2>
+	for (ApplicationListener<?> listener : getApplicationListeners(event, type)) { // <1>
+		if (executor != null) {
+			executor.execute(() -> invokeListener(listener, event));
+		}
+		else {
+			invokeListener(listener, event); // <3>
+		}
+	}
+}
+----
+<1> 获取到所有的 `ApplicationListener`:
+<2> 如果有Executor，可以支持使用Executor进行异步派发；
+<3> 否则，同步的方式直接执行 `listener` 方法；`invokeListener(listener, event)`;
+
+`invokeListener` 最终会回调onApplicationEvent方法：
+
+[source,java]
+----
+listener.onApplicationEvent(event);
+----
+
+**事件多播器（派发器）**
+
+核心逻辑是在容器 `refresh()` 方法中初始化事件多播器：
+
+* 容器 `refresh()`
+* 其中调用 `initApplicationEventMulticaster()` 初始化 `ApplicationEventMulticaster`，其内部逻辑如下：
+   . 先去容器中找有没有 id=“applicationEventMulticaster” 的组件
+   . 如果没有则创建 `this.applicationEventMulticaster = new SimpleApplicationEventMulticaster(beanFactory)`，并且加入到容器中，我们就可以在其他组件要派发事件，自动注入这个 `applicationEventMulticaster`
+ 
+**容器中有哪些监听器**
+
+监听器的注册同样是在 `refresh()` 方法的 `registerListeners()` 实现的：
+
+* 容器 `refresh()`
+* 调用 `registerListeners()`
+* 从容器中拿到所有的监听器，把他们注册到 `applicationEventMulticaster` 中
+
+[source,java]
+----
+protected void registerListeners() {
+	// 注册监听器
+	for (ApplicationListener<?> listener : getApplicationListeners()) {
+		getApplicationEventMulticaster().addApplicationListener(listener);
+	}
+	String[] listenerBeanNames = getBeanNamesForType(ApplicationListener.class, true, false);
+	for (String listenerBeanName : listenerBeanNames) {
+		getApplicationEventMulticaster().addApplicationListenerBean(listenerBeanName);
+	}
+	// ...
+}
+----
+
+== SmartInitializingSingleton
+
+这是一个顶层回调接口，在 `BeanFactory` 引导期间，在单例**预实例化阶段**结束时触发该回调接口。这个接口可以由singleton bean实现，以便在常规singleton实例化之后执行一些初始化，从而避免意外的早期初始化（例如从 `ListableBeanFactory.getBeansOfType` 调用）带来的副作用。从这个意义上说，它是初始化bean的一种替代方法，初始化bean在bean的本地构造阶段结束时被触发。此回调变量与 `org.springframework.context.event.ContextRefreshedEvent` 有些相似，但不需要 `org.springframework.context.ApplicationListener` 的实现，不需要跨上下文层次结构等筛选上下文引用。它还意味着对beans包的依赖性更小，而且独立的 `ListableBeanFactory` 实现（而不仅仅是在 `org.springframework.context.ApplicationContext` 环境中）也会遵守这一点。
+
+如果您打算启动/管理异步任务，最好实现 `org.springframework.context.Lifecycle`，这样可以为运行时管理提供更丰富的模型，并允许分阶段启动/关闭。
+
+[source,java]
+----
+public interface SmartInitializingSingleton {
+   // 在单例预实例化阶段结束时调用，并保证已经创建了所有常规单例bean。
+   // 此方法中的ListableBeanFactory.getBeansOfType调用不会在引导期间触发意外的副作用。
+   // 注意：对于在BeanFactory引导后按需延迟初始化的singleton bean，以及任何其他bean作用域，都不会触发此回调。小心地将它仅用于具有预期引导语义的bean。
+   void afterSingletonsInstantiated();
+}
+----
+
+**原理**
+
+容器刷新方法 `refresh()` 会调用 `finishBeanFactoryInitialization(beanFactory)` 方法来初始化剩下的单例bean
+
+1. ioc容器创建对象并调用 `refresh()`
+2. `finishBeanFactoryInitialization(beanFactory)` 初始化剩下的单实例bean
+   .. 先创建所有的单实例bean: `getBean()`
+   .. 获取所有创建好的单实例bean，判断是否是 `SmartInitializingSingleton` 类型的，如果是就调用 `afterSingletonsInstantiated()`
+
+[source,java]
+----
+protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
+   // ...
+	// 初始化单实例bean
+	String[] weaverAwareNames = beanFactory.getBeanNamesForType(LoadTimeWeaverAware.class, false, false);
+	for (String weaverAwareName : weaverAwareNames) {
+		getBean(weaverAwareName);
+	}
+	beanFactory.setTempClassLoader(null);
+	beanFactory.freezeConfiguration();
+	// 初始化所有剩余的单例bean
+	beanFactory.preInstantiateSingletons();
+}
+----
+
+而 `beanFactory.preInstantiateSingletons()` 代码如下：
+
+[source,java]
+----
+public void preInstantiateSingletons() throws BeansException {
+   // ...
+   // 省略实例化单例bean代码
+
+   // 实例化完成后回调 SmartInitializingSingleton 接口
+   for (String beanName : beanNames) {
+      Object singletonInstance = getSingleton(beanName);
+      if (singletonInstance instanceof SmartInitializingSingleton) {
+         final SmartInitializingSingleton smartSingleton = (SmartInitializingSingleton) singletonInstance;
+         if (System.getSecurityManager() != null) {
+            AccessController.doPrivileged((PrivilegedAction<Object>) () -> {
+               smartSingleton.afterSingletonsInstantiated();
+               return null;
+            }, getAccessControlContext());
+         }
+         else {
+            smartSingleton.afterSingletonsInstantiated();
+         }
+      }
+   }
+}
+----
+
+<完>

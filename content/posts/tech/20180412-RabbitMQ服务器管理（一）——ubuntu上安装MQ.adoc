@@ -1,0 +1,332 @@
+---
+title: RabbitMQ服务器管理（一）——ubuntu上安装MQ
+slug: rabbitmq-ubuntu-install
+img: /images/thumbnail/attachment/20180228/19c76a7d2e6348d3ba2c1a2b1311102b.png
+categories:
+  - 中间组件
+tags:
+  - rabbitmq
+description: >-
+  我们将在ubuntu上安装RabbitMQ，其他操作系统类似。RabbitMQ使用Erlang语言开发，需要先安装Erlang语言，erlang的安装涉及许多依赖包，不过官方已经提供了ubuntu库地址文件和依赖安装完整包，只需在ubuntu原地址列表加入官方地址并更新即可。安装完成，还涉及服务器启动、停止和状态检查，以及权限控制。
+date: 2018-04-12 11:31:04
+updated: 2019-03-06 11:30:50
+---
+
+= RabbitMQ服务器管理（一）——ubuntu上安装MQ
+:author: belonk.com
+:date: 2019-03-06
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: ubuntu,install,安装,rabbitmq,erlang,权限,远程连接,目录结构,配置,日志,执行文件
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: rabbitmq
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在本篇，我们将在ubuntu上安装RabbitMQ，其他操作系统类似。
+
+我们知道，RabbitMQ使用Erlang语言开发，所以需要先安装Erlang语言，在实践过程中，linux安装RabbitMQ还比较麻烦，涉及到很多依赖包的安装，官方的安装文档见 http://www.rabbitmq.com/install-debian.html[这里]。
+
+== 正确的安装步骤
+ 
+简单而言，正确的安装步骤如下：
+
+1、安装erlang依赖包
+
+----
+wget https://packages.erlang-solutions.com/erlang-solutions_1.0_all.deb
+sudo dpkg -i erlang-solutions_1.0_all.deb
+----
+
+编辑``/etc/apt/sources.list``，添加以下地址的任意一个
+
+----
+deb https://packages.erlang-solutions.com/ubuntu trusty contrib
+deb https://packages.erlang-solutions.com/ubuntu saucy contrib
+deb https://packages.erlang-solutions.com/ubuntu precise contrib
+----
+
+然后执行：
+
+----
+wget https://packages.erlang-solutions.com/erlang-solutions_1.0_all.deb
+sudo dpkg -i erlang-solutions_1.0_all.deb
+----
+
+2、安装erlang
+
+----
+sudo apt-get update sudo
+apt-get install esl-erlang（或erlang）
+----
+
+3、下载RabbitMQ
+
+----
+wget https://github.com/rabbitmq/rabbitmq-server/releases/download/v3.7.12/rabbitmq-server_3.7.12-1_all.deb
+----
+
+4、安装RabbitMQ依赖包
+
+----
+apt-get install socat
+get-get install init-system-helpers
+get-get install adduser
+get-get install logrotate
+----
+ 
+5、安装RabbitMQ
+
+----
+dpkg -i rabbitmq-server_3.7.12-1_all.deb
+----
+具体我的安装流程以及遇到的问题记录如下：
+
+== 安装过程
+
+=== 下载安装包
+ 
+ubuntu系统基于debian，所以我们要下载官方给的deb安装包：
+
+----
+wget https://dl.bintray.com/rabbitmq/all/rabbitmq-server/3.7.4/rabbitmq-server_3.7.4-1_all.deb
+----
+等待下载完成。
+
+=== 尝试安装
+ 
+下载安装后，尝试直接安装:
+
+----
+dpkg -i rabbitmq-server_3.7.4-1_all.deb
+----
+
+出现错误信息：
+
+image::/images/attachment/20180412/d137745685c44826a77ce48be1c7fa8e.png[]
+
+很明显，erlang还没有安装。
+
+=== 安装Erlang
+ 
+RabbitMQ的版本与Erlang版本存在依赖关系，这里安装的是3.7.4的MQ，官方的说明是：erlang的最低版本需要19.3，最高要20.3.x，具体官方说明可以看 http://www.rabbitmq.com/which-erlang.html[这里]。
+
+对于ubuntu，安装Erlang可以从源码编译安装，也可以从ubuntu库中安装，erlang也提供下载安装包。
+
+如果试图直接从ubuntu库安装erlang，会出现一堆依赖问题：
+
+----
+apt-get install erlang
+----
+
+结果如下：
+
+image::/images/attachment/20180412/90f55556696147d6a4dabe7d48085afa.png[]
+
+参看erlang官方文档，我们采用下载安装包来安装，详细信息可以看  https://www.erlang-solutions.com/resources/download.html[这里]。
+
+==== 下载安装包
+ 
+使用如下命令下载erlang安装包，这里下载的是64位版本：
+
+----
+wget https://packages.erlang-solutions.com/erlang/esl-erlang/FLAVOUR_1_general/esl-erlang_20.2.2-1~ubuntu~trusty_amd64.deb
+----
+
+下载完成后安装：
+
+----
+dpkg -i esl-erlang_20.2.2-1~ubuntu~trusty_amd64.deb
+----
+
+结果发现，仍有一些依赖找不到：
+
+image::/images/attachment/20180412/1ed25c3a695b4f9a8a6dc60f835b482f.png[]
+
+==== 安装依赖
+ 
+
+试图安装libwxbase：
+
+----
+apt-get install libwxbase
+----
+
+结果报错：
+
+image::/images/attachment/20180412/c2e509e217874e8ab0ab7e65504e0e0f.png[]
+
+apt-get找不到libwxbase这个包，仔细查看官方文档，需要的依赖包已经在erlang-solutions准备好了，具体详情见：  https://www.erlang-solutions.com/resources/download.html[https://www.erlang-solutions.com/resources/download.html]的Installation using repository章节。
+
+编辑/etc/apt/sources.list，从几个地址中选择一个加入即可：
+
+----
+deb https://packages.erlang-solutions.com/ubuntu trusty contrib
+deb https://packages.erlang-solutions.com/ubuntu saucy contrib
+deb https://packages.erlang-solutions.com/ubuntu precise contrib
+----
+
+我这里选择的：deb http://packages.erlang-solutions.com/ubuntu precise contrib。
+
+然后执行如下命令，使地址生效：
+
+----
+wget http://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc
+apt-key add erlang_solutions.asc
+apt-get update
+----
+
+等待更新完成，再次安装，还是缺少依赖，提示执行apt-get -f install安装，执行该命令：
+
+----
+apt-get -f install
+----
+
+==== 完成安装
+
+安装完成后，再次安装erlang下载包：
+
+----
+dpkg -i esl-erlang_20.2.2-1~ubuntu~trusty_amd64.deb
+----
+ 
+image::/images/attachment/20180412/a8f2d87bbac24e5d9a7270830f22b203.png[]
+
+说明安装成功。
+
+其实到这一步，依赖都安装完成，可以直接使用从ubuntu库安装了，执行apt-get install erlang或者apt-get install esl-erlang即可。
+
+=== 安装MQ
+ 
+Erlang安装完成，可以继续安装RabbitMQ了，执行如下命令：
+
+----
+dpkg -i rabbitmq-server_3.7.4-1_all.deb
+----
+
+image::/images/attachment/20180412/cd78b897333f41a48d82d6172e57852f.png[]
+
+安装成功。
+
+== 目录结构
+ 
+
+=== 主目录
+ 
+安装主目录位于：/usr/lib/rabbitmq
+
+image::/images/attachment/20180412/e5bf43557d464c3d993315dd3ec7598b.png[]
+
+* bin：可执行文件，其实是软连接到安装目录的sbin目录；
+* lib：rabbitmq安装目录。
+
+=== 日志目录
+
+日志目录：/var/log/rabbitmq/
+
+image::/images/attachment/20180412/577348d7f85349aa88afcd57bdd1fee5.png[]
+
+rabbit@ubuntu.log是mq的服务日志文件，从rabbit@ubuntu.log启动日志就可以看出目录结构：
+
+image::/images/attachment/20180412/ceafc2d9d97b4adab09d599fb43d90be.png[]
+
+上边的目录信息中：
+
+* database dir为数据库目录
+* mnesia: 用于存储RabbitMQ的每个队列、交换器和绑定的元数据的数据库，内建在erlang的非SQL型数据库。
+
+配置文件为none，说明没有创建配置文件。
+
+
+=== 配置文件目录
+ 
+配置文件目录：/etc/rabbitmq/
+
+默认情况下，该目录没有配置文件，如果RabbitMQ Server作为非生产环境用(例如开发环境)，那么其实全部使用默认配置就够了，如果要用于生产环境，那么我们需要更精确的控制各项配置，最好自己建立配置文件做精确控制。关于配置文件，可以看  http://www.rabbitmq.com/configure.html[这里]，这里不做详细介绍了。
+
+== 启停
+ 
+安装完成后默认是已经启动的，
+
+=== 启动
+ 
+----
+service rabbitmq-server start
+----
+
+上边的命令是以服务方式启动的，我们也可以直接启动mq安装主目录的脚本来启动：
+
+----
+./sbin/rabbitmq-server
+----
+
+以守护进程启动：
+
+----
+./sbin/rabbitmq-server -detached
+----
+
+=== 查询状态
+ 
+----
+service rabbitmq-server status
+----
+
+结果如下：
+ 
+image::/images/attachment/20180412/f2557bf32c4d44bcb87a14f60b723bd0.png[]
+
+通过按目录的执行脚本：
+
+----
+./sbin/rabbitmqctl status
+----
+
+=== 停止
+ 
+----
+wget https://packages.erlang-solutions.com/erlang-solutions_1.0_all.deb  sudo dpkg -i erlang-solutions_1.0_all.deb
+----
+
+结果如下：
+ 
+image::/images/attachment/20180412/624802fbf6414e2ba9bc7c620cadf9c2.png[]
+
+按目录脚本停止：
+
+----
+./sbin/rabbitmqctl stop {-n rabbit@[hostname]}
+----
+
+* `-n` 命令用于指定需要停止的节点位置，该命令会等到mq执行剩余工作再关闭，会同时停止mq和erlang节点。如果仅需要停止mq，而保持erlang节点继续运行，可以使用stop_app。
+
+
+=== 重新启动
+ 
+----
+service rabbitmq-server restart
+----
+
+关于上边的rabbitmqctl命令行工具管理mq的详细信息，请看  http://www.rabbitmq.com/rabbitmqctl.8.html#Application_Management[这里]。
+
+== 远端连接
+ 
+安装好后，本地客户端可以使用guest用户连接，但是远端客户端无法连接上，默认的guest用户只能用于本地连接，连接会抛出如下异常：
+
+----
+Exception in thread "main" com.rabbitmq.client.AuthenticationFailureException: ACCESS_REFUSED - Login was refused using authentication mechanism PLAIN. For details see the broker logfile.
+----
+
+官方建议删除该guest用户，或者修改密码，所以要连接远端mq服务器，还需要创建一个用户，并授予权限，也可以取消guest本地访问的限制，具体将在下一篇：权限管理来介绍。
+
+至此，我们已经成功安装了RabbitMQ服务器，并且可以通过命令来启动、停止服务器和查看服务器状态，接下来，我们需要对MQ&nbsp;server进行权限设置。

@@ -1,0 +1,377 @@
+---
+title: Docker入门系列二——安装
+slug: docker-install
+img: /images/thumbnail/attachment/20190708/f89ee6633e74417eb435501e9e73e01e.png
+categories:
+  - 中间组件
+tags:
+  - docker
+description: >-
+  Docker是基于Linux系统的cgroup技术实现的，既然如此，那么Docker是否支持非Linux系统上使用呢？答案是肯定的。Docker官方提供了Docker
+  Machine工具，用于在非Linux系统上构建虚拟机并在其上安装Docker；Docker官方还提供了Docker
+  Toolbox工具包，用来在旧版本的操作系统上安装Docker；另外，Docker还专门针对Windows和Mac OS，提供了更简单易用的Docker
+  Desktop，用来一键安装Docker及其相关组件。
+date: 2019-07-12 16:07:37
+updated: 2019-07-08 19:47:45
+---
+
+= Docker入门系列二——安装
+:author: belonk.com
+:date: 2019-07-08
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon: 
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: docker,安装,docker desktop,docker toolbox,docker machine
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: docker
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+在上一篇 http://www.belonk.com/c/docker_intro.html[Docker简介]中，我们介绍了Docker的概念、优势以及Docker结构，也提到了Docker是基于``Linux``系统的``cgroup``技术实现的，既然如此，那么Docker是否支持非Linux系统上使用呢？答案是肯定的。Docker官方提供了``Docker Machine``工具，用于在非Linux系统上构建虚拟机并在其上安装Docker；Docker官方还提供了``Docker Toolbox``工具包，用来在旧版本的操作系统上安装Docker；另外，Docker还专门针对Windows和Mac OS，提供了更简单易用的Docker Desktop，用来一键安装Docker及其相关组件。\n
+在本篇，我们将来看看如何在Linux、Mac OS和Windows上安装Docker。\n
+
+[NOTE]
+本篇安装的docker版本在最新的``18.09``版本，后续的docker入门系列文章都是基于该版本。
+
+== Ubuntu上安装Docker
+
+=== **系统要求**
+ 
+Docker要求安装与64位的Ubuntu，版本要求如下：
+
+* Cosmic 18.10
+* Bionic 18.04 (LTS)
+* Xenial 16.04 (LTS)
+
+Docker支持的架构包括：x86_64 (或amd64), armhf, arm64, s390x (IBM Z), and ppc64le (IBM Power)。
+测试Linux服务器为Ubuntu，版本为``16.04``，Ubuntu发布代码为``xenial``，其他版本的Linux就不做实践了：
+
+
+----
+root@ubuntu:~# cat /etc/lsb-release
+DISTRIB_ID=Ubuntu
+DISTRIB_RELEASE=16.04
+DISTRIB_CODENAME=xenial
+DISTRIB_DESCRIPTION="Ubuntu 16.04.2 LTS"
+----
+ 
+
+=== 准备工作
+ 
+**1、卸载旧版本**
+
+如果原来安装过旧版本的docker，需要先卸载之：
+
+----
+$ sudo apt-get remove docker docker-engine docker.io containerd runc
+----
+
+[IMPORTANT]
+旧版本的docker在Ubuntu的镜像仓库中名为docker.io，docker-io包是Debian/Ubuntu用于官方docker发布的名称，不叫docker的原因在于，避免与Ubuntu的docker system-tray二进制文件发生名称冲突。在新版本的docker中，docker已经区分为docker-ce和docker-ee版本，在安装新版本的docker时，需要先卸载旧版本docker。
+
+**2、添加仓库地址**
+
+安装前，需要先将docker官方安装地址加入到Ubuntu apt地址库中。
+
+（1）更新package索引
+
+----
+apt-get update
+----
+
+（2）安装apt使用https所需依赖
+
+----
+apt-get install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg-agent \
+    software-properties-common
+----
+
+（3）添加官方DockerGPG key
+
+----
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+----
+
+检查指纹：
+
+----
+root@ubuntu:~# apt-key fingerprint 0EBFCD88
+pub   4096R/0EBFCD88 2017-02-22
+      Key fingerprint = 9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88
+uid                  Docker Release (CE deb) <docker@docker.com>
+sub   4096R/F273FCD8 2017-02-22
+----
+ 
+成功则输出以上信息。
+
+（4）添加仓库地址
+
+----
+add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+----
+ 
+到此，准备工作完成。
+
+=== 安装docker
+ 
+按照以下步骤安装docker：
+
+1、更新仓库索引
+
+----
+apt-get update
+----
+
+2、安装最新的版本
+
+
+----
+apt-get install docker-ce docker-ce-cli containerd.io
+----
+
+下载的文件有几百兆，耐心等待一会儿。
+ 
+.ubuntu安装docker
+image::/images/attachment/20190708/4160910ac34c4e0abc42d1c75d3acaa1.png[]
+ 
+[NOTE]
+.安装指定版本？
+====
+如果需要安装指定的版本，需要先找出可用版本：
+----
+apt-cache madison docker-ce
+----
+然后，安装特定版本：
+----
+apt-get install docker-ce=<VERSION_STRING> docker-ce-cli=<VERSION_STRING> containerd.io
+----
+记得将VERSION_STRING替换为目标版本号。
+====
+
+3、验证docker安装是否成功
+
+运行如下命令验证docker是否安装成功：
+
+----
+docker run hello-world
+----
+
+它会下载docker默认自带的测试镜像并且运行它，控制台成功输出Hello from Docker，说明docker安装成功。
+
+=== 基于安装包安装
+ 
+上边是官方推荐的使用Ubuntu仓库安装的方式，也可以下载docker的安装包来进行安装。
+
+1、下载安装包
+
+浏览器打开 https://download.docker.com/linux/ubuntu/dists/[https://download.docker.com/linux/ubuntu/dists/]，选择pool/stable目录，根据系统架构选择amd64, armhf, arm64, ppc64el, 或 s390x目录。然后下载所需版本的安装包，包括``container.io``、``docker-ce-cli``、``docker-ce``安装包：
+
+.下载docker安装包
+image::/images/attachment/20190708/cfec84741cbd4eb4b5759a03e499e74c.png[]
+
+2、分别安装已下载的安装包：
+
+----
+dpkg -i /path/to/package.deb
+----
+
+3、查看安装结果
+
+----
+docker run hello-world​
+----
+
+Ubuntu上安装过程就介绍到这里，这里我们仅安装的docker服务程序、docker-cli，并没有安装docker-machine、docker-compose等工具，后续用到的时候再介绍。对于Mac OS和windows操作系统，Docker官方提供了一键安装包，能够一键安装docker服务程序以及其工具组件。
+
+接下来，我们看看如何使用一键安装包在Mac和Windows上安装docker。
+
+[TIP]
+实践的Mac OS和Windows都符合Docker安装的系统要求，对于不满足要求的旧版本系统，需要用到Docker toolbox和Docker machine，不过笔者这里没有实践，所以不做介绍。
+
+== Mac OS上安装Docker
+ 
+我们看看如何使用Docker Desktop for Mac来安装docker及其相关组件。
+
+=== 系统要求
+ 
+* Mac硬件必须是2010或更新型号，Intel支持内存管理单元（MMU）虚拟化，包括扩展页表（EPT）和无限制模式。您可以通过在终端中运行以下命令来检查您的计算机是否具有此支持：
+
+----
+sysctl kern.hv_support
+----
+
+如果支持则会输出kern.hv_support: 1。
+
+* 支持macOS Sierra 10.12和更高的macOS版本
+
+点击左上角苹果图标，选择关于本机可以查看您的系统信息。
+
+* 至少4GB的RAM
+* 不支持使用版本4.3.30之前的VirtualBox版本（它与Docker Desktop for Mac不兼容）
+
+如果您的系统不满足这些要求，您可以安装Docker Toolbox，它使用Oracle VirtualBox虚拟机而不是HyperKit footnote:[HyperKit，OSX上运行的轻量级虚拟化工具包。HyperKit是一种轻量级虚拟化方法，基于MacOSX10.10之后引入的Hypervisor框架。HyperKit应用可以利用硬件虚拟化运行VMs，但是并不需要特殊权限或者复杂管理工具栈。HyperKit是基于xHyve和vHyve项目，与其他相关功能模块（例如：VPNKit和DataKit）合作使得运行更加有效。由于HyperKit架构与库之上，因此将其和unikernel库连接起来就显得很直接。例如，我们可以通过使用MirageOS QCow库（用OCaml编写），加入持久化块设备支持。]。如果原来机器上已经安装了docker toolbox或者docker machine，看 https://docs.docker.com/docker-for-mac/docker-toolbox/[这里]。
+
+
+=== 安装Docker
+ 
+1、下载安装包
+
+安装包下载地址： https://download.docker.com/mac/stable/Docker.dmg[https://download.docker.com/mac/stable/Docker.dmg]
+
+2、双击``Docker.dmg``打开安装程序，然后将Moby the whale拖到Applications文件夹，如下图所示：
+
+.mac上安装docker
+image::/images/attachment/20190708/115e1bee693049c2ac6bff54b6df5ac2.png[]
+
+3、双击Docker.appApplications文件夹以启动Docker
+
+.Mac上已安装的Docker应用
+image::/images/attachment/20190708/b0dffd6523f747f196150092bcfe30cb.png[]
+
+稍作等待，Docker.app启动后，系统会提示您使用系统密码进行授权，需要管理员权限访问才能安装网络组件和Docker应用程序，然后就可以看到Docker的鲸鱼图标在状态栏显示，点击该图标可以看到docker的运行状态和一些操作菜单：
+
+.已启动的Docker和功能菜单
+image::/images/attachment/20190708/962e588bd1264c62ad81dc5d9e76df0b.png[]
+
+点击About Docker Desktop，可以查看已经安装的docker组件及其版本号信息：
+
+.已安装的Docker组件及版本信息
+image::/images/attachment/20190708/397593fce27446758f784ce0d1ff6540.png[]
+
+当然，也可以启动终端控制台，输入``docker version``，可以查看docker详细版本信息。
+
+到此，Mac OS上Docker安装完成。
+
+
+== Windows上安装Docker
+ 
+在Windows上安装Docker稍微有点麻烦，除了系统和硬件有一定的要求外，还可能涉及硬件兼容性问题，我们看看如何使用Docker Desktop for Windows来安装docker及其相关组件。
+
+
+=== 系统要求
+ 
+* Windows 10 64位：专业版，企业版或教育版（Build 15063或更高版本）
+* 在BIOS中启用虚拟化
+* CPU具有SLAT footnote:[SLAT（Second Level Address Translation）:&nbsp;__二级地址转换技术，在Intel和AMD处理器中均有所支持，但名称有所不同，Intel叫做EPT（Extended Page Tables），在Nehalem架构中开始支持；AMD叫做RVI(Rapid Virtualization Indexing),在第三代Opteron处理器Barcelona中才开始支持。SLAT主要应用在Hyper-V中，帮助执行更多内存管理功能，并且减少在客户机物理机地址和实体机物理地址之间转换的系统开销，减少了运行虚拟机时Hypervisor的CPU和虚拟机的内存占用。] 功能。
+* 至少4GB的RAM。
+
+如果您的系统不满足上述要求，那么您不能安装Docker Desktop for Windows，只能安装Docker Toolbox，它使用Oracle的Virtual Box虚拟机来代替微软的Hyoer-V虚拟机。
+
+[TIP]
+====
+老的Docker Toolbox和Docker Machine用户：Docker Desktop for Windows需要微软的Hyper-V虚拟机来运行，Docker Desktop for Windows安装程序会为您启用Hyper-V，并重新启动计算机。启用Hyper-V后，原来已安装的VirtualBox不再起作用，但仍保留已有VirtualBox VM映像。原docker-machine创建的VirtualBox VM （如default vm ）不再启动，它们不能与Docker Desktop for Windows共存。但是，您仍可以使用它 docker-machine来管理远程VM。
+
+另外，在windows已安装的虚拟机(如VMWare)上安装Docker可能成功，但是官方并不推荐，如果系统不支持，官方更推荐使用Docker Toolbox来安装Docker。
+====
+
+=== 安装Docker
+ 
+Docker Desktop for Windows安装包括一下组件：Docker Engine、Docker CLI client、Docker Compose、Docker Machine和kitematic。另外需要注意，创建的容器和镜像将在Windows系统的所有用户中共享，因为所有用户共享windows虚拟机。
+
+1、下载Docker Desktop for Windows
+
+从 https://hub.docker.com/editions/community/docker-ce-desktop-windows下[https://hub.docker.com/editions/community/docker-ce-desktop-windows下]载Docker Desktop for Windows，得到``Docker for Windows Installer.exe``安装包。
+
+2、双击安装包安装，按步骤安装即可
+
+3、安装完成后，会提示启用Hyper-V footnote:[Hyper-V: Hyper-V是微软的一款虚拟化产品，是微软第一个采用类似Vmware和Citrix开源Xen一样的基于hypervisor的技术。这也意味着微软会更加直接地与市场先行者VMware展开竞争，但竞争的方式会有所不同。
+] 虚拟机：
+
+.提示启用Hyper-V
+image::/images/attachment/20190708/39ddcdee2a53497d8a22692f837aeb03.png[]
+
+选择ok即可，稍后会重启计算机。
+
+4、启用CPU虚拟化
+
+打开任务管理器，点击性能标签页，点击CPU，可以查看CPU虚拟化是否启用：
+
+.任务管理器查看CPU虚拟化是否启用
+image::/images/attachment/20190708/6bcf01fe695443f7b36de4380275344e.png[]
+
+如果显示已禁用，那么先要启用CPU虚拟化，否则启动Docker会出现如下的错误：
+
+.未启用虚拟化时启动docker出错
+image::/images/attachment/20190708/a67faac8472c4574b274e292bbe233cd.png[]
+
+修改BIOS，启用虚拟化：
+
+（1）启动计算时，按住DEL键或者F2键(具体视主板而定)，进入BIOS设置，找到CPU配置选项，比如我的：
+
+.BIOS CPU配置
+image::/images/attachment/20190708/23ba8f1cb0034ceb9ecc44cea7f3e077.png[]
+
+（2）点开CPU配置，找到虚拟化选项，改为启用：
+
+.启用虚拟化
+image::/images/attachment/20190708/f2c17cfad5994f04ac07c8aefda9ec45.png[]
+
+最后按F10保存，计算机会重启，CPU虚拟化启动完成。
+
+完成，点击桌面或开始菜单的Docker Desktop图标启动Docker，成功后状态栏会有Docker的图标：
+
+.Windows成功启动docker
+image::/images/attachment/20190708/e9ceb6338f274c7e817cd270fd83a6f5.png[]
+
+点击About Docker Desktop，可以看到已安装的各个组件的版本信息：
+
+.Windows上已安装的docker组件版本信息
+image::/images/attachment/20190708/8b9c2ad015864dab876f864618555043.png[]
+
+当然，您也可以启动CMD，输入docker version，可以查看docker的版本信息，或者输入docker run hello-world，运行docker测试镜像，来验证docker是否安装成功。
+
+至此，Windows上docker已经安装完成。
+
+
+== Docker管理
+ 
+我们重点来介绍一下**Ubuntu上Docker的管理**，Mac OS和Windows均可以通过可视化界面操作，就不详细介绍了。
+
+1、查看运行状态
+----
+service docker status
+----
+2、停止docker
+----
+service docker stop
+----
+3、启动docker
+----
+service docker start
+----
+4、重启docker
+----
+service docker restart
+----
+5、版本查看
+----
+docker version
+----
+此时输出docker服务程序和docker cli的版本号
+----
+docker --version
+----
+输出简短版本信息
+
+
+== 总结
+ 
+尽管Docker大部分应用都在Linux系统中，但是也支持在Mac OS和Windows系统中安装docker，还提供了一键安装包，对于以学习为目的的用户来说非常方便。
+ 
+ 

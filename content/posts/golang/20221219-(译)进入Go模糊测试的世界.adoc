@@ -1,0 +1,759 @@
+---
+title: (译)进入Go模糊测试的世界
+slug: go-fuzz-guide
+categories:
+  - GoLang
+tags:
+  - go
+  - fuzz
+  - test
+description: 本教程介绍了 Go 中模糊测试的基础知识。模糊测试会针对您的测试准备一些随机数据然后运行测试时使用它们，以尝试找出漏洞或导致崩溃的输入。可以通过模糊测试发现的一些漏洞示例包括 SQL 注入、缓冲区溢出、拒绝服务和跨站点脚本攻击(XSS)。
+date: 2022/12/19
+updated: 2022/12/19
+---
+
+= (译)进入Go模糊测试的世界
+:author: huzhou.site
+:doctype: article
+:email: huzhou.v@gmail.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:linkcss: true
+:numbered: true
+:stylesheet:
+:tabsize: 4
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+
+原文地址: https://go.dev/doc/tutorial/fuzz[]
+
+本教程介绍了 Go 中模糊测试的基础知识。模糊测试会针对您的测试准备一些随机数据然后运行测试时使用它们，以尝试找出漏洞或导致崩溃的输入。可以通过模糊测试发现的一些漏洞示例包括 SQL 注入、缓冲区溢出、拒绝服务和跨站点脚本攻击(XSS)。
+
+在本教程中，您将为一个简单的函数编写一个模糊测试，运行 go 命令，并调试和修复代码中的问题。
+
+有关本教程中术语的帮助，请参阅 <</2022/10/26/go-fuzz#词汇表, Go模糊测试>> 词汇表。
+
+您将逐步完成以下部分：
+
+1. <<为您的代码创建一个文件夹>>
+2. <<添加代码进行测试>>
+3. <<添加单元测试>>
+4. <<添加模糊测试>>
+5. <<修复无效字符串错误>>
+6. <<修复双反错误>>
+7. <<结论>>
+
+**注意**
+
+* 更多 Go 教程，请参阅 https://go.dev/doc/tutorial/index.html[教程]。
+* Go fuzzing 当前支持 https://go.dev/security/fuzz/#requirements[Go Fuzzing 文档] 中列出的内置类型的子集，并支持将来添加的更多内置类型。
+
+## 先决条件
+
+- **Go 1.18 或更高版本的安装。** 有关安装说明，请参阅 https://go.dev/doc/install[安装 Go]。
+- **用于编辑代码的工具。** 您拥有的任何文本编辑器都可以正常工作。
+- **一个命令终端。** Go 在 Linux 和 Mac 上的任何终端以及 Windows 中的 PowerShell 或 cmd 上都能很好地工作。
+- **支持模糊测试的环境。** 目前仅在 AMD64 和 ARM64 架构上使用覆盖检测进行模糊测试。
+
+[[为您的代码创建一个文件夹]]
+## 为您的代码创建一个文件夹
+
+首先，为您要编写的代码创建一个文件夹。
+
+1、 打开命令提示符并切换到您的主目录。
+
+在 Linux 或 Mac 上：
+
+----
+$ cd
+----
+
+在 Windows 上：
+
+----
+C:\> cd %HOMEPATH%
+----
+
+本教程的其余部分将显示 $ 作为提示。您使用的命令也可以在 Windows 上运行。
+
+2、在命令提示符下，为您的代码创建一个名为 fuzz 的目录。
+
+----
+$ mkdir fuzz
+$ cd fuzz
+----
+
+3、创建一个模块来保存您的代码。
+
+运行`go mod init`命令，为其提供新代码的模块路径。
+
+----
+$ go mod init example/fuzz
+go: creating new go.mod: module example/fuzz
+----
+
+**注意**::
+对于生产代码，您需要指定一个更符合您自己需求的模块路径。有关更多信息，请阅读 <</2023/04/19/go-mod#, Go模块：管理依赖项>>一文。
+
+接下来，您将添加一些简单的代码来反转字符串，稍后我们将对其进行模糊测试。
+
+[[添加代码进行测试]]
+## 添加代码进行测试
+
+这一步，您将添加一个函数来反转字符串中的每一个字符。
+
+### 编写代码
+
+1. 使用您的文本编辑器，在 fuzz 目录中创建一个名为 main.go 的文件。
+
+2. 进入 main.go，在文件顶部，粘贴以下包声明。
+
+----
+package main
+----
+
+独立程序（与库相反）始终位于 package 中 `main`。
+
+3、在包声明下，粘贴以下函数声明。
+
+[source,go]
+----
+func Reverse(s string) string {
+    b := []byte(s)
+    for i, j := 0, len(b)-1; i < len(b)/2; i, j = i+1, j-1 {
+        b[i], b[j] = b[j], b[i]
+    }
+	return string(b)
+}
+----
+
+此函数将接受一个 `string` 类型参数，循环其对应的 `byte` 切片，并在最后返回反转的字符串。
+
+**注意**::
+此代码基于golang.org/x/example 中的 `stringutil.Reverse` 函数。
+
+4、在 main.go 顶部的包声明下方，粘贴以下 `main` 函数来初始化一个字符串，反转它，打印输出，然后重复。
+
+[source,go]
+----
+func main() {
+    input := "The quick brown fox jumped over the lazy dog"
+    rev := Reverse(input) // 反转字符串
+    doubleRev := Reverse(rev) // 将反转的结果再反转一次，期望得到的是原有字符串
+    fmt.Printf("original: %q\n", input)
+    fmt.Printf("reversed: %q\n", rev)
+    fmt.Printf("reversed again: %q\n", doubleRev)
+}
+----
+
+此函数运行 `Reverse` 方法反转一个字符串，然后将结果打印到控制台。
+
+5、该 `main` 函数使用 `fmt` 包，因此您需要导入它。
+
+第一行代码应如下所示：
+
+[source,go]
+----
+package main
+
+import "fmt"
+----
+
+### 运行代码
+
+从包含 main.go 的目录中的命令行，运行代码。
+
+----
+$ go run .
+original: "The quick brown fox jumped over the lazy dog"
+reversed: "god yzal eht revo depmuj xof nworb kciuq ehT"
+reversed again: "The quick brown fox jumped over the lazy dog"
+----
+
+可以看到，将原有字符串反转后再反转，得到的结果应该与原有字符串相同。
+
+现在我们来添加一下单元测试。
+
+[[添加单元测试]]
+## 添加单元测试
+
+在这一步中，您将为 `Reverse` 函数编写一个基本的单元测试。
+
+### 编写代码
+
+1. 使用您的文本编辑器，在 fuzz 目录中创建一个名为 reverse_test.go 的文件。
+2. 将以下代码粘贴到 reverse_test.go 中。
+
+[source,go]
+----
+package main
+
+import (
+	"testing"
+)
+
+func TestReverse(t *testing.T) {
+	// 测试用例，给定字符串和预期结果
+	testcases := []struct {
+		in, want string
+	}{
+		{"Hello, world", "dlrow ,olleH"},
+		{" ", " "},
+		{"!12345", "54321!"},
+	}
+	for _, tc := range testcases {
+		rev := Reverse(tc.in)
+		// 比较结果，不符合预期则表示测试未通过
+		if rev != tc.want {
+				t.Errorf("Reverse: %q, want %q", rev, tc.want)
+		}
+	}
+}
+----
+
+上边的测试代码很简单，给出输入的字符串，然后断言其被反转后的结果。
+
+### 运行代码
+
+使用运行单元测试 `go test`：
+
+----
+$ go test
+PASS
+ok      example/fuzz  0.013s
+----
+
+接下来，我们将单元测试更改为模糊测试(fuzzing test)。
+
+**译注**::
+上边的单元测试虽然通过了，但是不代表该程序没有问题，单元测试有局限性，可能开发人员的测试用例没有覆盖到边缘用例，这就解释了为什么需要继续采用模糊测试。
+
+[[添加模糊测试]]
+## 添加模糊测试
+
+单元测试有局限性，即每个输入都必须由开发人员添加到测试中。模糊测试的一个好处是它可以为您的代码提供输入，并且可以识别您提出的测试用例是否存在没有覆盖到的边缘用例。
+
+在本节中，您将单元测试转换为模糊测试，这样您就可以用更少的工作生成更多的输入！
+
+请注意，您可以将单元测试、基准测试和模糊测试保存在同一个 `*_test.go` 文件中，这里，我们将单元测试转换为模糊测试。
+
+### 编写代码
+
+在您的文本编辑器中，将 `reverse_test.go` 中的单元测试替换为以下模糊测试。
+
+[source,go]
+----
+func FuzzReverse(f *testing.F) {
+	// 提供测试数据集
+    testcases := []string{"Hello, world", " ", "!12345"}
+    for _, tc := range testcases {
+        f.Add(tc)  // 调用 f.Add 添加种子语料库
+    }
+    // 执行模糊测试，第一个参数为 *testing.T，第二个为模糊的输入，依据种子语料库生成
+    f.Fuzz(func(t *testing.T, orig string) {
+        rev := Reverse(orig)
+        doubleRev := Reverse(rev)
+        // 反转两次后的结果应该与原来字符串相同
+        if orig != doubleRev {
+            t.Errorf("Before: %q, after: %q", orig, doubleRev)
+        }
+        // 使用 utf8 包来判断：如果原有的是有效的 utf8 字符串，那么反转结果也应该有效
+        if utf8.ValidString(orig) && !utf8.ValidString(rev) {
+            t.Errorf("Reverse produced invalid UTF-8 string %q", rev)
+        }
+    })
+}
+----
+
+Fuzzing 也有一些限制。在单元测试中，您可以预测 `Reverse` 函数的预期输出，并验证实际输出是否满足这些预期。
+
+例如，在测试用例 `Reverse("Hello, world")` 中，单元测试将返回指定为 `"dlrow ,olleH"`.
+
+模糊测试时，您无法预测预期输出，因为您**无法控制输入**。
+
+但是，您可以在模糊测试中验证 `Reverse` 函数的一些属性。在这个模糊测试中检查的两个属性是：
+
+1. 将字符串反转两次保留原始值
+2. 反转的字符串将其状态保留为有效的 UTF-8。
+
+注意单元测试和模糊测试之间的语法差异：
+
+- 该函数以 FuzzXxx 而不是 TestXxx 开头，特定参数为 `*testing.F` 而不是 `*testing.T`
+- 单元测试中使用 `t.Run` 执行子测试，而模糊测试调用 `f.Fuzz` 函数开启测试，其参数是 `*testing.T` 以及要模糊的类型，它由 `f.Add` 方法提供的种子语料库生成。
+
+确保已导入 `unicode/utf8` 包。
+
+[source,go]
+----
+package main
+
+import (
+    "testing"
+    "unicode/utf8"
+)
+----
+
+随着单元测试转换为模糊测试，是时候再次运行测试了。
+
+### 运行代码
+
+1、首先，不开启模糊测试，而是使用 `go test` 命令执行常规单元测试，这样可以验证给出的种子语料能否测试通过。
+
+----
+$ go test
+PASS
+ok      example/fuzz  0.013s
+----
+
+如果您在该文件中有其他测试，您也可以运行 `go test -run=FuzzReverse` 来指定只想运行的模糊测试方法。
+
+2、使用 `go test -fuzz` 命令来执行模糊测试，查看是否有随机生成的字符串输入会导致测试失败。这里添加了一个 `-fuzz=Fuzz` 参数来启动模糊测试，它指定了执行模糊测试的方法。
+
+----
+$ go test -fuzz=Fuzz
+fuzz: elapsed: 0s, gathering baseline coverage: 0/3 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 3/3 completed, now fuzzing with 8 workers
+fuzz: minimizing 38-byte failing input file...
+--- FAIL: FuzzReverse (0.01s)
+	--- FAIL: FuzzReverse (0.00s)
+		reverse_test.go:20: Reverse produced invalid UTF-8 string "\x9c\xdd"
+
+	Failing input written to testdata/fuzz/FuzzReverse/af69258a12129d6cbba438df5d5f25ba0ec050461c116f777e77ea7c9a0d217a
+	To re-run:
+	go test -run=FuzzReverse/af69258a12129d6cbba438df5d5f25ba0ec050461c116f777e77ea7c9a0d217a
+FAIL
+exit status 1
+FAIL    example/fuzz  0.030s
+----
+
+可以看到，模糊测试失败了，导致问题的输入被写入到 **当前测试文件所在目录** 的种子语料库文件中，下次在运行 `go test`，即使没有 `-fuzz` 标志也会使用该语料库文件来进行模糊测试。要查看导致失败的输入，请在文本编辑器中打开写入 testdata/fuzz/FuzzReverse 目录的语料库文件。您的种子语料库文件可能包含不同的字符串，但格式相同：
+
+----
+go test fuzz v1
+string("泃")
+----
+
+语料库文件的第一行表示编码版本。以下每一行代表构成语料库条目的每种类型的值。由于模糊目标只需要 1 个输入，因此版本之后只有 1 个值。
+
+3、不使用 `-fuzz` 再次执行 `go test`，此时将使用导致失败的种子语料库条目：
+
+----
+$ go test
+--- FAIL: FuzzReverse (0.00s)
+	--- FAIL: FuzzReverse/af69258a12129d6cbba438df5d5f25ba0ec050461c116f777e77ea7c9a0d217a (0.00s)
+		reverse_test.go:20: Reverse produced invalid string
+FAIL
+exit status 1
+FAIL    example/fuzz  0.016s
+----
+
+测试失败了，现在我们来查找问题并修复它。
+
+[[修复无效字符串错误]]
+## 修复无效字符串错误
+
+在本节中，我们将调试故障并修复之。
+
+在继续之前，请花一些时间思考并找出导致测试失败的问题所在，并尝试自己解决问题。
+
+### 诊断错误
+
+有几种不同的方法可以调试此错误。如果您使用 VS Code 作为文本编辑器，则可以 https://github.com/golang/vscode-go/blob/master/docs/debugging.md[设置调试器] 进行问题排查。
+
+在本教程中，我们会将有用的调试信息打印到终端。
+
+首先，我们看看 https://pkg.go.dev/unicode/utf8[utf8.ValidString] 方法.
+
+----
+ValidString reports whether s consists entirely of valid UTF-8-encoded runes.
+----
+
+**译注**::
+翻译成中文就是：`ValidString` 方法报告字符串 `s` 是否完全由 UTF-8 符文(rune)组成。rune 是 go 语言中的一个基本类型，它是 int32 的别名。更多关于 rune 的信息见 <</2023/03/25/go-unicode#, Go 中的字符串、字节、符文和字符>> 一文。
+
+当前`Reverse`函数逐字节反转字符串，这就是我们的问题所在。为了保留原始字符串的 UTF-8 编码字符，我们必须逐个符文反转字符串，而不是字节。
+
+**译注**::
+一个UTF-8字符可能由多个字节组成，所以逐个字节翻转UTF-8字符会造成乱码，比如被翻转的字符串是中文时。
+
+要检查输入（在本例中为中文字符`泃`）导致 `Reverse` 在反转时产生无效字符串的原因，您可以检查反转字符串中的符文数。
+
+#### 编写代码
+
+在您的文本编辑器中，将 fuzz 目标替换 `FuzzReverse` 为以下内容。
+
+[source,go]
+----
+f.Fuzz(func(t *testing.T, orig string) {
+    rev := Reverse(orig)
+    doubleRev := Reverse(rev)
+    // 打印字符串的rune数量
+    t.Logf("Number of runes: orig=%d, rev=%d, doubleRev=%d", utf8.RuneCountInString(orig), utf8.RuneCountInString(rev), utf8.RuneCountInString(doubleRev))
+    if orig != doubleRev {
+        t.Errorf("Before: %q, after: %q", orig, doubleRev)
+    }
+    if utf8.ValidString(orig) && !utf8.ValidString(rev) {
+        t.Errorf("Reverse produced invalid UTF-8 string %q", rev)
+    }
+})
+----
+
+如果发生错误，或者使用 `-v` 参数打印详细信息，`t.Logf` 语句会输出内容，以便调试问题。
+
+#### 运行代码
+
+使用 go test 运行测试：
+
+----
+$ go test
+--- FAIL: FuzzReverse (0.00s)
+    --- FAIL: FuzzReverse/28f36ef487f23e6c7a81ebdaa9feffe2f2b02b4cddaa6252e87f69863046a5e0 (0.00s)
+        reverse_test.go:16: Number of runes: orig=1, rev=3, doubleRev=1
+        reverse_test.go:21: Reverse produced invalid UTF-8 string "\x83\xb3\xe6"
+FAIL
+exit status 1
+FAIL    example/fuzz    0.598s
+----
+
+整个种子语料库采用字符串，其中每个字符都是一个字节。但是，“泃”等字符可能需要几个字节。因此，**逐字节反转字符串将使多字节字符无效**。
+
+**注意**::
+请阅读 <</2023/03/25/go-unicode#, Go 中的字符串、字节、符文和字符>> 一文以深入了解 Go 如何处理字符串。
+
+知道bug所在，现在可以开始修复问题了。
+
+### 修复错误
+
+为了更正这个 `Reverse` 函数，让我们用符文(rune)而不是字节来遍历字符串。
+
+#### 编写代码
+
+在您的文本编辑器中，将现有的 `Reverse()` 函数替换为以下内容。
+
+[source,go]
+----
+func Reverse(s string) string {
+    r := []rune(s) // 将字符串转为 rune 切片
+    for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
+        r[i], r[j] = r[j], r[i]
+    }
+    return string(r)
+}
+----
+
+关键区别在于：将字符串 `s` 转为了 `rune` 切片，而不是 `byte`，但是注意这里循环yun时依然使用的字符下标。
+
+#### 运行代码
+
+1、使用运行测试 `go test`
+
+----
+$ go test
+PASS
+ok      example/fuzz  0.016s
+----
+
+现在测试通过了！
+
+2、再用 fuzz 一下 `go test -fuzz`，看看有没有新的 bug。
+
+----
+$ go test -fuzz=Fuzz
+fuzz: elapsed: 0s, gathering baseline coverage: 0/37 completed
+fuzz: minimizing 506-byte failing input file...
+fuzz: elapsed: 0s, gathering baseline coverage: 5/37 completed
+--- FAIL: FuzzReverse (0.02s)
+	--- FAIL: FuzzReverse (0.00s)
+		reverse_test.go:33: Before: "\x91", after: "�"
+
+	Failing input written to testdata/fuzz/FuzzReverse/1ffc28f7538e29d79fce69fef20ce5ea72648529a9ca10bea392bcff28cd015c
+	To re-run:
+	go test -run=FuzzReverse/1ffc28f7538e29d79fce69fef20ce5ea72648529a9ca10bea392bcff28cd015c
+FAIL
+exit status 1
+FAIL    example/fuzz  0.032s
+----
+
+我们可以看到，经过两次反转后，字符串与原始字符串不同。我们使用字符串进行模糊测试，但是这次输入本身是无效的 unicode 字符，这怎么可能呢？
+
+让我们再次调试。
+
+[[修复双反错误]]
+## 修复双反错误
+
+在本节中，您将调试双反故障并修复错误。
+
+在继续之前，请随意花一些时间思考这个问题并尝试自己解决问题。
+
+### 诊断错误
+
+和以前一样，有几种方法可以调试此故障。在这种情况下，使用 https://github.com/golang/vscode-go/blob/master/docs/debugging.md[调试器] 将是一个很好的方法。
+
+在本教程中，我们将在 `Reverse` 函数中记录有用的调试信息。
+
+仔细查看反转的字符串以发现错误。在 Go 中， <</2023/02/09/go-slice#, 字符串是字节的只读切片>>，并且可以包含无效的 UTF-8 字节。原始字符串是一个带有一个字节的字节切片，`'\x91'` , 当输入字符串设置为 `[]rune` 时，Go 将字节切片编码为 UTF-8，并将字节替换为 UTF-8 字符 `�`。当我们将替换的 UTF-8 字符与输入字节切片进行比较时，它们显然不相等。
+
+#### 编写代码
+
+在您的文本编辑器中，将 `Reverse` 函数替换为以下内容。
+
+[source,go]
+----
+func Reverse(s string) string {
+	fmt.Printf("input: %q\n", s)
+	r := []rune(s)
+	fmt.Printf("runes: %q\n", r)
+	for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+----
+
+这将帮助我们了解在将字符串转换为符文切片时出了什么问题。
+
+#### 运行代码
+
+这一次，我们只想运行失败的测试来检查日志。为此，我们将使用 `go test -run`.
+
+----
+$ go test -run=FuzzReverse/28f36ef487f23e6c7a81ebdaa9feffe2f2b02b4cddaa6252e87f69863046a5e0
+input: "\x91"
+runes: ['�']
+input: "�"
+runes: ['�']
+--- FAIL: FuzzReverse (0.00s)
+    --- FAIL: FuzzReverse/28f36ef487f23e6c7a81ebdaa9feffe2f2b02b4cddaa6252e87f69863046a5e0 (0.00s)
+        reverse_test.go:16: Number of runes: orig=1, rev=1, doubleRev=1
+        reverse_test.go:18: Before: "\x91", after: "�"
+FAIL
+exit status 1
+FAIL    example/fuzz    0.145s
+----
+
+要在 FuzzXxx/testdata 中运行特定语料库条目，您可以给 `-run` 加上 `{FuzzTestName}/{filename}` 参数，这在调试时很有用。
+
+知道输入是无效的 unicode，让我们修复 `Reverse` 函数中的错误。
+
+### 修复错误
+
+`Reverse` 为了解决这个问题，如果输入不是有效的 UTF-8，让我们返回一个错误。
+
+#### 编写代码
+
+1、在您的文本编辑器中，将现有 `Reverse` 函数替换为以下内容。
+
+[source,go]
+----
+func Reverse(s string) (string, error) {
+	if !utf8.ValidString(s) {
+		return s, errors.New("input is not valid UTF-8")
+	}
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r), nil
+}
+----
+
+如果输入字符串包含无效的 UTF-8 字符，此更改将返回错误。
+
+2、由于 `Reverse` 函数现在返回错误，因此修改 `main` 函数以丢弃额外的错误值。将现有 `main` 功能替换为以下内容。
+
+[source,go]
+----
+func main() {
+	input := "The quick brown fox jumped over the lazy dog"
+	rev, revErr := Reverse(input)
+	doubleRev, doubleRevErr := Reverse(rev)
+	fmt.Printf("original: %q\n", input)
+	fmt.Printf("reversed: %q, err: %v\n", rev, revErr)
+	fmt.Printf("reversed again: %q, err: %v\n", doubleRev, doubleRevErr)
+}
+----
+
+这些调用 `Reverse` 应该返回一个 `nil` 错误，因为输入字符串是有效的 UTF-8。
+
+3、您将需要导入错误和 `unicode/utf8` 包。main.go 中的 `import` 语句应如下所示。
+
+[source,go]
+----
+import (
+	"errors"
+	"fmt"
+	"unicode/utf8"
+)
+----
+
+4、修改reverse_test.go文件检查是否有错误，如果返回产生错误则跳过测试。
+
+[source,go]
+----
+func FuzzReverse(f *testing.F) {
+	testcases := []string {"Hello, world", " ", "!12345"}
+	for _, tc := range testcases {
+		f.Add(tc)  // Use f.Add to provide a seed corpus
+	}
+	f.Fuzz(func(t *testing.T, orig string) {
+		rev, err1 := Reverse(orig)
+		if err1 != nil {
+			return
+		}
+		doubleRev, err2 := Reverse(rev)
+		if err2 != nil {
+			 return
+		}
+		if orig != doubleRev {
+			t.Errorf("Before: %q, after: %q", orig, doubleRev)
+		}
+		if utf8.ValidString(orig) && !utf8.ValidString(rev) {
+			t.Errorf("Reverse produced invalid UTF-8 string %q", rev)
+		}
+	})
+}
+----
+
+除了返回之外，您还可以调用 `t.Skip()` 以停止执行该模糊输入。
+
+#### 运行代码
+
+1、使用 `go test` 运行测试
+
+----
+$ go test
+PASS
+ok      example/fuzz  0.019s
+----
+
+2、执行`go test -fuzz=Fuzz`进行模糊测试，几秒钟后，`ctrl-C` 停止模糊测试。
+
+----
+$ go test -fuzz=Fuzz
+fuzz: elapsed: 0s, gathering baseline coverage: 0/38 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 38/38 completed, now fuzzing with 4 workers
+fuzz: elapsed: 3s, execs: 86342 (28778/sec), new interesting: 2 (total: 35)
+fuzz: elapsed: 6s, execs: 193490 (35714/sec), new interesting: 4 (total: 37)
+fuzz: elapsed: 9s, execs: 304390 (36961/sec), new interesting: 4 (total: 37)
+...
+fuzz: elapsed: 3m45s, execs: 7246222 (32357/sec), new interesting: 8 (total: 41)
+^Cfuzz: elapsed: 3m48s, execs: 7335316 (31648/sec), new interesting: 8 (total: 41)
+PASS
+ok      example/fuzz  228.000s
+----
+
+如果不希望模糊测试一直运行，可以使用 `-fuzztime` 标志指定时间。如果没有发生故障，那么模糊测试将一直运行，除非使用 `ctrl-C` 终止它。
+
+3、`go test -fuzz=Fuzz -fuzztime 30s` 如果没有测试失败，则运行 30 秒后自动退出。
+
+----
+$ go test -fuzz=Fuzz -fuzztime 30s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/5 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 5/5 completed, now fuzzing with 4 workers
+fuzz: elapsed: 3s, execs: 80290 (26763/sec), new interesting: 12 (total: 12)
+fuzz: elapsed: 6s, execs: 210803 (43501/sec), new interesting: 14 (total: 14)
+fuzz: elapsed: 9s, execs: 292882 (27360/sec), new interesting: 14 (total: 14)
+fuzz: elapsed: 12s, execs: 371872 (26329/sec), new interesting: 14 (total: 14)
+fuzz: elapsed: 15s, execs: 517169 (48433/sec), new interesting: 15 (total: 15)
+fuzz: elapsed: 18s, execs: 663276 (48699/sec), new interesting: 15 (total: 15)
+fuzz: elapsed: 21s, execs: 771698 (36143/sec), new interesting: 15 (total: 15)
+fuzz: elapsed: 24s, execs: 924768 (50990/sec), new interesting: 16 (total: 16)
+fuzz: elapsed: 27s, execs: 1082025 (52427/sec), new interesting: 17 (total: 17)
+fuzz: elapsed: 30s, execs: 1172817 (30281/sec), new interesting: 17 (total: 17)
+fuzz: elapsed: 31s, execs: 1172817 (0/sec), new interesting: 17 (total: 17)
+PASS
+ok      example/fuzz  31.025s
+----
+
+可以看到，模糊测试通过了！
+
+除了 `-fuzz` 标志之外，`go test` 命令还添加了几个新标志，可以参阅 <</2022/10/26/go-fuzz#, Go模糊测试>> 一文。
+
+[[结论]]
+## 结论
+
+做得很好！刚刚您已经成功介绍了如何在 Go 中进行模糊测试。
+
+下一步是在您的代码中选择一个您想要进行模糊测试的函数，然后尝试一下！如果 fuzzing 在您的代码中发现错误，请考虑将其添加到 https://github.com/golang/go/wiki/Fuzzing-trophy-case[trophy case] 中。
+
+如果您遇到任何问题，或对某些功能有意见或建议，请 https://github.com/golang/go/issues/new/?&labels=fuzz[提出问题]。
+
+您还可以参与Gophers Slack中的 https://gophers.slack.com/archives/CH5KV1AKE[fuzzing频道] 参与更多模糊测试新特性的讨论和反馈。
+
+您可以查看 https://go.dev/security/fuzz/#requirements[go.dev/security/fuzz] 上的文档以进一步阅读。
+
+## 完整的代码
+
+— main.go —
+
+[source,go]
+----
+package main
+
+import (
+    "errors"
+    "fmt"
+    "unicode/utf8"
+)
+
+func main() {
+    input := "The quick brown fox jumped over the lazy dog"
+    rev, revErr := Reverse(input)
+    doubleRev, doubleRevErr := Reverse(rev)
+    fmt.Printf("original: %q\n", input)
+    fmt.Printf("reversed: %q, err: %v\n", rev, revErr)
+    fmt.Printf("reversed again: %q, err: %v\n", doubleRev, doubleRevErr)
+}
+
+func Reverse(s string) (string, error) {
+    if !utf8.ValidString(s) {
+        return s, errors.New("input is not valid UTF-8")
+    }
+    r := []rune(s)
+    for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
+        r[i], r[j] = r[j], r[i]
+    }
+    return string(r), nil
+}
+----
+
+— reverse_test.go —
+
+[source,go]
+----
+package main
+
+import (
+    "testing"
+    "unicode/utf8"
+)
+
+func FuzzReverse(f *testing.F) {
+    testcases := []string{"Hello, world", " ", "!12345"}
+    for _, tc := range testcases {
+        f.Add(tc) // Use f.Add to provide a seed corpus
+    }
+    f.Fuzz(func(t *testing.T, orig string) {
+        rev, err1 := Reverse(orig)
+        if err1 != nil {
+            return
+        }
+        doubleRev, err2 := Reverse(rev)
+        if err2 != nil {
+            return
+        }
+        if orig != doubleRev {
+            t.Errorf("Before: %q, after: %q", orig, doubleRev)
+        }
+        if utf8.ValidString(orig) && !utf8.ValidString(rev) {
+            t.Errorf("Reverse produced invalid UTF-8 string %q", rev)
+        }
+    })
+}
+----
+
+<完>

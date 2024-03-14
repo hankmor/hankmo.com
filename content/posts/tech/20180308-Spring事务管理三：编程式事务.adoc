@@ -1,0 +1,117 @@
+---
+title: Spring事务管理三：编程式事务
+slug: spring-programming-transaction
+img: /images/thumbnail/attachment/20180307/cd2270337b14476b91abd681c95de358.png
+categories:
+  - Spring
+tags:
+  - spring
+  - 事务
+  - transaction
+description: >-
+  Spring提供了TransactionTemplate工具类，可以方便地让开发人员手动的编程实现事务控制。编程式事务虽然可以精确控制事务，但是事务控制代码必须侵入业务逻辑代码中，耦合度高，后期难以维护。一般而言，不需要精确控制事务，所以采用的更多的是Spring的声明式事务。
+date: 2018-03-08 15:50:47
+updated: 2018-05-29 12:28:18
+---
+
+= Spring事务管理三：编程式事务
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: spring,事务,transaction,TransactionTemplate
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: spring,事务,transaction
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+前边提到，编写程序式的事务管理可以清楚的定义事务的边界，可以实现细粒度的事务控制，比如你可以通过程序代码来控制你的事务何时开始，何时结束等，它可以实现细粒度的事务控制。
+
+== TransactionTemplate
+ 
+Spring提供了TransactionTemplate对象来控制事务，它使用了一种回调机制，通过回调来修改事务状态，继承关系如下：
+
+image::/images/attachment/20180308/25126c35719b4720b2e2464c24748382.png[]
+
+TransactionOperations接口定义了基础的事务的执行操作execute()，该接口便于后续扩展，一般不直接使用。
+
+在使用TransactionTemplate之前，需要声明bean：
+ 
+[source,xml]
+----
+<!--JDBC事务管理器-->
+<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    <property name="dataSource" ref="dataSource"/>
+</bean>
+<!--编程式事务配置-->
+<bean id="transactionTemplate" class="org.springframework.transaction.support.TransactionTemplate">
+    <property name="transactionManager" ref="transactionManager"/>
+</bean>
+----
+ 
+TransactionTemplate使用PlatformTransactionManager的实现来管理事务，这里注入的是JDBC的事务管理器。事务控制代码如下：
+
+[source,java]
+----
+public void add(User user) throws Exception{
+    // Spring编码式事务，回调机制
+    transactionTemplate.execute(new TransactionCallback<Object>() {
+        @Override
+        public Object doInTransaction(TransactionStatus status) {
+            try {
+                userMapper.insertSelective(user);
+            } catch (Exception e) {
+                // 异常，设置为回滚
+                status.setRollbackOnly();
+                throw e;
+            }
+            return null;
+        }
+    });
+}
+----
+ 
+调用TransactionTemplate的execute()方法，传递一个TransactionCallback接口的实现，执行其doInTransaction()方法，该方法会回传事务状态对象TransactionStatus，如果有异常，则调用status.setRollbackOnly()将事务状态标记为回滚，否则doInTransaction方法正常返回，事务则会提交。
+
+如果事务控制的方法不需要返回值，那么可以使用TransactionCallback接口的抽象实现类TransactionCallbackWithoutResult：
+
+[source,java]
+----
+@Override
+public void add(User user) throws Exception {
+    // Spring编码式事务，回调机制
+    transactionTemplate.execute(new TransactionCallbackWithoutResult() {
+        @Override
+        protected void doInTransactionWithoutResult(TransactionStatus status) {
+            try {
+                userMapper.insertSelective(user);
+            } catch (Exception e) {
+                // 异常，设置为回滚
+                status.setRollbackOnly();
+                throw e;
+            }
+        }
+    });
+}
+----
+ 
+
+== PlatformTransactionManager
+ 
+
+当然，除了使用TransactionTemplate类外，我们还可以直接使用PlatformTransactionManager的实现来控制事务，通过该接口的getTransaction获取事务状态，然后调用commit提交事务，rollback回滚事务。上一篇我们已经详细介绍了PlatformTransactionManager的各个方法，编码过程也很简单，这里不再赘述。
+
+
+== 总结
+ 
+Spring提供了TransactionTemplate工具类，可以方便地让开发人员手动的编程实现事务控制。编程式事务虽然可以精确控制事务，但是事务控制代码必须侵入业务逻辑代码中，耦合度高，后期难以维护。一般而言，不需要精确控制事务，所以采用的更多的是Spring的声明式事务。

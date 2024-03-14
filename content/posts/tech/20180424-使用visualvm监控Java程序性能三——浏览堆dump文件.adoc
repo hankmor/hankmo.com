@@ -1,0 +1,198 @@
+---
+title: 使用visualvm监控Java程序性能三——浏览堆dump文件
+slug: visualvm-heap-dump
+img: /images/thumbnail/attachment/20180420/cbdb6d636de24970b3b7269022d33b08.png
+categories:
+  - 高新技术
+tags:
+  - visualvm
+  - 性能优化
+description: >-
+  堆dump，即堆转储，其实是一个当前JVM堆内存所有对象在某个时间点上的快照。堆dump用来将当前应用程序的堆内存中的数据信息保存为文件，并可以快速浏览文件中的内容，查询对象分配信息。堆dump是分析程序类和实例对象的关键手段，通过将堆内存信息保存起来，从而为后续分析做好准备工作。分析对dump，找出占用资源较高的对象，找出其引用关系，然后进行代码优化。
+date: 2018-04-24 19:18:50
+updated: 2018-05-29 18:05:57
+---
+
+= 使用visualvm监控Java程序性能三——浏览堆dump文件
+:author: belonk.com
+:date: 2018-05-29
+:doctype: article
+:email: belonk@126.com
+:encoding: UTF-8
+:favicon:
+:generateToc: true
+:icons: font
+:imagesdir: images
+:keywords: 堆dump,visualvm,对象,引用,性能优化
+:linkcss: true
+:numbered: true
+:stylesheet: 
+:tabsize: 4
+:tag: visualvm,性能优化
+:toc: auto
+:toc-title: 目录
+:toclevels: 4
+:website: https://belonk.com
+
+堆dump，即堆转储，其实是一个当前JVM堆内存所有对象在某个时间点上的快照。堆dump用来将当前应用程序的堆内存中的数据信息保存为文件，并可以快速浏览文件中的内容，查询对象分配信息。
+
+在VisualVM中，堆dump的入口很多，可以再应用程序右键，选择堆dump；也可以打开主窗口的“监视”tab页，点击右上角有堆dump按钮；还可以打开抽样器tab页，进行内存抽样后，点击工具栏上的堆dump按钮。
+
+
+== 打开堆dump
+ 
+执行完堆dump后，主窗口会打开一个堆dump的页面，同时应用程序节点会增加一个headdump+时间子节点，可以直接打开该节点来浏览堆dump文件信息，如图所示：
+
+
+image::/images/attachment/20180424/c58297eeb75d4a09bd91734741500d68.png[]
+
+
+堆dump文件存储后缀为.hprof，除了能够看到本地堆dump文件，也可以通过菜单栏的文件-装入打开他人分享的dump文件：
+
+
+image::/images/attachment/20180424/381c3bc3a52743c6b227e68fb2dfd5bd.png[]
+
+image::/images/attachment/20180424/1d2d4066b2b841008976bf4351f09478.png[]
+
+
+
+== 浏览堆dump文件信息
+ 
+堆dump tab页包含了几个子标签页面：概要、类、实例、OQL控制台，我们重点说下前三个。
+
+
+=== 概要
+ 
+显示了转储堆dump时的信息，包括基本信息、环境信息、系统属性和线程信息，例如你可以看到堆dump时间、文件存放位置、大小等。
+
+
+image::/images/attachment/20180424/91ce1fd92452488fa22d26e86e8d7bb5.png[]
+
+
+
+=== 类
+ 
+类视图显示类的列表，以及该类引用的实例的数量和百分占比、类所有实例的大小和百分占比。您可以通过在实例视图中右键单击名称和选择“在实例图中显示”或者直接双击类来查看特定类的实例列表：
+
+
+image::/images/attachment/20180424/6e42865c80e14aea848adf235470beef.png[]
+
+
+通过类视图，可以整体上明确哪些类实例数多，占用资源高。
+
+可以通过最下方的“类目过滤器”来搜索类，点击漏斗形状的图标可以选择筛选类型，例如包含/不包含类名称、正则匹配、搜索子类等。例如，搜索类名包含EsSyncTask的所有类，如下图所示：
+
+
+image::/images/attachment/20180424/b91c0fedddcc42439ccecc1b0c3530d2.png[]
+
+
+
+=== 实例数
+ 
+当在类视图选择查询具体某一个类的实例时（右键或者双击），此时就打开了该类的实例视图。当您从实例窗格中选择一个实例时，VisualVM将显示该类的字段，并在各自的窗格中引用该类。
+
+
+image::/images/attachment/20180424/dfd90a30fa17463e8a5f6119ba79d49a.png[]
+
+
+除了显示了具体的类和概要信息（实例数量、大小、总大小等）外，实例视图还有几个面板：
+
+* 实例数：显示当前类的实例列表，点击具体的某一个实例可以在字段和引用面板查看实例的字段信息和引用了的对象
+* 字段：显示当前选择的实例的具体字段，包括字段名称、类型、字段值等
+* 引用：递归显示当前所有引用了该类的类实例，该面板会一层层递归显示引用，包括引用实例的再引用。通过引用面板，可以跟踪对象的引用情况，以便找到具体的类，从而优化代码。
+
+通过右键点击实例或者在引用面板右键，可以查看最近垃圾回收根节点。
+
+接下来，我们来编一个实例程序，看看堆dump的情况，代码如下：
+
+[source,java]
+----
+public class HeaddumpTest {
+    public static void main(String[] args) {
+        Refrence ref = new Refrence();
+        int id = 0;
+        while (true) {
+            ref.add(new MyClass(id++, "myclass" + id));
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+class Refrence {
+    private List<MyClass> myClasses = new ArrayList<>();
+
+    public void add(MyClass myClass) {
+        myClasses.add(myClass);
+    }
+
+    public List<MyClass> getMyClasses() {
+        return myClasses;
+    }
+
+    public void setMyClasses(List<MyClass> myClasses) {
+        this.myClasses = myClasses;
+    }
+}
+
+class MyClass {
+    private int id;
+    private String name;
+
+    MyClass(int id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+----
+ 
+设置head大小为1m，勾选再出现OOM时自动生成dump文件，运行一段时间会出现OOME，打开自动生成的dump文件，此时的类视图如图所示：
+
+
+image::/images/attachment/20180424/b5008b7f5bd04360a56a797dba280c6f.png[]
+
+
+找到我们编写的MyClass内部类，可以看到该对象的实例数有1259，占总实例数的4.5%。表明该自定义类型的实例数较大，编码可能存在不合理的地方，具体需要查找到该类的引用。
+
+双击打开类实例视图：
+
+
+image::/images/attachment/20180424/3430880a84d14f03bbc4d311beac235d.png[]
+
+
+实例数面板显示了MyClass类的全部实例，点击一个实例，可以看到字段面板展示了类的字段和值。从引用面板可以看出，该实例最终被HeapdumpTest的Refrence内部类引用。此时，可以查询编码，找到该对象的引用相关代码，看是否存在不合理的对象创建，是否存在不合理引用导致垃圾回收不能回收该类，从而进行代码层面的优化。
+
+邮件点击this，选择“显示最近的垃圾回收根节点”，可以看到，该实例最近的垃圾回收实是发生在myClasses的ArrayList上。
+
+
+=== OQL控制台
+ 
+OQL是一种查询Java堆的类似sql的查询语言，基于JavaScript表达式语言。OQL允许过滤/选择从Java堆中需要的信息。VisualVM已经预定义了部分查询语句(例如“显示类X的所有实例”)，同时，OQL增加了更多的灵活性，你可以点击 https://htmlpreview.github.io/?https://raw.githubusercontent.com/visualvm/visualvm.java.net.backup/master/www/oqlhelp.html[这里]了解详细信息。
+
+通过OQL控制台，你可以定制OQL语句、执行并查询执行结果，这里不做详细介绍，有兴趣的可以自行查阅相关资料。
+
+
+== 总结
+ 
+堆dump是分析应用程序类和实例对象的关键手段，为代码优化提供依据。通过堆dump文件，找出占用资源高的对象，分析其引用关系，从而进行代码优化。
+
+这里简单介绍了如何使用VisualVM进行堆dump，并浏览dump文件，分析对象和实例。如果想要深入了解，可以查阅相关资料。
