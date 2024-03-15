@@ -13,6 +13,7 @@ updated: 2022/07/19
 ---
 
 = (译)Go并发模式——Context
+:source-highlighter: highlight.js
 :author: huzhou.site
 :doctype: article
 :email: huzhou.v@gmail.com

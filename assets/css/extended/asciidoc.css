@@ -1,0 +1,756 @@
+
+/* ===========================================
+代码数字编号
+=========================================== */
+
+.admonitionblock td.content .title, .audioblock .title, .exampleblock .title, .imageblock .title, .listingblock .title,
+.literalblock .title, .stemblock .title, .openblock .title, .paragraph .title, .quoteblock .title,
+table.tableblock .title, .verseblock .title, .videoblock .title, .dlist .title, .olist .title, .ulist .title,
+.qlist .title, .hdlist .title {
+    text-rendering: optimizeLegibility;
+    text-align: left;
+    font-family: "Noto Serif", "DejaVu Serif", serif;
+    font-size: 1rem;
+    font-style: italic
+}
+
+.subheader, .admonitionblock td.content > .title, .audioblock > .title, .exampleblock > .title, .imageblock > .title,
+.listingblock > .title, .literalblock > .title, .stemblock > .title, .openblock > .title, .paragraph > .title,
+.quoteblock > .title, table.tableblock > .title, .verseblock > .title, .videoblock > .title, .dlist > .title,
+.olist > .title, .ulist > .title, .qlist > .title, .hdlist > .title {
+    line-height: 1.45;
+    color: #7a2518 !important;
+    font-weight: 400;
+    margin-top: 0;
+    margin-bottom: .25em
+}
+
+.admonitionblock table {
+    border-collapse: separate;
+    border: 0;
+    background: none;
+    width: 100%
+}
+
+.admonitionblock table td.icon {
+    text-align: center;
+    width: 80px
+}
+
+.admonitionblock table td {
+    border: none;
+}
+
+.admonitionblock table td.icon img {
+    max-width: none
+}
+
+.admonitionblock table td.icon .title {
+    font-weight: bold;
+    font-family: "Open Sans", "DejaVu Sans", sans-serif;
+    text-transform: uppercase
+}
+
+.admonitionblock table td.content {
+    padding-left: 1.125em;
+    padding-right: 1.25em;
+    border-left: 1px solid #ddddd8 !important;
+    color: rgba(0, 0, 0, .6);
+    word-break: break-all;
+}
+
+.admonitionblock table td.content > :last-child > :last-child {
+    margin-bottom: 0
+}
+
+
+.admonitionblock td.icon [class^="fa icon-"] {
+    font-size: 2.5em;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, .5);
+    cursor: default
+}
+
+.admonitionblock td.icon .icon-note::before {
+    content: "\f05a";
+    color: #19407c
+}
+
+.admonitionblock td.icon .icon-tip::before {
+    content: "\f0eb";
+    text-shadow: 1px 1px 2px rgba(155, 155, 0, .8);
+    color: #111
+}
+
+.admonitionblock td.icon .icon-warning::before {
+    content: "\f071";
+    color: #bf6900
+}
+
+.admonitionblock td.icon .icon-caution::before {
+    content: "\f06d";
+    color: #bf3400
+}
+
+.admonitionblock td.icon .icon-important::before {
+    content: "\f06a";
+    color: #bf0000
+}
+
+.post-body .admonitionblock.note, .post-body .admonitionblock.important, .post-body .admonitionblock.tip {
+    padding: 0;
+    border-radius: 3px;
+    margin-bottom: 20px;
+    position: relative;
+    background: #f0f0f036;
+    border: 1px solid transparent;
+}
+
+.post-body .admonitionblock.note .table-container, .post-body .admonitionblock.important .table-container,
+.post-body .admonitionblock.tip .table-container {
+    padding: 10px 0;
+}
+
+.post-body .admonitionblock.note .table-container table, .post-body .admonitionblock.important .table-container table,
+.post-body .admonitionblock.tip .table-container table {
+    margin: 0;
+}
+
+.imageblock .title {
+    text-align: center;
+}
+
+/* ===========================================
+代码数字编号
+=========================================== */
+
+.conum[data-value] {
+    display: inline-block;
+    color: #fff !important;
+    background-color: rgba(0, 0, 0, .8);
+    -webkit-border-radius: 100px;
+    border-radius: 100px;
+    text-align: center;
+    font-size: .75em;
+    width: 1.67em;
+    height: 1.67em;
+    line-height: 1.67em;
+    font-family: "Open Sans", "DejaVu Sans", sans-serif;
+    font-style: normal;
+    font-weight: bold
+}
+
+.conum[data-value] * {
+    color: #fff !important
+}
+
+.conum[data-value] + b {
+    display: none
+}
+
+.conum[data-value]::after {
+    content: attr(data-value)
+}
+
+pre .conum[data-value] {
+    position: relative;
+    top: -.125em
+}
+
+b.conum * {
+    color: inherit !important
+}
+
+.conum:not([data-value]):empty {
+    display: none
+}
+
+.hdlist > table, .colist > table {
+    border: 0;
+    background: none;
+}
+
+.colist table td {
+    background: none;
+    border: none;
+}
+
+.colist.arabic {
+    margin-top: 10px!important;
+}
+
+code .conum[data-value] {
+    color: #000 !important;
+    background-color: #fff;
+}
+
+/* ===========================================
+目录样式
+=========================================== */
+
+#toctitle {
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 1em;
+}
+
+*:not(pre) > code {
+    font-size: .875em;
+    font-style: normal !important;
+    letter-spacing: 0;
+    padding: .1em .5ex;
+    word-spacing: -.15em;
+    /* color: #c7254e; */
+    background-color: #faf8f880;
+    -webkit-border-radius: 4px;
+    border-radius: 4px;
+    line-height: 1.45;
+    text-rendering: optimizeSpeed;
+    word-wrap: break-word;
+    border: 1px solid #b6afaf80;
+}
+
+*:not(pre) > code.nobreak {
+    word-wrap: normal
+}
+
+*:not(pre) > code.nowrap {
+    white-space: nowrap
+}
+
+@media screen and (max-width: 375px) {
+    #toc {
+        font-size: 0.875em;
+        border: 1px dashed #ccc;
+        padding: 1em;
+        margin: 0;
+        float: none;
+    }
+}
+
+/* ===========================================
+表格样式
+=========================================== */
+
+.admonitionblock table td.contenttable {
+    border-collapse: collapse;
+    border-spacing: 0
+}
+
+table.tableblock {
+    max-width: 100%;
+    border-collapse: separate
+}
+
+p.tableblock:last-child {
+    margin-bottom: 0
+}
+
+td.tableblock > .content {
+    margin-bottom: -1.25em
+}
+
+table.tableblock, th.tableblock, td.tableblock {
+    border: 0 solid #dedede
+}
+
+table.grid-all > thead > tr > .tableblock, table.grid-all > tbody > tr > .tableblock {
+    border-width: 0 1px 1px 0
+}
+
+table.grid-all > tfoot > tr > .tableblock {
+    border-width: 1px 1px 0 0
+}
+
+table.grid-cols > * > tr > .tableblock {
+    border-width: 0 1px 0 0
+}
+
+table.grid-rows > thead > tr > .tableblock, table.grid-rows > tbody > tr > .tableblock {
+    border-width: 0 0 1px
+}
+
+table.grid-rows > tfoot > tr > .tableblock {
+    border-width: 1px 0 0
+}
+
+table.grid-all > * > tr > .tableblock:last-child, table.grid-cols > * > tr > .tableblock:last-child {
+    border-right-width: 0
+}
+
+table.grid-all > tbody > tr:last-child > .tableblock, table.grid-all > thead:last-child > tr > .tableblock, table.grid-rows > tbody > tr:last-child > .tableblock, table.grid-rows > thead:last-child > tr > .tableblock {
+    border-bottom-width: 0
+}
+
+table.frame-all {
+    border-width: 1px
+}
+
+table.frame-sides {
+    border-width: 0 1px
+}
+
+table.frame-topbot, table.frame-ends {
+    border-width: 1px 0
+}
+
+table.stripes-all tr, table.stripes-odd tr:nth-of-type(odd) {
+    background: #f8f8f7
+}
+
+table.stripes-none tr, table.stripes-odd tr:nth-of-type(even) {
+    background: none
+}
+
+th.halign-left, td.halign-left {
+    text-align: left
+}
+
+th.halign-right, td.halign-right {
+    text-align: right
+}
+
+th.halign-center, td.halign-center {
+    text-align: center
+}
+
+th.valign-top, td.valign-top {
+    vertical-align: top
+}
+
+th.valign-bottom, td.valign-bottom {
+    vertical-align: bottom
+}
+
+th.valign-middle, td.valign-middle {
+    vertical-align: middle
+}
+
+table thead th, table tfoot th {
+    font-weight: bold
+}
+
+tbody tr th {
+    display: table-cell;
+    line-height: 1.6;
+    background: #f7f8f7
+}
+
+tbody tr th, tbody tr th p, tfoot tr th, tfoot tr th p {
+    color: rgba(0, 0, 0, .8);
+    font-weight: bold
+}
+
+/*p.tableblock>code:only-child{background:none;padding:0}*/
+p.tableblock {
+    font-size: 1em
+}
+
+td > div.verse {
+    white-space: pre
+}
+
+ol {
+    margin-left: 1.75em
+}
+
+ul li ol {
+    margin-left: 1.5em
+}
+
+dl dd {
+    margin-left: 1.125em
+}
+
+dl dd:last-child, dl dd:last-child > :last-child {
+    margin-bottom: 0
+}
+
+ol > li p, ul > li p, ul dd, ol dd, .olist .olist, .ulist .ulist, .ulist .olist, .olist .ulist {
+    margin-bottom: .625em
+}
+
+ul.checklist, ul.none, ol.none, ul.no-bullet, ol.no-bullet, ol.unnumbered, ul.unstyled, ol.unstyled {
+    list-style-type: none
+}
+
+ul.no-bullet, ol.no-bullet, ol.unnumbered {
+    margin-left: .625em
+}
+
+ul.unstyled, ol.unstyled {
+    margin-left: 0
+}
+
+ul.checklist {
+    margin-left: .625em
+}
+
+ul.checklist li > p:first-child > .fa-square-o:first-child, ul.checklist li > p:first-child > .fa-check-square-o:first-child {
+    width: 1.25em;
+    font-size: .8em;
+    position: relative;
+    bottom: .125em
+}
+
+ul.checklist li > p:first-child > input[type="checkbox"]:first-child {
+    margin-right: .25em
+}
+
+ul.inline {
+    display: -ms-flexbox;
+    display: -webkit-box;
+    display: flex;
+    -ms-flex-flow: row wrap;
+    -webkit-flex-flow: row wrap;
+    flex-flow: row wrap;
+    list-style: none;
+    margin: 0 0 .625em -1.25em
+}
+
+ul.inline > li {
+    margin-left: 1.25em
+}
+
+.unstyled dl dt {
+    font-weight: 400;
+    font-style: normal
+}
+
+ol.arabic {
+    list-style-type: decimal
+}
+
+ol.decimal {
+    list-style-type: decimal-leading-zero
+}
+
+ol.loweralpha {
+    list-style-type: lower-alpha
+}
+
+ol.upperalpha {
+    list-style-type: upper-alpha
+}
+
+ol.lowerroman {
+    list-style-type: lower-roman
+}
+
+ol.upperroman {
+    list-style-type: upper-roman
+}
+
+ol.lowergreek {
+    list-style-type: lower-greek
+}
+
+.hdlist > table, .colist > table {
+    border: 0;
+    background: none
+}
+
+.hdlist > table > tbody > tr, .colist > table > tbody > tr {
+    background: none
+}
+
+td.hdlist1, td.hdlist2 {
+    vertical-align: top;
+    padding: 0 .625em
+}
+
+td.hdlist1 {
+    font-weight: bold;
+    padding-bottom: 1.25em
+}
+
+.literalblock + .colist, .listingblock + .colist {
+    /*margin-top: -.5em*/
+}
+
+.colist td:not([class]):first-child {
+    padding: .6em .75em 0;
+    line-height: 1;
+    vertical-align: top;
+    width: 1em;
+}
+
+.colist td:not([class]):first-child img {
+    max-width: none
+}
+
+.colist td:not([class]):last-child {
+    padding: .25em 0
+}
+
+.thumb, .th {
+    line-height: 0;
+    display: inline-block;
+    border: solid 4px #fff;
+    -webkit-box-shadow: 0 0 0 1px #ddd;
+    box-shadow: 0 0 0 1px #ddd
+}
+
+.imageblock.left, .imageblock[style*="float: left"] {
+    margin: .25em .625em 1.25em 0
+}
+
+.imageblock.right, .imageblock[style*="float: right"] {
+    margin: .25em 0 1.25em .625em
+}
+
+.imageblock > .title {
+    margin-bottom: 0
+}
+
+.imageblock.thumb, .imageblock.th {
+    border-width: 6px
+}
+
+.imageblock.thumb > .title, .imageblock.th > .title {
+    padding: 0 .125em
+}
+
+.image.left, .image.right {
+    margin-top: .25em;
+    margin-bottom: .25em;
+    display: inline-block;
+    line-height: 0
+}
+
+.image.left {
+    margin-right: .625em
+}
+
+.image.right {
+    margin-left: .625em
+}
+
+a.image {
+    text-decoration: none;
+    display: inline-block
+}
+
+a.image object {
+    pointer-events: none
+}
+
+sup.footnote, sup.footnoteref {
+    font-size: .875em;
+    position: static;
+    vertical-align: super
+}
+
+sup.footnote a, sup.footnoteref a {
+    text-decoration: none
+}
+
+sup.footnote a:active, sup.footnoteref a:active {
+    text-decoration: underline
+}
+
+#footnotes {
+    padding-top: .75em;
+    padding-bottom: .75em;
+    margin-bottom: .625em
+}
+
+#footnotes hr {
+    width: 20%;
+    min-width: 6.25em;
+    margin: -.25em 0 .75em;
+    border-width: 1px 0 0
+}
+
+#footnotes .footnote {
+    padding: 0 .375em 0 .225em;
+    line-height: 1.3334;
+    font-size: .875em;
+    margin-left: 1.2em;
+    margin-bottom: .2em
+}
+
+#footnotes .footnote a:first-of-type {
+    font-weight: bold;
+    text-decoration: none;
+    margin-left: -1.05em
+}
+
+#footnotes .footnote:last-of-type {
+    margin-bottom: 0
+}
+
+#content #footnotes {
+    margin-top: -.625em;
+    margin-bottom: 0;
+    padding: .75em 0
+}
+
+.gist .file-data > table {
+    border: 0;
+    background: #fff;
+    width: 100%;
+    margin-bottom: 0
+}
+
+.gist .file-data > table td.line-data {
+    width: 99%
+}
+
+div.unbreakable {
+    page-break-inside: avoid
+}
+
+.big {
+    font-size: larger
+}
+
+.small {
+    font-size: smaller
+}
+
+.underline {
+    text-decoration: underline
+}
+
+.overline {
+    text-decoration: overline
+}
+
+.line-through {
+    text-decoration: line-through
+}
+
+.aqua {
+    color: #00bfbf
+}
+
+.aqua-background {
+    background-color: #00fafa
+}
+
+.black {
+    color: #000
+}
+
+.black-background {
+    background-color: #000
+}
+
+.blue {
+    color: #0000bf
+}
+
+.blue-background {
+    background-color: #0000fa
+}
+
+.fuchsia {
+    color: #bf00bf
+}
+
+.fuchsia-background {
+    background-color: #fa00fa
+}
+
+.gray {
+    color: #606060
+}
+
+.gray-background {
+    background-color: #7d7d7d
+}
+
+.green {
+    color: #006000
+}
+
+.green-background {
+    background-color: #007d00
+}
+
+.lime {
+    color: #00bf00
+}
+
+.lime-background {
+    background-color: #00fa00
+}
+
+.maroon {
+    color: #600000
+}
+
+.maroon-background {
+    background-color: #7d0000
+}
+
+.navy {
+    color: #000060
+}
+
+.navy-background {
+    background-color: #00007d
+}
+
+.olive {
+    color: #606000
+}
+
+.olive-background {
+    background-color: #7d7d00
+}
+
+.purple {
+    color: #600060
+}
+
+.purple-background {
+    background-color: #7d007d
+}
+
+.red {
+    color: #bf0000
+}
+
+.red-background {
+    background-color: #fa0000
+}
+
+.silver {
+    color: #909090
+}
+
+.silver-background {
+    background-color: #bcbcbc
+}
+
+.teal {
+    color: #006060
+}
+
+.teal-background {
+    background-color: #007d7d
+}
+
+.white {
+    color: #bfbfbf
+}
+
+.white-background {
+    background-color: #fafafa
+}
+
+.yellow {
+    color: #bfbf00
+}
+
+.yellow-background {
+    background-color: #fafa00
+}
+
+span.icon > .fa {
+    cursor: default
+}
+
+a span.icon > .fa {
+    cursor: inherit
+}

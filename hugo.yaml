@@ -149,22 +149,38 @@ menu:
       weight: 40
 
 # Read: https://github.com/adityatelange/hugo-PaperMod/wiki/FAQs#using-hugos-syntax-highlighter-chroma
-pygmentsUseClasses: true
+pygmentsUseClasses: false
 markup:
   highlight:
-    #    noClasses: false
-    # anchorLineNos: true
-    codeFences: true
-    # guessSyntax: true
+    anchorLineNos: false
+    codeFences: false
+    guessSyntax: false
+    hl_Lines: ""
+    hl_inline: false
+    lineAnchors: ""
+    lineNoStart: 1
     lineNos: true
+    lineNumbersInTable: true
+    noClasses: true
+    noHl: true
     style: monokai
+    tabWidth: 4
   asciidocExt:
     extensions:
       - "asciidoctor-diagram"
       - "asciidoctor-html5s"
-    workingFolderCurrent: true
     attributes:
-      source-highlighter: "" # coderay
+      source-highlighter: "highlight.js"
+    noHeaderOrFooter: true
+    backend: html5
+    failureLevel: fatal
+    preserveTOC: false
+    safeMode: unsafe
+    sectionNumbers: false
+    trace: false
+    verbose: false
+    workingFolderCurrent: false
+
 security:
   enableInlineShortcodes: false
   exec:
