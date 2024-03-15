@@ -64,7 +64,7 @@ params:
     safari_pinned_tab: "/images/favicon.ico"
 
   label:
-    text: "Home"
+    text: "墨寒轩"
     icon: /apple-touch-icon.png
     iconHeight: 35
 
@@ -72,16 +72,19 @@ params:
   profileMode:
     enabled: true # needs to be explicitly set
     title: HANKMO.COM
-    subtitle: "🧑‍💻Dive into technology and think positively about life!🌱"
+    # subtitle: "🧑‍💻Dive into technology and think positively about life!🌱"
+    subtitle: "🧑‍💻潜心研技术，积极品人生！🌱"
     imageUrl: "/images/favicon.ico"
     imageWidth: 128
     imageHeight: 128
     imageTitle: "hankmo.com"
     buttons:
-      - name: Posts
+      - name: 🧑‍💻关于
+        url: /about/me
+      - name: 📖博文
         url: posts
-      - name: Tags
-        url: tags
+      # - name: 🏷️
+        # url: tags
 
   # home-info mode
   homeInfoParams:
@@ -132,19 +135,19 @@ menu:
       url: /search
       weight: 1
     - identifier: posts
-      name: Posts
+      name: 博文
       url: /posts/
       weight: 10
     - identifier: categories
-      name: Categories
+      name: 分类
       url: /categories/
       weight: 20
     - identifier: Tags
-      name: Tags
+      name: 标签
       url: /tags/
       weight: 30
     - identifier: about
-      name: About
+      name: 关于
       url: /about/me
       weight: 40
 
