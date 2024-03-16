@@ -286,4 +286,4 @@ String[] msgs = new String[]{
 * 消息标记为持久化并不能完全保证消息不丢失
 * 轮询的消息分发机制并不公平，可以通过设置channel.basicQos来保证消息未处理完成前不在分发新的消息给当前消费者
 
-示例代码见 https://github.com/belonk/RabbitMQDemo/tree/master/src/main/java/com/belonk/rmq/workqueue[github].
+示例代码见 https://github.com/hankmor/RabbitMQDemo/tree/master/src/main/java/com/belonk/rmq/workqueue[github].

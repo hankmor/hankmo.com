@@ -469,4 +469,4 @@ public Fan createFan() {
 
 如果有更多的风扇，我们可以新加工厂来生产，只是新工厂不需要生产电视机和空调，这会违背接口隔离原则。我们还可以让一个具体工厂生产多个具体产品，但是这又会违背开闭原则。因此，抽象工厂模式的核心思想是，将多个产品分布到不同的工厂来创建实例，至于如何分配需要设计时做出一些权衡，尽量满足开闭原则、接口隔离原则的要求。
 
-本文示例代码见: https://github.com/belonk/java-designpattern[Github]
+本文示例代码见: https://github.com/hankmor/java-designpattern[Github]

@@ -282,4 +282,4 @@ public abstract class TypeReference<T> implements Comparable<TypeReference<T>> {
 
 Java不能通过 `Class` 直接获取到类的具体泛型，但是可以通过创建泛型父类持有具体泛型并创建其匿名子类来实现。
 
-本文示例代码见： https://github.com/koobyte/java-learning/tree/master/src/main/java/com/belonk/lang/generic[github].
+本文示例代码见： https://github.com/hankmor/java-learning/tree/master/src/main/java/com/belonk/lang/generic[github].

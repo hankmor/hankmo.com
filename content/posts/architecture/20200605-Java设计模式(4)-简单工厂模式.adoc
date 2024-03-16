@@ -133,4 +133,4 @@ class MilkOrderFactory {
 
 简单工厂模式，属于最简单的工厂模式，它体现了工厂模式最基本形态。但是它会违背软件设计的开闭原则，在使用时应该慎重考虑，如果生产的产品数量小，可以考虑使用，但是如果产品类型多、数量大，就应该考虑工厂方法模式或者抽象工厂模式了。
 
-本文示例代码见： https://github.com/belonk/java-designpattern[Github]
+本文示例代码见： https://github.com/hankmor/java-designpattern[Github]

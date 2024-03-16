@@ -448,4 +448,4 @@ Hello World!
  
 基于内存的stomp消息代理能够满足单应用需求，引入外部stomp消息代理解决了多应用之间的websocket消息传递需求。不同的消息中间件，都会按照stomp规范定义自身的destination支持。开发者需要明白两个点：订阅者订阅了什么destination，发送者发送到什么destination，这两个地址的匹配规则是什么。
 
-源码地址： https://github.com/belonk/springboot-demo/tree/master/13-websocket/03-websocket-stomp-rabbitmq[见GITHUB]
+源码地址： https://github.com/hankmor/springboot-demo/tree/master/13-websocket/03-websocket-stomp-rabbitmq[见GITHUB]

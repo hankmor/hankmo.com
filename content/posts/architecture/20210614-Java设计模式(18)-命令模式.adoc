@@ -289,7 +289,7 @@ public class CommandPatternDemo {
 }
 ----
 
-以上完整示例代码见 https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/command[github]。
+以上完整示例代码见 https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/command[github]。
 
 == 总结
 

@@ -69,7 +69,7 @@ ____
 
 大意是说，`ArrayList` 实现不是线程安全的，多个线程访问它时需要外部同步，也可以使用 `Collections.synchronizedList` 来将其包装为线程安全的 `List`。
 
-有了类规范说明，那么类表现的行为就应该与其规范一致。比如，`ArrayList` 不是线程安全的，那么多个线程在同时迭代、添加、删除元素时，会抛出 `IndexOutOfBoundsException` 或 `ConcurrentModificationException`。`Collections.synchronizedList` 包装的 `List` 是线程安全的，正确使用时不会出现这个问题 footnote:[示例代码见: https://github.com/koobyte/thinking-in-jcip/tree/main/src/main/java/com/koobyte/concurrency/c02[github]]，参看<<#not-safe-list,后文示例>>。
+有了类规范说明，那么类表现的行为就应该与其规范一致。比如，`ArrayList` 不是线程安全的，那么多个线程在同时迭代、添加、删除元素时，会抛出 `IndexOutOfBoundsException` 或 `ConcurrentModificationException`。`Collections.synchronizedList` 包装的 `List` 是线程安全的，正确使用时不会出现这个问题 footnote:[示例代码见: https://github.com/hankmor/thinking-in-jcip/tree/main/src/main/java/com/koobyte/concurrency/c02[github]]，参看<<#not-safe-list,后文示例>>。
 
 === 安全性
 
@@ -334,7 +334,7 @@ public class UnsafeCachingFactorizer extends GenericServlet implements Servlet {
 <1> 竞态条件：读取的值可能被其他线程修改
 <2> 竞态条件：两个set操作不满足原子性
 
-这个示例代码 footnote:[来自《Java并发编程实战》： 见 https://github.com/koobyte/jcip-source-code-maven/blob/main/jcip-examples/src/main/java/net/jcip/examples/UnsafeCachingFactorizer.java[github]] 不是线程安全的，它想要对请求中的一个整型值做因式分解，并将最后的分解结果缓存起来，下次可以直接从缓存中获取。由于它存在两个共享的原子变量 `lastNumber` 和 `lastFactors`， `service` 方法中存在竞态条件，并不能保证 `lastNumber` 和 `lastFactors` 能够同时 `set` 成功，另外，一个线程在执行 `lastNumber.get()` 时，其他线程可能调用 `lastNumber.set(i)` 更改其值，导致线程原来读取的值失效。
+这个示例代码 footnote:[来自《Java并发编程实战》： 见 https://github.com/hankmor/jcip-source-code-maven/blob/main/jcip-examples/src/main/java/net/jcip/examples/UnsafeCachingFactorizer.java[github]] 不是线程安全的，它想要对请求中的一个整型值做因式分解，并将最后的分解结果缓存起来，下次可以直接从缓存中获取。由于它存在两个共享的原子变量 `lastNumber` 和 `lastFactors`， `service` 方法中存在竞态条件，并不能保证 `lastNumber` 和 `lastFactors` 能够同时 `set` 成功，另外，一个线程在执行 `lastNumber.get()` 时，其他线程可能调用 `lastNumber.set(i)` 更改其值，导致线程原来读取的值失效。
 
 保证原子性最简单的方式是 *使用同步机制*。Java 的同步机制包括：`synchronized` 和 `Lock`，此外，还可以使用 `volatile` 来申明需要线程共享的变量。
 
@@ -504,7 +504,7 @@ public class ReentrantSynchronized {
 
 == 综合示例：改进UnsafeCachingFactorizer
 
-现在，我们可以使用同步代码块来改进前边的 `UnsafeCachingFactorizer`，代码 footnote:[来自《Java并发编程实战》，见 https://github.com/koobyte/jcip-source-code-maven/blob/main/jcip-examples/src/main/java/net/jcip/examples/UnsafeCachingFactorizer.java[github]]如下：
+现在，我们可以使用同步代码块来改进前边的 `UnsafeCachingFactorizer`，代码 footnote:[来自《Java并发编程实战》，见 https://github.com/hankmor/jcip-source-code-maven/blob/main/jcip-examples/src/main/java/net/jcip/examples/UnsafeCachingFactorizer.java[github]]如下：
 
 [source,java]
 ----

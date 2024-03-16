@@ -300,4 +300,4 @@ public class EnumerationDemo {
 
 Java中内置了迭代器，而且集合框架中大多都实现了它，通常我们不需要再去自定义实现迭代器。
 
-本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/iterator[github]
+本文示例代码见： https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/iterator[github]

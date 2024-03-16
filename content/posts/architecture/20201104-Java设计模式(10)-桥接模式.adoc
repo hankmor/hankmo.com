@@ -269,4 +269,4 @@ image::/images/attachment/designpattern/bridge-pattern4.png[]
 
 例如，开发消息系统，消息存在消息业务类型（如普通、加急消息）、消息方式（微信、短信、邮件）等多维度变化时，可以考虑桥接模式；又如，开发电商系统，商品存在多个维度的属性变化，如SPU footnote:[SPU，Standard Product Unit, 即标准化产品单元，SPU是商品信息聚合的最小单位，是一组可复用、易检索的标准化信息的集合，该集合描述了一个产品的特性。通俗点讲，属性值、特性相同的商品就可以称为一个SPU。SPU属性不影响商铺库存和价格，参考： http://www.woshipm.com/pd/1973766.html[http://www.woshipm.com/pd/1973766.html] ]、SKU footnote:[SKU, Stock Keeping Unit, 库存量单位) SKU即库存进出计量的单位，是物理上不可分割的最小存货单元。一款商品，可以根据SKU来确定具体的货物存量。SKU属性会影响到库存和价格的属性, 又叫销售属性。参考： http://www.woshipm.com/pd/1973766.html[http://www.woshipm.com/pd/1973766.html] ] 等属性，可以考虑使用桥接模式。
 
-本文示例代码见: https://github.com/belonk/java-designpattern[Github]
+本文示例代码见: https://github.com/hankmor/java-designpattern[Github]

@@ -408,7 +408,7 @@ class Client {
 当前状态：已终止
 ----
 
-完整的实例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/state[github]。
+完整的实例代码见： https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/state[github]。
 
 == 总结
 

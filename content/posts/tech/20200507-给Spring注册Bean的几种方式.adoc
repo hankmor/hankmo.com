@@ -521,7 +521,7 @@ assert carFactoryBean.getClass().equals(CarFactoryBean.class);
 ----
 
 == 示例代码
-本文示例代码参见 https://github.com/belonk/spring5-demo/tree/master/01-spring-ioc/[Github]。
+本文示例代码参见 https://github.com/hankmor/spring5-demo/tree/master/01-spring-ioc/[Github]。
 
 [bibliography]
 == 参考文档

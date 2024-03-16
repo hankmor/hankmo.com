@@ -317,4 +317,4 @@ SimpleCar simpleCar = SimpleCar.builder() // <1>
 
 建造者模式应用比较广泛，如JDK的``StringBuilder``、Spring的``ServerRequest.Builder``、``BeanDefinitionBuilder``等等。
 
-本文示例代码见: https://github.com/belonk/java-designpattern/tree/master/src/com/belonk/designpattern/builder[Github]
+本文示例代码见: https://github.com/hankmor/java-designpattern/tree/master/src/com/belonk/designpattern/builder[Github]

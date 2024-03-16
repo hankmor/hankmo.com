@@ -280,4 +280,4 @@ public abstract class ComponentAdapter implements ComponentListener {
 
 在java8以后，JDK提供了接口的默认方法，解决了无需实现接口定义的所有方法的问题。因此，接口适配器模式可能会使用越来越少。
 
-本文示例代码见: https://github.com/belonk/java-designpattern/tree/master/src/com/belonk/designpattern/adapter[Github]
+本文示例代码见: https://github.com/hankmor/java-designpattern/tree/master/src/com/belonk/designpattern/adapter[Github]

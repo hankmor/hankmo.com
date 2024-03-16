@@ -739,7 +739,7 @@ public void testConstraintComposing() {
 
 本文仅简单了介绍了如何使用``Bean Validation``，要获取更多内容请参阅官方文档。
 
-本文的源码： https://github.com/belonk/springboot-demo/tree/master/06-webapp-demo[GITHUB]
+本文的源码： https://github.com/hankmor/springboot-demo/tree/master/06-webapp-demo[GITHUB]
 
 &nbsp;
 

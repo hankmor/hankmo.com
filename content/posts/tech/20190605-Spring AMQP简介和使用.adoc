@@ -947,4 +947,4 @@ Confirm callback :
 
 6、发布者消息确认和返回时，注意条件，满足条件才能进行确认和返回，并且一个RabbitTemplate只能设置一个确认回调和返回回调
 
-本文的实例代码见： https://github.com/belonk/springboot-demo/tree/master/12-amqp/00-spring-amqp[github]
+本文的实例代码见： https://github.com/hankmor/springboot-demo/tree/master/12-amqp/00-spring-amqp[github]

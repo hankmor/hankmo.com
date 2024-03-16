@@ -320,4 +320,4 @@ public class PrototypeOriginator implements Cloneable { // <1>
 
 当需要保存对象的状态，又不想暴露对象的实现细节，此时可以考虑使用原型模式，将备忘录和其保存的逻辑抽取出来，对象仅需暴露一个创建备忘录和一个恢复到备忘录的方法即可，便于扩展。但是，备忘录对象会保存原发器的部分甚至整个状态，会带来很大的开销，因此使用时需要权衡利弊。
 
-本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/memento[github]
+本文示例代码见： https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/memento[github]

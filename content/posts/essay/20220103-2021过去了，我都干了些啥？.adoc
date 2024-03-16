@@ -167,7 +167,7 @@ https://golang.google.cn/[Go] 是一门很好的语言，具备良好的性能�
 .2021 github提交次数
 image::/images/other/2021-github.png[]
 
-去年，在 https://github.com/koobyte[Github] 上的提交数才300多一点，今年的目标是突破500，如果自己能够按照既定目标边学习边实践，那么提交数肯定会超过这个目标。
+去年，在 https://github.com/hankmor[Github] 上的提交数才300多一点，今年的目标是突破500，如果自己能够按照既定目标边学习边实践，那么提交数肯定会超过这个目标。
 
 === 读书计划
 

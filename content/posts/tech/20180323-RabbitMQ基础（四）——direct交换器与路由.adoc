@@ -182,8 +182,8 @@ image::/images/attachment/20180323/058c29dce41846aaa4dddcda5163b6ff.png[]
 Producer生产各种级别的日志信息，发送给type为direct的交换器Exchange；在消费者端，队列Queue1绑定的bindingKey为error，队列Queue2则绑定了多个key，分别为debug、info和warning；最终，Consumer1从Queue1获取消息，而Consumer2从Queue2获取消息，实现了日志的按级别转发和接收。
 
 完成的代码见：
-https://github.com/belonk/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l04routing/LogSenderDirect.java[LogSenderDirect.java]和
-https://github.com/belonk/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l04routing/LogReceiverDirect.java[LogReceiverDirect.java]。
+https://github.com/hankmor/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l04routing/LogSenderDirect.java[LogSenderDirect.java]和
+https://github.com/hankmor/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l04routing/LogReceiverDirect.java[LogReceiverDirect.java]。
  
 
 == 总结

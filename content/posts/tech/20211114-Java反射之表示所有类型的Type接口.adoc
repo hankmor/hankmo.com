@@ -464,4 +464,4 @@ class sun.reflect.generics.reflectiveObjects.WildcardTypeImpl
 
 通常，根据泛型定义的形式，会先获取 `ParameterizedType`，然后通过其 `getActualTypeArguments()` 继续深挖到其他泛型类型。
 
-本文示例代码见： https://github.com/koobyte/java-learning/tree/master/src/main/java/com/belonk/lang/reflect[github].
+本文示例代码见： https://github.com/hankmor/java-learning/tree/master/src/main/java/com/belonk/lang/reflect[github].

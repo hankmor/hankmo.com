@@ -64,7 +64,7 @@ image::/images/concurrency/jcip-view.png[width="400"]
 
 我在阅读本书时，会结合自己的理解写一些读书笔记和感悟，尽量尝试用通俗易懂的文字来解释一些难以理解的内容，并通过大量的代码来实践。一方面，写读书笔记可以加深自己的理解，对书中内容持怀疑的态度，然后实践求证，这样才能算真正理解。另一方面，只读不练，那也是假把式，大脑会很快遗忘，边读书边实践边整理，还要时不时的 "温故" 才能 "知新"。
 
-读书笔记相关的代码我都放在 https://github.com/koobyte/thinking-in-jcip[这里]。
+读书笔记相关的代码我都放在 https://github.com/hankmor/thinking-in-jcip[这里]。
 
 [NOTE]
 ====
@@ -85,4 +85,4 @@ image::/images/concurrency/jcip-view.png[width="400"]
 
 === 书中源码
 
-本书的 https://jcip.net/[官方网站] 提供了书中的全部源代码，不过没有使用构建工具，自己还需要加入第三方包。我已经将源码整理成了 `Maven` 工程放到 https://github.com/koobyte/jcip-source-code-maven[github] 上，可以直接 fork 使用。
+本书的 https://jcip.net/[官方网站] 提供了书中的全部源代码，不过没有使用构建工具，自己还需要加入第三方包。我已经将源码整理成了 `Maven` 工程放到 https://github.com/hankmor/jcip-source-code-maven[github] 上，可以直接 fork 使用。

@@ -540,4 +540,4 @@ void
 
 JDK1.8注解可以标注在任何类型上，获取注解的方式也随之扩展了。`AnnotatedType` 接口的目的在于获取泛型类型上的注解，包括泛型参数、通配符、上下边界等，前提是目标元素声明了泛型类型并且标注了注解，否则其 `getType` 方法将返回原始类型。
 
-本文示例代码见： https://github.com/koobyte/java-learning/tree/master/src/main/java/com/belonk/lang/reflect[github].
+本文示例代码见： https://github.com/hankmor/java-learning/tree/master/src/main/java/com/belonk/lang/reflect[github].

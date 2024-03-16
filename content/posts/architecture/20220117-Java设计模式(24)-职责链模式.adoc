@@ -347,4 +347,4 @@ public class AskForLeaveChain {
 
 职责链模式是一种常用的设计模式，各大框架都有它的身影。比如，Spring 的 `HandlerExecutionChain`，MyBatis 的 `InterceptorChain` 等等。
 
-本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/respchain/[github]。
+本文示例代码见： https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/respchain/[github]。

@@ -267,4 +267,4 @@ public ResultMsg error() throws Exception {
 Spring Boot还提供了更加精确的控制自定义页面的方式，这里不再详述。
 
 示例源码见
-https://github.com/belonk/springboot-demo/tree/master/02-webapp-view[Github]。
+https://github.com/hankmor/springboot-demo/tree/master/02-webapp-view[Github]。

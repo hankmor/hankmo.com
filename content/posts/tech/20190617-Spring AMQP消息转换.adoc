@@ -325,4 +325,4 @@ ____
 
 3、JSON消息转换器还支持配置ClassMapper来定义转换类型。
 
-本文实例代码见 https://github.com/belonk/springboot-demo/tree/master/12-amqp/00-spring-amqp[github]。
+本文实例代码见 https://github.com/hankmor/springboot-demo/tree/master/12-amqp/00-spring-amqp[github]。

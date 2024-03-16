@@ -613,7 +613,7 @@ public class MetaListener {
 == 总结
  
 
-本文的示例代码见 https://github.com/belonk/springboot-demo/tree/master/12-amqp/00-spring-amqp-annotation[github]，总结一下：
+本文的示例代码见 https://github.com/hankmor/springboot-demo/tree/master/12-amqp/00-spring-amqp-annotation[github]，总结一下：
 
 1、``@RabbitListener``是消息异步监听的基本注解，可以定义监听的队列、队列绑定关系
 

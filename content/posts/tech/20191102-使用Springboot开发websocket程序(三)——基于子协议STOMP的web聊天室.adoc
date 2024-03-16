@@ -647,4 +647,4 @@ public class MockWebsocketClient {
 
 6、除了浏览器使用``stomp.js``，Spring也提供了STOMP Java客户端
 
-本文的源码： https://github.com/belonk/springboot-demo/tree/master/14-websocket-stomp[GITHUB]。
+本文的源码： https://github.com/hankmor/springboot-demo/tree/master/14-websocket-stomp[GITHUB]。

@@ -309,7 +309,7 @@ public class ConsumerController {
 但是，我们编写的是一个单节点的注册中心，注册中心一旦出现故障，那么会影响整个微服务体系，导致其不可用，在下一篇，我们来看看如何使用Eureka搭建高可用、双节点的服务注册中心。
 
 **示例代码：
-https://github.com/belonk/springcloud-demo/tree/master/02-eureka[github]**
+https://github.com/hankmor/springcloud-demo/tree/master/02-eureka[github]**
 
 
 **参考文章：**

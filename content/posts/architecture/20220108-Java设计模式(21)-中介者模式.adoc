@@ -227,4 +227,4 @@ ConcreteColleague1 收到了消息: 我是同事2
 
 另外，中介者模式、外观模式、观察者模式之间存在一定的相似性，使用时需要注意区分。
 
-本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/mediator[github]。
+本文示例代码见： https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/mediator[github]。

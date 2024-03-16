@@ -340,4 +340,4 @@ public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
  
 本篇用了Spring对websocket协议的原生支持，来开发了一个简单的web聊天室。但是它仅支持群发消息，如果要支持点对点消息，我们还需要做大量的开发工作。其实，websocket也支持使用其子协议，来完成更高级的功能。在下一篇，我们将介绍websocket的自协议STOMP，并用它来升级我们的聊天室程序。
 
-完整实例代码在 https://github.com/belonk/springboot-demo/tree/master/13-websocket[这里]。
+完整实例代码在 https://github.com/hankmor/springboot-demo/tree/master/13-websocket[这里]。

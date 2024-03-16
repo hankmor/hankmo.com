@@ -555,4 +555,4 @@ public class PhilosopherDinnerResolve5 {
 
 多线程编程中，活跃性问题是非常复杂的问题，通常难以定位和分析。本文以 *哲学家就餐* 问题为核心，探讨了死锁的产生原因和避免方法。除了 *死锁*，活跃性问题还包括 *饥饿* 和 *活锁*，后边再详细讨论它们。
 
-本文示例代码见： https://github.com/koobyte/thinking-in-jcip/tree/main/src/main/java/com/koobyte/concurrency/c01[github].
+本文示例代码见： https://github.com/hankmor/thinking-in-jcip/tree/main/src/main/java/com/koobyte/concurrency/c01[github].

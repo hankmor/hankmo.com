@@ -281,4 +281,4 @@ public class Runtime {
 
 综上，单例模式解决了频繁创建实例和销毁实例的性能开销。推荐的实现方式是支持懒加载的方式，比如：双重检查、静态内部类，枚举和静态属性的方式也是可用的。
 
-本文示例代码见： https://github.com/belonk/java-designpattern[GITHUB]
+本文示例代码见： https://github.com/hankmor/java-designpattern[GITHUB]

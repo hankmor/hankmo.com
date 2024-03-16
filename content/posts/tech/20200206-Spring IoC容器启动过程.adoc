@@ -36,7 +36,7 @@ updated:
 [TIP]
 要跟踪Spring的源码，可能需要结合不同的功能测试代码，以便跟踪源码时查看Spring具体的功能实现。比如：要了解Spring `@ComponentScan` 注解的原理，则首先需要编写一个配置类(`@Configuration`)，然后定义组件扫描。
 
-本文的跟踪代码的过程可能涉及多个部分的测试代码，但是容器启动的代码都类似，详细的代码见 https://github.com/belonk/spring5-demo[Github]。
+本文的跟踪代码的过程可能涉及多个部分的测试代码，但是容器启动的代码都类似，详细的代码见 https://github.com/hankmor/spring5-demo[Github]。
 
 .容器启动测试代码footnote:[本文实例代码见<https://github.com/hankmor/spring5-demo,github>]
 [source,java]

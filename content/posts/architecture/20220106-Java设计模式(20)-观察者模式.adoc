@@ -299,4 +299,4 @@ public class Observable {
 
 观察者模式定义了对象之间的一对多的依赖关系，抽象了主题对象和观察者，使得系统可以很容易扩展它们。但是，由于主题对象会通知所有注册的观察者，而且观察者对其他观察者并不感知，所以当某一个观察者触发主题状态修改并通知时，如果没有定义和遵照依赖准则，可能付出较大的代价。
 
-本文示例代码见： https://github.com/belonk/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/observer[github]。
+本文示例代码见： https://github.com/hankmor/java-designpattern/tree/master/src/main/java/com/belonk/designpattern/observer[github]。

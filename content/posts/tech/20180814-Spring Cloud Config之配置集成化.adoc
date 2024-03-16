@@ -223,7 +223,7 @@ spring.cloud.config.server.git.basedir=/Users/sun/Desktop/belonk/config
 spring.cloud.config.server.git.search-paths=/
 # 配置git仓库访问的用户信息，http需要配置用户名和密码
 spring.cloud.config.server.git.uri=
-https://github.com/belonk/config-center.git
+https://github.com/hankmor/config-center.git
 spring.cloud.config.server.git.username=
 spring.cloud.config.server.git.password=
 ----
@@ -459,6 +459,6 @@ spring.cloud.config.name=api-gateway
 对于配置刷新，本文仅仅简单介绍了使用``actuator``的``/refresh``端点进行手动刷新的方式，更多自动化的方式将在后续文章来学习和讨论。
 
 * 本文示例代码：
-https://github.com/belonk/springcloud-demo/tree/master/06-config[github]
+https://github.com/hankmor/springcloud-demo/tree/master/06-config[github]
 * 参考文章： 
 ** http://cloud.spring.io/spring-cloud-static/Edgware.SR4/single/spring-cloud.html#_spring_cloud_config[Spring Cloud官方文档]

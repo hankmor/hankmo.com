@@ -271,8 +271,8 @@ channel.basicAck(envelope.getDeliveryTag(), false);
 ----
 
 完整代码见
-https://github.com/belonk/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l06rpc/FibonacciRpcClient.java[FibonacciRpcClient]和
-https://github.com/belonk/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l06rpc/FibonacciRpcServer.java[FibonacciRpcServer]。
+https://github.com/hankmor/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l06rpc/FibonacciRpcClient.java[FibonacciRpcClient]和
+https://github.com/hankmor/RabbitMQDemo/blob/master/src/main/java/com/belonk/rmq/l06rpc/FibonacciRpcServer.java[FibonacciRpcServer]。
  
 
 == 总结

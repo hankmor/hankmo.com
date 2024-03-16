@@ -165,4 +165,4 @@ public class FactoryMethodPattern {
 
 工程方法模式，对简单工厂进行了改进，遵循开闭原则，并抽象了四个具体的角色：抽象工厂、抽象产品、具体工厂、具体产品。通常，具体工厂和具体产品时一一对应的，但是，也可能存在一个工厂生产多种产品的形式。设计模式重要的是其核心思想，而在具体设计表现形式上可能存在多种变化。
 
-本文示例代码见： https://github.com/belonk/java-designpattern[Github]
+本文示例代码见： https://github.com/hankmor/java-designpattern[Github]

@@ -412,4 +412,4 @@ public Response queryAll(@Validated @RequestBody ShoppingCartQuery query) {
 
 Spring Boot的Web Starter已经加入了Bean Validation(JSR303)的依赖，可以直接使用。在使用时，只需在需要校验的方法上加上@Valid或者@Validated注解即可，如果需要编码自定义校验结果，则在校验的参数后加上BindingResult参数，注意对应关系；否则，为了模块化需要，也可以屏蔽校验失败业务逻辑，编写全局校验器，校验失败自动返回JSON校验结果即可。
 
-本篇源码见 https://github.com/belonk/springboot-demo/tree/master/06-webapp-demo[``Github``]。
+本篇源码见 https://github.com/hankmor/springboot-demo/tree/master/06-webapp-demo[``Github``]。

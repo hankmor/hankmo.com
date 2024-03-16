@@ -138,4 +138,4 @@ image::/images/attachment/20190122/99cda8e9bed24932ac1da422e5366ffd.png[]
 
 问题解决。
 
-**示例代码： https://github.com/belonk/springcloud-demo/tree/master/02-eureka[github]**
+**示例代码： https://github.com/hankmor/springcloud-demo/tree/master/02-eureka[github]**
