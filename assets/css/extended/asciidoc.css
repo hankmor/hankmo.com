@@ -9,9 +9,8 @@ table.tableblock .title, .verseblock .title, .videoblock .title, .dlist .title, 
 .qlist .title, .hdlist .title {
     text-rendering: optimizeLegibility;
     text-align: left;
-    font-family: "Noto Serif", "DejaVu Serif", serif;
-    font-size: 1rem;
-    font-style: italic
+    /* font-size: 1rem;
+    font-style: italic */
 }
 
 .subheader, .admonitionblock td.content > .title, .audioblock > .title, .exampleblock > .title, .imageblock > .title,
@@ -20,8 +19,7 @@ table.tableblock .title, .verseblock .title, .videoblock .title, .dlist .title, 
 .olist > .title, .ulist > .title, .qlist > .title, .hdlist > .title {
     line-height: 1.45;
     color: #7a2518 !important;
-    font-weight: 400;
-    margin-top: 0;
+    
     margin-bottom: .25em
 }
 
@@ -47,7 +45,6 @@ table.tableblock .title, .verseblock .title, .videoblock .title, .dlist .title, 
 
 .admonitionblock table td.icon .title {
     font-weight: bold;
-    font-family: "Open Sans", "DejaVu Sans", sans-serif;
     text-transform: uppercase
 }
 
@@ -134,9 +131,8 @@ table.tableblock .title, .verseblock .title, .videoblock .title, .dlist .title, 
     width: 1.67em;
     height: 1.67em;
     line-height: 1.67em;
-    font-family: "Open Sans", "DejaVu Sans", sans-serif;
-    font-style: normal;
-    font-weight: bold
+    /* font-style: normal; */
+    /* font-weight: bold */
 }
 
 .conum[data-value] * {
@@ -194,7 +190,7 @@ code .conum[data-value] {
 
 *:not(pre) > code {
     font-size: .875em;
-    font-style: normal !important;
+    /* font-style: normal !important; */
     letter-spacing: 0;
     padding: .1em .5ex;
     word-spacing: -.15em;
@@ -569,7 +565,7 @@ sup.footnote a:active, sup.footnoteref a:active {
 }
 
 #footnotes .footnote a:first-of-type {
-    font-weight: bold;
+    /* font-weight: bold; */
     text-decoration: none;
     margin-left: -1.05em
 }
@@ -600,11 +596,11 @@ div.unbreakable {
 }
 
 .big {
-    font-size: larger
+    /* font-size: larger */
 }
 
 .small {
-    font-size: smaller
+    /* font-size: smaller */
 }
 
 .underline {

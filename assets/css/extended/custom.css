@@ -57,6 +57,41 @@
 /*     color: var(--main-link-color-deep); */
 /* } */
 
+.admonitionblock .content {
+    color: var(--content)!important;
+    padding-left: 1.125em!important;
+    padding-right: 1.25em!important;
+}
+
 .post-content pre code:has(i) {
     display: inline-block;
+}
+
+.quoteblock .title {
+    color: var(--content)!important; 
+}
+
+.quoteblock .attribution {
+    margin-top: -1rem;
+    margin-bottom: 1.0rem;
+    text-align: right;
+    font-size: 1rem;
+    font-style: italic;
+}
+
+.paragraph .title,.quoteblock .title {
+    color: var(--content)!important;
+    font-weight: bold;
+    font-style: normal;
+}
+
+.imageblock .title {
+    font-size: 0.875rem;
+    color: var(--content)!important;
+    text-align: left;
+    margin-bottom: 1.5rem;
+}
+
+.imageblock:has(.title) img {
+    margin-bottom: 0;
 }
